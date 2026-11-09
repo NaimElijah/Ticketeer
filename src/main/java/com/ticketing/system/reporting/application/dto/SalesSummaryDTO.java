@@ -10,7 +10,8 @@ import java.util.Optional;
  * @param ticketsSold    how many lines are not refunded
  * @param avgOrderValue  revenue per order that still has a line not refunded; 0 when none has
  * @param topEvent       the name of the event with the highest revenue; empty when nothing is sold,
- *                       and when no sold line carries an event name
+ *                       and when no sold line carries an event name (lines with no resolved event
+ *                       name are not ranked)
  * @param refundedOrders how many orders have at least one refunded line
  */
 public record SalesSummaryDTO(double revenue, int ticketsSold, double avgOrderValue, Optional<String> topEvent,

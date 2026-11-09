@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberAccountService {
 
-    private final AuthenticationService authenticationService; // validates the member's token and extracts the user id
+    private final AuthenticationService authenticationService;
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketRepository ticketRepository;
     private final CatalogEventDisplayPort eventDisplayPort; // For event/zone name lookups in history records.
@@ -89,8 +89,9 @@ public class MemberAccountService {
 
     /**
      * UC-16 (single receipt): one of the signed-in member's own orders, enriched for the receipt page
-     * (#276). It throws, as {@link #viewMyHistory} does, so the presenter can tell apart an
-     * authentication failure, a missing receipt, and a receipt that is not the caller's.
+     * (#276). It throws distinct exceptions, as {@link #viewMyHistory} does. {@code ReceiptPresenter}
+     * shows a missing receipt and another member's the same way, so receipt ids on other accounts
+     * stay hidden.
      *
      * @param token     the member's session token
      * @param receiptId the id of the order receipt to show

@@ -35,8 +35,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>This javadoc is the single coverage map for <i>every</i> correctness/integrity requirement
  * in {@code docs/requirements/requirements.md} (§1 correctness constraints, §2 integrations,
  * §3 commercial rules, and the relevant SLRs). Only <b>scannable structural state</b> is checked
- * in this class; connection rules are checked at initialization, and behavioural / transaction
- * rules are enforced at their call sites — cited below so nothing is silently dropped.
+ * in this class; connection rules are checked at initialization and market open, and behavioural /
+ * transaction rules are enforced at their call sites — cited below so nothing is silently dropped.
  *
  * <h3>Scanned here (structural state)</h3>
  * <ul>
@@ -115,8 +115,7 @@ public class SystemIntegrityVerifier {
      * capacity.
      *
      * <p>Read-only: the scans never write. The one transaction also keeps the loaded aggregates
-     * attached while the scans traverse them, which matters only for an association mapped LAZY; every
-     * association is EAGER today (#372).
+     * attached while the scans traverse them (#372).
      *
      * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException at the first
      *         violation. The message names the offending records by id; for a broken aggregate

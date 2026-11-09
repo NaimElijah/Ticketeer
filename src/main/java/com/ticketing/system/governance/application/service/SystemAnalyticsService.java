@@ -61,7 +61,8 @@ public class SystemAnalyticsService {
     /**
      * Creates the service over the metrics and the read ports it aggregates.
      *
-     * @param clock               ends the trailing windows of the snapshots
+     * @param clock               ends the trailing windows computed over receipts: the purchase rate,
+     *                            the purchase throughput and the 30-day revenue
      * @param analyticsProperties supplies the length, in minutes, of the window the per-minute rates
      *                            are computed over
      */

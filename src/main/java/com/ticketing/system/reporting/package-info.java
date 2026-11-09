@@ -9,8 +9,9 @@
  * <p>{@code application.service} holds {@code MemberAccountService} (UC-16 member purchase-history /
  * receipt reads), {@code CompanyAnalyticsService} (owner-workspace dashboard and company sales
  * reads) and {@code SalesSummaryCalculator}, which computes the headline sales figures over order
- * records into {@code application.dto.SalesSummaryDTO} (UC-22, UC-31). The services depend on the
- * driven ports and DTOs owned by the contexts they read.
+ * records into {@code application.dto.SalesSummaryDTO} (UC-22, UC-31). The services depend on those
+ * contexts' driven ports, DTOs and domain types, and on identity's {@code AuthenticationService},
+ * organization's {@code CompanyMembershipService} and catalog's {@code CompanyRatings}.
  *
  * <p>Declared {@code OPEN} so its query services stay directly callable by the presentation layer.
  */

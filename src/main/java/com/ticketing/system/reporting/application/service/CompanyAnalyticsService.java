@@ -45,7 +45,7 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
  * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. The
  * dashboard's sales figures are the company's own share of each receipt (a receipt can mix events
  * from several companies), over the trailing 30 days, counting only lines that are not refunded
- * (#21). The sales history has no date limit.
+ * (#21).
  */
 @Service
 @Slf4j
@@ -99,8 +99,9 @@ public class CompanyAnalyticsService {
     }
 
     /**
-     * Live dashboard counters for one company, as seen by the calling member. A fresh company with
-     * no events has zero counts and a {@code null} rating (nothing is rated).
+     * Live dashboard counters for one company, as seen by the calling member. A company with no
+     * events has no active events, tickets or revenue, and a {@code null} rating. Open inquiries do
+     * not depend on events.
      *
      * <p>Figures the caller may not see are withheld as {@code null}: revenue and tickets sold
      * need {@link Permission#VIEW_SALES} and open inquiries need
@@ -232,9 +233,9 @@ public class CompanyAnalyticsService {
      * @throws InvalidTokenException if the token is not valid
      */
     private int authenticate(String token) {
-        if (!sessionManager.validateToken(token)) {  // reject unknown/expired tokens
+        if (!sessionManager.validateToken(token)) {
             throw new InvalidTokenException("Invalid token");
         }
-        return sessionManager.extractUserId(token);  // token valid → extract the caller's id
+        return sessionManager.extractUserId(token);
     }
 }

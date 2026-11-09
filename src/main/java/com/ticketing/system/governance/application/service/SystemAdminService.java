@@ -156,7 +156,6 @@ public class SystemAdminService {
     public synchronized void initializePlatform() {
         log.info("Platform initialization requested.");
 
-        // Re-initializing an already-initialized platform is handled gracefully.
         if (status != PlatformStatus.UNINITIALIZED) {
             log.info("Platform already initialized (status={}); ignoring re-initialization.", status);
             return;
@@ -238,7 +237,8 @@ public class SystemAdminService {
      * <p>Re-verifies both external services (I.2.2), then that a System Admin exists, then the
      * structural integrity ({@link SystemIntegrityVerifier}), before moving to {@code OPEN} and
      * recording the time. Opens from {@code READY} and re-opens from {@code CLOSED}. Idempotent on an
-     * open market: it returns the current state without checking anything.
+     * open market: once the caller is authorized, it returns the current state without re-verifying
+     * the services or the integrity.
      *
      * @param request carries the admin token; only its {@code token} is read. A {@code null} request is
      *                treated as a missing token
@@ -335,10 +335,12 @@ public class SystemAdminService {
     }
 
     /**
-     * UC-32: closes the trading market, an admin and operations incident control with no dedicated
-     * use case. Admin-only. While the market is {@code CLOSED}, reservations and checkouts are
-     * refused, and {@link #ensureMarketOpen()} never reopens it; only {@link #openMarket} does.
-     * Idempotent on a closed market: it returns the current state.
+     * UC-32: closes the trading market, an admin and operations incident control. Admin-only. While
+     * the market is {@code CLOSED}, reservations and checkouts are refused, and
+     * {@link #ensureMarketOpen()} never reopens it while this process runs; only {@link #openMarket}
+     * does. The state is not persisted, so a restart loses the close and {@code MarketOpener} opens
+     * the market again (NaimElijah/Ticketeer#24). Idempotent on a closed market: it returns the
+     * current state.
      *
      * @param request carries the admin token and an optional reason. The reason is only logged, and a
      *                missing or blank one is logged as {@code unspecified}. A {@code null} request is
@@ -518,7 +520,6 @@ public class SystemAdminService {
         // Logged only after the check: the filters can name a buyer.
         log.info("Admin request to view global purchase history with filters: {}", filters);
 
-        // If companyId is provided, we ensure that the eventIds filter (if provided) is a subset of the events for that company, in the normalizeGlobalHistoryFilters() method.
         GlobalHistoryFiltersDTO effectiveFilters = normalizeGlobalHistoryFilters(filters);
         Set<Integer> selectedEventIds = selectedEventIdsOrNull(effectiveFilters);
 
@@ -550,16 +551,13 @@ public class SystemAdminService {
     // This method rejects a date range whose start is after its end, and folds the company filter into the
     // event filter, so the query sees only event ids that belong to that company.
     private GlobalHistoryFiltersDTO normalizeGlobalHistoryFilters(GlobalHistoryFiltersDTO filters) {
-        // If no filters are provided, return a default filter that matches all receipts.
         GlobalHistoryFiltersDTO f = filters == null
                 ? new GlobalHistoryFiltersDTO(null, null, null, null, null)
                 : filters;
-        // Validate that fromDate is not after toDate if both are provided.
         if (f.fromDate() != null && f.toDate() != null && f.fromDate().isAfter(f.toDate())) {
             throw new IllegalArgumentException("fromDate must be before or equal to toDate");
         }
 
-        // Without a company filter, the event filter passes through unchanged.
         if (f.companyId() == null) {
             return new GlobalHistoryFiltersDTO(
                     f.buyerUserId(),
@@ -569,25 +567,19 @@ public class SystemAdminService {
                     f.toDate());
         }
 
-        // If companyId is provided, we need to ensure that the eventIds filter (if provided) is a subset of the events for that company.
-        // If eventIds is null, we will use all events for that company.
         List<Integer> companyEventIds = eventRepository.findIdsByCompany(f.companyId());
 
         List<Integer> effectiveEventIds;
 
         if (f.eventIds() == null) {
-            // No event filter provided, use all events for the company.
             effectiveEventIds = companyEventIds;
         } else {
-            // Event filter provided: intersect the requested event IDs with the company's events.
             // (No exception is thrown; out-of-company eventIds are silently dropped.)
             Set<Integer> requestedSet = new HashSet<>(f.eventIds());
-            // Retain only the event IDs that are both in the requested set and in the company's events.(Intersection of the two sets)
             effectiveEventIds = companyEventIds.stream()
                     .filter(requestedSet::contains)
                     .toList();
         }
-        // now the company filter is effectively translated into an event filter that is guaranteed to be consistent with the company constraint, and we can proceed with the query.
         return new GlobalHistoryFiltersDTO(
                 f.buyerUserId(),
                 null,
@@ -602,7 +594,6 @@ public class SystemAdminService {
         if (filters.eventIds() == null) {
             return null;
         }
-        // Convert to set for efficient lookup later.
         return filters.eventIds().stream().collect(Collectors.toSet());
     }
 
