@@ -17,9 +17,8 @@ import jakarta.persistence.Version;
  * <p>The id is assigned, never {@code @GeneratedValue} (the constructor rejects an id
  * {@code <= 0}). An admin and a member can hold the same id number (ADR-012). {@code @Version}
  * drives optimistic locking and lets Spring Data tell a new entity (version {@code null}) from a
- * loaded one. Fields are non-final and a protected no-arg constructor exists purely so
- * Hibernate can hydrate instances; the public constructor still enforces the invariants for
- * application-created admins.
+ * loaded one. The protected no-arg constructor exists so Hibernate can hydrate instances; the
+ * public constructor still enforces the invariants for application-created admins.
  */
 @Entity
 @Table(name = "admins")

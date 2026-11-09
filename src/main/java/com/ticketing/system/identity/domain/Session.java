@@ -40,9 +40,9 @@ import jakarta.persistence.Version;
  * {@code @GeneratedValue}. {@code userId} is a plain by-id column — never a
  * {@code @ManyToOne} to User (the cross-aggregate reference rule). {@code @Version}
  * drives optimistic locking and lets Spring Data tell a new entity (version == null)
- * from a loaded one. Fields are non-final and a protected no-arg constructor exists
- * purely so Hibernate can hydrate instances — the public constructor still enforces
- * the invariants for application-created sessions.
+ * from a loaded one. The protected no-arg constructor exists so Hibernate can hydrate
+ * instances — the public constructor still enforces the invariants for application-created
+ * sessions.
  */
 @Entity
 @Table(name = "sessions")

@@ -28,8 +28,8 @@ import jakarta.persistence.PersistenceContext;
  *
  * <p>{@link #save} is an upsert that preserves optimistic locking on the real flows:
  * {@code data.save} inserts a fresh session (new {@code sid}, version {@code null}) and
- * updates a loaded-then-mutated one under its {@code @Version} check (login / start-guest
- * insert; promote / extend / touch update). The only case {@code data.save} can't express
+ * updates a loaded-then-mutated one under its {@code @Version} check (start-guest and admin
+ * sign-in insert; promote and touch update). The only case {@code data.save} can't express
  * is a brand-new instance reusing an already-persisted id — with an assigned id + version
  * {@code null}, merge/persist treats it as transient and tries to INSERT (duplicate key).
  * That never happens in the application (sids are unique), only in the in-memory

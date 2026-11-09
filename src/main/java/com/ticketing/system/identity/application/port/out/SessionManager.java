@@ -110,6 +110,7 @@ public interface SessionManager {
      * @return {@code true} only for a live Guest row's id; {@code false} for {@code null} / blank, an
      *     unknown or expired id, the raw id of a Member or Admin session, and any token. Never throws
      *     for these
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     boolean validateGuestSession(String sessionId);
 
@@ -120,6 +121,7 @@ public interface SessionManager {
      *     for any token {@link #validateToken} rejects as invalid, an admin token included
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     for an expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     int extractUserId(String token);
 
@@ -153,7 +155,11 @@ public interface SessionManager {
      */
     String extractSessionId(String token);
 
-    /** Quick expiry check; returns {@code true} for expired, revoked, or malformed tokens of either kind. */
+    /**
+     * Quick expiry check; returns {@code true} for expired, revoked, or malformed tokens of either kind.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged
+     */
     boolean isExpired(String token);
 
     /**
