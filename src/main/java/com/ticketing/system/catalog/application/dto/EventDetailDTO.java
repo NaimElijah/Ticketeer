@@ -13,15 +13,11 @@ import com.ticketing.system.catalog.domain.ShowDate;
  * UC-8 (alongside {@code VenueMapDTO}), UC-19 (an owner viewing their event to edit it).
  *
  * @param eventId       the event's id, as text
- * @param name          the event's name
  * @param rating        the event's rating from 0 to 5, or {@code null} if unrated
  * @param description   the event's description; {@code null} if it has none, and also in the DTO that
  *                      {@code EventManagementService.getEvent} returns
- * @param category      the event's category
  * @param location      the venue's location, or {@code null} if the event has no venue map
  * @param companyId     the owning company's id, as text
- * @param companyName   the owning company's name
- * @param status        the event's lifecycle status
  * @param showDates     the shows, as wall-clock times at the venue
  * @param timeZone      the zone {@code showDates} are wall-clock times in (ADR-008)
  * @param artistsNames  the lineup

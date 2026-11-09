@@ -398,7 +398,6 @@ public class SeatedZone extends InventoryZone {
 
     @Override
     public boolean checkAvailability(int quantity) {
-        // check if there are at least 'quantity' available seats in this zone
         int available = getAvailableAmount();
         if (available < quantity) {
             throw new IllegalStateException("Only " + available + " seats available, but " + quantity + " requested");

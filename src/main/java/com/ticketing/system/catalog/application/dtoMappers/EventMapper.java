@@ -65,7 +65,7 @@ public class EventMapper {
      * services reach the company differently.
      *
      * @param event       the event
-     * @param companyName the owning company's name
+     * @param companyName the name of the company the caller has already loaded
      * @return the detail; its location is {@code null} when the event has no venue map
      */
     public EventDetailDTO toEventDetailDTO(Event event, String companyName) {

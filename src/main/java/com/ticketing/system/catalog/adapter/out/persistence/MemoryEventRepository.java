@@ -269,7 +269,7 @@ public class MemoryEventRepository implements EventRepository {
             }
         }
 
-        return true; // if the event passed into all the filters, it got to here and we'll return true
+        return true;
     }
 
 

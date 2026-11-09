@@ -409,7 +409,7 @@ public class InventoryService implements InventoryCommandPort {
         return eventRepository.findById(eventId);
     }
 
-    /** Resolves a zone from an event's venue map, normalizing both the throw and the null contract of getZone. */
+    /** Resolves a zone from an event's venue map, normalizing the throw of getZone. */
     private InventoryZone getZoneOrThrow(Event event, int zoneId) {
         if (event.getVenueMap() == null) {
             throw new IllegalStateException("Venue map is not configured for event: " + event.getId());

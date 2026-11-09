@@ -51,7 +51,8 @@ import jakarta.persistence.Version;
  * company is held by id; category and status are stored by name. {@code @Version} drives the
  * event-level optimistic lock for structural and lifecycle edits, while {@link Seat} and
  * {@link InventoryZone} carry their own {@code @Version} so independent buyer reservations never
- * false-conflict. Artist names and show dates are element collections; the venue map is an owned
+ * false-conflict. The venue map row has no {@code @Version}, so a write that changes only that row is
+ * last-write-wins. Artist names and show dates are element collections; the venue map is an owned
  * {@code @OneToOne} (the column is nullable, but {@code addEvent} binds an empty map); the policies are
  * stored as JSON. A protected no-arg constructor lets Hibernate hydrate; the public constructors enforce the invariants.
  */
@@ -95,7 +96,7 @@ public class Event implements InvariantChecked {
     @jakarta.persistence.CollectionTable(name = "event_show_dates", joinColumns = @JoinColumn(name = "event_id"))
     private List<ShowDate> showDates;
     // The IANA zone the show dates are wall-clock times in (ADR-008). It lives on the event rather
-    // than the VenueMap because the map may be null in DRAFT while show dates are already mandatory.
+    // than the VenueMap because the constructor accepts a null map while show dates are already mandatory.
     @Column(name = "time_zone", nullable = false, length = 64)
     private ZoneId timeZone;
     @Convert(converter = PurchasePolicyJsonConverter.class)
@@ -174,9 +175,8 @@ public class Event implements InvariantChecked {
         this.venueMap = venueMap;
         this.showDates = showDates == null ? null : new ArrayList<>(showDates);
         this.timeZone = timeZone;
-        // purchasePolicy defaults to NoPurchasePolicy when not supplied.
         this.purchasePolicy = PurchasePolicy == null ? new NoPurchasePolicy() : PurchasePolicy;
-        // Stored as given; checkInvariants refuses null. No path sets an event's discount yet (OQ-36, #259),
+        // Stored as given; checkInvariants refuses null. No path sets an event's discount yet (OQ-36, NaimElijah/Ticketeer#259),
         // so EventManagementService.addEvent passes a 0% policy.
         this.discountPolicy = discountPolicy;
         checkInvariants();
@@ -190,7 +190,8 @@ public class Event implements InvariantChecked {
     /**
      * Reserves inventory in one zone. The zone decides whether the selection is a standing quantity or
      * seated seats. When this takes the last available place or seat of an ON_SALE event, the event
-     * becomes SOLD_OUT.
+     * becomes SOLD_OUT. That flip is atomic for threads sharing this instance (the in-memory adapter); on
+     * Jpa, concurrent flips are separated by the event's {@code @Version}.
      *
      * @param zoneId    the zone within the venue map
      * @param selection the quantity or seats to reserve; carries the holding order's key
@@ -353,7 +354,6 @@ public class Event implements InvariantChecked {
     public double calculatePrice(int quantity, Double priceAtoneticketReservation, LocalDateTime now) {
         return discountPolicy.calculate(quantity, priceAtoneticketReservation, now);
     }
-    //? These 2 functions are not in the implementation plan, so above for each event we just give discount 0, so not doing any discount.
     /**
      * Prices one ticket of a purchase of {@code quantity} tickets through the event's discount policy.
      * Takes the same arguments as {@link #calculatePrice}.
@@ -749,7 +749,8 @@ public class Event implements InvariantChecked {
     /**
      * Moves an ON_SALE event to SOLD_OUT. {@link #reserveInventory} calls it when no AVAILABLE seat or
      * standing place remains; it does not check that itself. Does nothing when the event is already
-     * SOLD_OUT. Safe against concurrent buyer operations.
+     * SOLD_OUT. Atomic for threads sharing this instance (the in-memory adapter); on Jpa, concurrent flips
+     * are separated by the event's {@code @Version}.
      *
      * @throws InvalidStateTransitionException if the event is in any status but ON_SALE or SOLD_OUT
      */
@@ -773,7 +774,8 @@ public class Event implements InvariantChecked {
     /**
      * Moves a SOLD_OUT event back to ON_SALE. {@link #releaseInventory} and {@link #returnSoldToStock}
      * call it when a place or seat becomes available again; it does not check that itself. Does nothing
-     * when the event is already ON_SALE. Safe against concurrent buyer operations.
+     * when the event is already ON_SALE. Atomic for threads sharing this instance (the in-memory adapter);
+     * on Jpa, concurrent flips are separated by the event's {@code @Version}.
      *
      * @throws InvalidStateTransitionException if the event is in any status but SOLD_OUT or ON_SALE
      */
@@ -1100,7 +1102,7 @@ public class Event implements InvariantChecked {
         if (discountPolicy == null) {
             throw new IllegalStateException("Event invariant violated: discountPolicy must not be null");
         }
-        // venueMap may be null in DRAFT state (UC-19) before UC-20 binds it — don't enforce non-null.
+        // The constructor accepts a null map, so don't enforce non-null.
         // If present, the VenueMap's own invariants apply (cascade-check when implemented).
     }
 

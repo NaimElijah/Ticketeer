@@ -70,9 +70,10 @@ import com.ticketing.system.shared.domain.policy.PurchasePolicy;
  * {@link #listEventsForCompany} and {@link #getEventDetail}, which need only active membership of the
  * company.
  *
- * <p>A write locks the event with {@code EventRepository.lockForUpdate} for its duration. On the Jpa
- * adapter that lock is a no-op, and a concurrent writer is separated by the {@code @Version} of the row
- * it changes (the event's, a zone's or a seat's); the loser gets {@code ConcurrentReservationException}.
+ * <p>A write to an existing event locks it with {@code EventRepository.lockForUpdate} for its duration.
+ * On the Jpa adapter that lock is a no-op. Writers changing the same event, zone or seat row are
+ * separated by that row's {@code @Version}, and the loser gets {@code ConcurrentReservationException}.
+ * {@code venue_maps} has no {@code @Version}, so a write that changes only that row is last-write-wins.
  * {@link #cancelEventAndRefund} is deliberately not {@code @Transactional}; see there.
  *
  * <p>Event creation and venue-map configuration are separate steps: creation needs only the venue's
@@ -179,7 +180,7 @@ public class EventManagementService {
 
         int newEventId = eventRepository.nextId();
         VenueMap venueMap = new VenueMap(eventRepository.nextVenueMapId(), request.location(), List.of());
-        // No path sets an event's discount yet (OQ-36, #259), so addEvent passes a 0% policy.
+        // No path sets an event's discount yet (OQ-36, NaimElijah/Ticketeer#259), so addEvent passes a 0% policy.
         DiscountPolicy discountPolicy = new DiscountPolicy(0);
 
         
@@ -229,7 +230,7 @@ public class EventManagementService {
      *
      * @param token     the member's session token
      * @param companyId the company
-     * @param filters   the filters to narrow by, with an absent filter meaning no restriction
+     * @param filters   the filters to narrow by, with an absent filter meaning no restriction; not null
      * @return the matching events; empty if there are none
      * @throws InvalidTokenException       if {@code token} is not a live member token
      * @throws CompanyNotFoundException    if the company does not exist
@@ -385,9 +386,9 @@ public class EventManagementService {
      *                                      name (ignoring case), or a placement runs past the grid; the
      *                                      message is shown to the user
      * @throws BusinessRuleViolationException if a zone name is too long
-     * @throws IllegalStateException        if the event has no stored venue location, a zone name is blank
-     *                                      or a price is out of range, a placement overlaps another zone,
-     *                                      or {@link Event} refuses the map (see
+     * @throws IllegalStateException        if the event has no stored venue location, a zone name or a
+     *                                      seat label is blank or a price is out of range, a placement
+     *                                      overlaps another zone, or {@link Event} refuses the map (see
      *                                      {@link Event#configureVenueMap})
      */
     @Transactional
@@ -559,8 +560,9 @@ public class EventManagementService {
      *                                      are missing or repeat a label, another zone has the name
      *                                      (ignoring case), or a placement runs past the grid; the
      *                                      message is written for the user
-     * @throws IllegalStateException        if the event is past SCHEDULED, the zone name is blank or the
-     *                                      price is out of range, or a placement overlaps another zone
+     * @throws IllegalStateException        if the event is past SCHEDULED, the zone name or a seat label
+     *                                      is blank or the price is out of range, or a placement
+     *                                      overlaps another zone
      * @throws BusinessRuleViolationException if the event has no venue map, or the zone name is too long
      */
     @Transactional

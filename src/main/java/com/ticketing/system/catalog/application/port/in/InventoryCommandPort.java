@@ -126,7 +126,7 @@ public interface InventoryCommandPort {
      * Computes the final unit price for one ticket of an event via its discount policy. Pure read.
      *
      * @param eventId             the event
-     * @param eventQuantity       the total quantity being bought for this event (drives quantity discounts)
+     * @param eventQuantity       the total quantity being bought for this event
      * @param priceAtReservation  the price captured when the ticket was reserved
      * @param now                 the pricing timestamp
      * @return the final per-ticket price
@@ -186,6 +186,8 @@ public interface InventoryCommandPort {
      *     reserved places than lines
      * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if a seat is no
      *     longer RESERVED or is held by a different order
+     * @throws IllegalArgumentException if a line names a zone that the event's venue map does not have,
+     *     or a seat label that the zone does not know
      */
     void validateCanConfirmSale(List<InventoryLineDTO> lines, String orderKey);
 

@@ -82,7 +82,6 @@ public class CatalogService {
      */
     public List<EventSummaryDTO> browseEventCatalog() {
         EventMapper mapper = new EventMapper();
-        // Return all events that are ON_SALE and associated with an ACTIVE company.
         return productionCompanyRepository.findActive().stream()
                 .flatMap(company -> eventRepository.findActiveByCompany(company.getCompanyId()).stream())
                 .filter(event -> event.getStatus() == EventStatus.ON_SALE)
@@ -497,7 +496,6 @@ public class CatalogService {
         validateDoubleRange(f.minEventRating(), f.maxEventRating(), "event rating");
         validateDoubleRange(f.minCompanyRating(), f.maxCompanyRating(), "company rating");
 
-        // validate that fromDate is before or equal to toDate if both are provided.
         if (f.fromDate() != null && f.toDate() != null && f.fromDate().isAfter(f.toDate())) {
             throw new IllegalArgumentException("fromDate must be before or equal to toDate");
         }
@@ -506,7 +504,6 @@ public class CatalogService {
     }
 
     private void validateDoubleRange(Double min, Double max, String name) {
-        // if either min or max is null, we consider it unbounded and therefore valid, so only throw if both are non-null and min > max.
         if (min != null && max != null && min > max) {
             throw new IllegalArgumentException("min " + name + " must be <= max " + name);
         }

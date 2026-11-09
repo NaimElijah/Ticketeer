@@ -12,10 +12,8 @@ import com.ticketing.system.shared.dto.PurchasePolicyDTO;
  * The input of {@code EventManagementService.addEvent} (UC-19): the details of a new event.
  *
  * @param companyId     the id of the company that will own the event
- * @param name          the event's name
  * @param description   the event's description, or {@code null} for none
  * @param artistsNames  the lineup; at least one name
- * @param category      the event's category
  * @param rating        the event's rating from 0 to 5, or {@code null} if unrated
  * @param location      the venue's location; {@code addEvent} refuses a request without one
  * @param showDates     the shows, as wall-clock times at the venue read in {@code timeZone}; at least

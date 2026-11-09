@@ -108,8 +108,6 @@ public class VenueMap implements InvariantChecked {
         this.inventoryZones = new ArrayList<>(inventoryZones);
         this.gridRows = gridRows;
         this.gridCols = gridCols;
-        // initialize nextZoneId to one greater than the max existing zone ID, or 1 if there are no zones.
-        // This is for convenience when adding new zones to the venue map.
         this.nextZoneId = this.inventoryZones.stream()
                 .mapToInt(InventoryZone::getId)
                 .max()
