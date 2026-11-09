@@ -55,6 +55,21 @@ import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Application service for production companies: registering one, appointing and revoking owners and
+ * managers, answering appointments, editing a manager's permissions and the company's purchase policy, and
+ * reading membership lists and the organizational tree.
+ *
+ * <p>Every method authenticates the caller's session token; some reject malformed input before doing so. A
+ * member method accepts a member token only, and the {@code admin}-prefixed methods an admin token only.
+ * Appointing, accepting, editing permissions and revoking each publish a notice
+ * ({@code OwnerAppointmentPendingNotice}, {@code ManagerAppointmentPendingNotice}, {@code RoleChangedNotice} or
+ * {@code ManagerRevokedNotice}) that the notifications context consumes after commit (ADR-004); rejecting and
+ * registering do not.
+ *
+ * <p>Unless a method says otherwise, a token that is not live fails with {@code InvalidTokenException}, and an
+ * expired one with {@code SessionExpiredException}.
+ */
 @Service
 @Slf4j
 public class CompanyManagementService {
@@ -73,13 +88,18 @@ public class CompanyManagementService {
     // Outbound port to catalog's active-event count — organization asks through this port instead of
     // importing any catalog type (keeps organization strictly below catalog in the dependency graph).
     private final CompanyEventStatsPort companyEventStatsPort;
-    // Owns the appointment (company-membership) lifecycle since it was promoted off the User aggregate
-    // (task #20). All appointment reads/writes below delegate here instead of walking user.companyAppointments.
+    // Owns the appointment (company-membership) lifecycle; every appointment read and write below delegates here.
     private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context integration events (role-change / appointment notices); the
     // notifications context listens for these instead of organization calling it directly.
     private final ApplicationEventPublisher eventPublisher;
 
+    /**
+     * Creates the service.
+     *
+     * @param companyEventStatsPort the port through which the active-event count is read from catalog
+     * @param eventPublisher        publishes the membership notices
+     */
     public CompanyManagementService(ProductionCompanyRepository companyRepository, UserRepository userRepository,
             SessionManager sessionManager, CompanyEventStatsPort companyEventStatsPort,
             CompanyMembershipService companyMembershipService,
@@ -92,7 +112,18 @@ public class CompanyManagementService {
         this.eventPublisher = eventPublisher;
     }
 
-    // UC-23 — Owner appoints another Member as co-Owner (PENDING).
+    /**
+     * UC-23 — an owner appoints another member as a co-owner. The appointment starts pending and takes effect when
+     * the target accepts; the target is notified.
+     *
+     * @param token   the appointing owner's member token
+     * @param request the company and the member to appoint; both ids must be positive
+     * @throws IllegalArgumentException      if either id is not positive
+     * @throws UserNotFoundException         if a user the call refers to does not exist
+     * @throws UnauthorizedActionException   if the caller is not an owner of the company
+     * @throws BusinessRuleViolationException if the target already has a pending appointment in the company or
+     *                                        is already an active owner
+     */
     @Transactional
     public void appointOwner(String token, OwnerAppointmentRequestDTO request) {
         if (request.companyId() <= 0 || request.targetUserId() <= 0) {
@@ -111,14 +142,12 @@ public class CompanyManagementService {
             throw e;
         }
 
-        companyMembershipService.requireOwnerInCompany(appointerId, request.companyId()); // appointer must be an owner
-        if (appointer == null || targetUser == null) { // appointee/appointer must be real users
+        companyMembershipService.requireOwnerInCompany(appointerId, request.companyId());
+        if (appointer == null || targetUser == null) {
             throw new UserNotFoundException();
         }
-        // Target user receives a pending owner appointment (all logic checks + persistence happen inside).
         companyMembershipService.receiveOwnerAppointment(request.targetUserId(), request.companyId(), appointerId);
 
-        // Notify target user
         ProductionCompany company = companyRepository.getCompanyById(request.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new OwnerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
@@ -128,7 +157,18 @@ public class CompanyManagementService {
                 appointerId, request.targetUserId(), request.companyId());
     }
 
-    // UC-24 — Owner appoints a Manager with explicit granular permissions.
+    /**
+     * UC-24 — an owner appoints a member as a manager with an explicit permission set. The appointment starts
+     * pending and takes effect when the target accepts; the target is notified.
+     *
+     * @param token   the appointing owner's member token
+     * @param request the company, the member to appoint and the permissions to grant
+     * @throws IllegalArgumentException      if either id is not positive, or the permission list is null or empty
+     * @throws UserNotFoundException         if a user the call refers to does not exist
+     * @throws UnauthorizedActionException   if the caller is not an owner of the company
+     * @throws BusinessRuleViolationException if the target already has an active or pending appointment in the
+     *                                        company
+     */
     @Transactional
     public void appointManager(String token, ManagerAppointmentRequestDTO request) {
         if (request.companyId() <= 0 || request.targetUserId() <= 0) {
@@ -142,16 +182,14 @@ public class CompanyManagementService {
         int ownerId = authenticate(token);
         User owner = userRepository.getUserById(ownerId);
         User targetUser = userRepository.getUserById(request.targetUserId());
-        companyMembershipService.requireOwnerInCompany(ownerId, request.companyId()); // appointer must be an owner
-        if (owner == null || targetUser == null) { // appointee/appointer must be real users
+        companyMembershipService.requireOwnerInCompany(ownerId, request.companyId());
+        if (owner == null || targetUser == null) {
             throw new UserNotFoundException();
         }
 
-        // Target user receives a pending manager appointment (checks + persistence happen inside).
         companyMembershipService.receiveManagerAppointment(
                 request.targetUserId(), request.companyId(), ownerId, request.permissions());
 
-        // Notify target user
         ProductionCompany company = companyRepository.getCompanyById(request.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         // The invitee's role changes only on acceptance, which publishes the RoleChangedNotice.
@@ -162,8 +200,22 @@ public class CompanyManagementService {
                 ownerId, request.targetUserId(), request.companyId(), request.permissions());
     }
 
-    // UC-23 / UC-24 — target accepts or rejects a pending owner/manager
-    // appointment.
+    /**
+     * UC-23 / UC-24 — the target accepts or rejects their pending owner or manager appointment.
+     *
+     * <p>Accepting makes the caller an owner or manager of the company and publishes a {@code RoleChangedNotice}.
+     * An offer whose inviter is no longer an owner of the company cannot be accepted and stays pending. Rejecting
+     * ends the appointment.
+     *
+     * @param token    the target's member token
+     * @param response the company and whether to accept
+     * @throws IllegalArgumentException       if the company id is not positive
+     * @throws UserNotFoundException          if the caller does not exist
+     * @throws CompanyNotFoundException       if the company does not exist
+     * @throws com.ticketing.system.shared.exception.AppointmentNotFoundException   if the caller has no pending appointment in the company
+     * @throws BusinessRuleViolationException when accepting, if the inviter is no longer an owner, or if the
+     *                                        caller's existing active appointment may not be replaced
+     */
     @Transactional
     public void respondToAppointment(String token, AppointmentResponseDTO response) {
         if (response.companyId() <= 0) {
@@ -173,11 +225,11 @@ public class CompanyManagementService {
 
         int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
-        if (user == null) { // caller must be a real user
+        if (user == null) {
             throw new UserNotFoundException();
         }
         ProductionCompany company = companyRepository.getCompanyById(response.companyId());
-        if (company == null) { // the company must exist
+        if (company == null) {
             throw new CompanyNotFoundException();
         }
 
@@ -185,7 +237,6 @@ public class CompanyManagementService {
 
         if (response.accept()) {
             requireInviterStillOwner(userId, response.companyId());
-            // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
             appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
                 company.addOwner(appointment.getInviterId(), userId);
@@ -194,13 +245,10 @@ public class CompanyManagementService {
             }
             log.info("Appointment accepted: userId={}, companyId={}", userId, response.companyId());
 
-            // Notify of role change to final role
             // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new RoleChangedNotice(userId, response.companyId(), company.getName(),
                     appointment.getRole().name()));
         } else {
-            // Transitions the pending appointment to REJECTED (persisted via the appointment repo);
-            // status-based lookups will no longer return it.
             companyMembershipService.rejectInvitation(userId, response.companyId());
             log.info("Appointment rejected: userId={}, companyId={}", userId, response.companyId());
         }
@@ -220,7 +268,19 @@ public class CompanyManagementService {
         }
     }
 
-    // UC-24 — edit a Manager's permission set (only by the original appointer, while still an owner).
+    /**
+     * UC-24 — replaces an active manager's permission set. Only the owner who appointed the manager may do it, and
+     * only while still an owner; the manager is notified.
+     *
+     * @param token the editing owner's member token
+     * @param edit  the company, the manager and the new permission set
+     * @throws UserNotFoundException          if the manager does not exist
+     * @throws IllegalArgumentException       if the new permission set is null or empty
+     * @throws UnauthorizedActionException    if the caller is not an owner of the company, or did not appoint the
+     *                                        manager
+     * @throws com.ticketing.system.shared.exception.AppointmentNotFoundException   if the target has no active appointment in the company
+     * @throws BusinessRuleViolationException if the target's active appointment is not a manager appointment
+     */
     @Transactional
     public void editManagerPermissions(String token, PermissionEditDTO edit) {
         int ownerId = authenticate(token);
@@ -232,7 +292,7 @@ public class CompanyManagementService {
             log.warn("Manager not found during permission edit: {}", e.getMessage());
             throw e;
         }
-        if (manager == null) { // target manager must be a real user
+        if (manager == null) {
             throw new UserNotFoundException();
         }
 
@@ -243,11 +303,9 @@ public class CompanyManagementService {
 
         // A revoked owner keeps no authority over the managers they appointed.
         companyMembershipService.requireOwnerInCompany(ownerId, edit.companyId());
-        // Only the original appointer may edit; role/status checks + persistence happen inside.
         companyMembershipService.modifyManagerPermissions(edit.targetUserId(), edit.companyId(), ownerId,
                 edit.newPermissions());
 
-        // Notify manager of permission change
         ProductionCompany company = companyRepository.getCompanyById(edit.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new RoleChangedNotice(edit.targetUserId(), edit.companyId(),
@@ -257,6 +315,22 @@ public class CompanyManagementService {
                 edit.companyId());
     }
 
+    /**
+     * Ends a member's active owner or manager appointment and removes them from the company's lists; the member
+     * is notified.
+     *
+     * <p>Only a current owner may revoke. The appointment's own rules decide whose appointment the caller may end:
+     * a manager's by its inviter, an owner's by its inviter or the owner themselves. The founder's appointment
+     * cannot be revoked.
+     *
+     * @param token         the revoking owner's member token
+     * @param revokeRequest the company and the member whose appointment ends
+     * @throws UserNotFoundException        if the target does not exist
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the target is the founder, or the caller is not an owner of the company
+     * @throws com.ticketing.system.shared.exception.AppointmentNotFoundException if the target has no active appointment in the company
+     * @throws IllegalArgumentException     if the caller may not revoke that appointment
+     */
     @Transactional
     public void RevokeAppointment(String token, AppointmentRevokeDTO revokeRequest) {
         int ownerId = authenticate(token);
@@ -272,13 +346,11 @@ public class CompanyManagementService {
         // Only a current owner may revoke, so a revoked owner keeps no authority over the managers they
         // appointed. An owner revoking their own appointment is a current owner, so it stays allowed.
         companyMembershipService.requireOwnerInCompany(ownerId, revokeRequest.companyId());
-        // Revoke the target's active appointment (revoke-rights checks + persistence happen inside).
         companyMembershipService.revokeAppointment(revokeRequest.targetUserId(), revokeRequest.companyId(), ownerId);
         company.RevokeAppointment(revokeRequest.targetUserId());
 
         companyRepository.updateCompany(company);
 
-        // Notify user of revocation
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new ManagerRevokedNotice(revokeRequest.targetUserId(),
                 revokeRequest.companyId(), company.getName()));
@@ -319,7 +391,16 @@ public class CompanyManagementService {
     // Read-side roster queries (#264 — wire ManagerListView).
     // ---------------------------------------------------------------------------
 
-    // II.4.7.1 — active managers of a company (owner-only view).
+    /**
+     * II.4.7.1 — lists a company's active managers. Owner-only.
+     *
+     * @param token     the requesting owner's member token
+     * @param companyId the company
+     * @return one entry per manager that holds an active appointment
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the caller does not exist
+     * @throws UnauthorizedActionException if the caller is not an owner of the company
+     */
     @Transactional(readOnly = true)
     public List<AppointmentInfoDTO> listManagers(String token, int companyId) {
         int requesterId = authenticate(token);
@@ -346,7 +427,17 @@ public class CompanyManagementService {
         return managers;
     }
 
-    // II.4.7.1 — pending invitations (manager + owner offers) awaiting acceptance.
+    /**
+     * II.4.7.1 — lists a company's pending appointments, manager invitations and owner offers alike, that await
+     * the target's response. Owner-only.
+     *
+     * @param token     the requesting owner's member token
+     * @param companyId the company
+     * @return one entry per pending appointment
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the caller does not exist
+     * @throws UnauthorizedActionException if the caller is not an owner of the company
+     */
     @Transactional(readOnly = true)
     public List<AppointmentInfoDTO> listPendingInvitations(String token, int companyId) {
         int requesterId = authenticate(token);
@@ -370,10 +461,14 @@ public class CompanyManagementService {
         return pending;
     }
 
-    // Companies where the authenticated user holds an ACTIVE Owner appointment.
-    // Bridges token -> companyId for the owner workspace until a real
-    // current-company
-    // selector lands (V2-CADMIN-05).
+    /**
+     * Lists the companies in which the caller holds an active Owner appointment. Feeds the owner-only workspace
+     * pages (V2-CADMIN-05).
+     *
+     * @param token the member's token
+     * @return the companies, empty if the caller owns none
+     * @throws UserNotFoundException if the caller does not exist
+     */
     @Transactional(readOnly = true)
     public List<ProductionCompanyDTO> findOwnedCompanies(String token) {
         int userId = authenticate(token);
@@ -400,14 +495,16 @@ public class CompanyManagementService {
         return owned;
     }
 
-    // Every company the authenticated member belongs to via an ACTIVE appointment
-    // (Owner OR
-    // Manager), with the viewer's display role resolved
-    // ("Founder"/"Co-owner"/"Manager").
-    // Feeds the owner-workspace company selector + name/role subtitle
-    // (V2-WIRE-OWNER-DASH);
-    // unlike findOwnedCompanies it keeps managers, since /owner is reachable by
-    // them too.
+    /**
+     * Lists every company the caller belongs to through an active appointment, owner or manager, with the
+     * caller's display role: {@code "Founder"}, {@code "Co-owner"} or {@code "Manager"}. Feeds the owner
+     * workspace's company selector and its name and role subtitle (V2-WIRE-OWNER-DASH). Unlike
+     * {@link #findOwnedCompanies} it keeps managers, since the owner workspace is reachable by them too.
+     *
+     * @param token the member's token
+     * @return the companies, empty if the caller belongs to none
+     * @throws UserNotFoundException if the caller does not exist
+     */
     @Transactional(readOnly = true)
     public List<MyCompanyDTO> findMyCompanies(String token) {
         int userId = authenticate(token);
@@ -434,13 +531,16 @@ public class CompanyManagementService {
         return companies;
     }
 
-    // II.4.7.3 / II.4.8.2 — the signed-in member's own invitation records (every
-    // status),
-    // keyed on the inviter. The presenter splits PENDING (the pending list) from
-    // the
-    // resolved ACTIVE/REJECTED/REVOKED rows (history). Names are resolved per row,
-    // mirroring
-    // listPendingInvitations.
+    /**
+     * II.4.7.3 / II.4.8.2 — lists the appointments addressed to the caller, in every status, each naming its
+     * inviter. A company's founding appointment is not an invitation and is left out. The presenter splits the
+     * pending ones from the resolved ones (accepted, rejected, revoked). An inviter who no longer exists shows as a
+     * placeholder name.
+     *
+     * @param token the member's token
+     * @return the invitations, empty if there are none
+     * @throws UserNotFoundException if the caller does not exist
+     */
     @Transactional(readOnly = true)
     public List<InvitationDTO> listMyInvitations(String token) {
         int userId = authenticate(token);
@@ -481,26 +581,32 @@ public class CompanyManagementService {
         return invitations;
     }
 
-    // ---------------------------------------------------------------------------
-    // DTO-typed methods added in skeleton round (parallel to the existing
-    // token-arg / List<Permission>-arg methods above; team to consolidate later).
-    // ---------------------------------------------------------------------------
-
-    // UC-18 — register a new Production Company; appoints Founder/Owner in same
-    // transaction.
+    /**
+     * UC-18 — registers a new production company. The caller becomes its founder and first owner, through an
+     * immediately active founding appointment created in the same transaction. The company starts
+     * {@code ACTIVE} with a stored rating of 0, which nothing reads or updates afterwards: the rating shown to
+     * users is derived by catalog's {@code CompanyRatings}.
+     *
+     * @param token   the registering member's token
+     * @param request the company's name and description; surrounding whitespace is trimmed
+     * @return the registered company
+     * @throws UserNotFoundException          if the caller does not exist
+     * @throws IllegalArgumentException       if the name or the description is null or empty after trimming
+     * @throws IllegalStateException          with {@link #COMPANY_NAME_TAKEN_MESSAGE} if a company already has
+     *                                        that name
+     * @throws BusinessRuleViolationException if the name or the description is longer than the user-text limit
+     */
     @Transactional
     public ProductionCompanyDTO registerCompany(String token, CompanyRegistrationDTO request) {
         int userId = authenticate(token);
         userRepository.getUserById(userId); // existence check (throws if the caller is unknown)
 
-        // CompanyRegistrationDTO is a class with get* accessors, not a record.
         if (request.getName() == null || request.getName().trim().isEmpty() ||
                 request.getDescription() == null || request.getDescription().trim().isEmpty()) {
             log.warn("Company registration failed: Missing required fields by user {}", userId);
             throw new IllegalArgumentException("All company fields (name, description) must be provided");
         }
 
-        // Call on the injected instance, not the interface.
         if (companyRepository.existsByName(request.getName().trim())) {
             log.warn("Company registration failed: Company name '{}' already exists", request.getName());
             throw new IllegalStateException(COMPANY_NAME_TAKEN_MESSAGE);
@@ -526,11 +632,24 @@ public class CompanyManagementService {
                 newProductionCompany.getCompanyId(),
                 newProductionCompany.getName(),
                 newProductionCompany.getDescription(),
-                newProductionCompany.getStatus().name(), // DTO field is String
-                newProductionCompany.getFounderId() // DTO field is founderId
+                newProductionCompany.getStatus().name(),
+                newProductionCompany.getFounderId()
         );
     }
 
+    /**
+     * Replaces the company's purchase policy with the one in {@code config}; a null policy clears the company's
+     * policy. Requires the {@code EDIT_POLICIES} permission, which owners hold implicitly. Only the purchase
+     * policy is stored; the config's discount policies are not.
+     *
+     * @param token  the member's token
+     * @param config the company and the policy to set
+     * @throws IllegalArgumentException    if {@code config} is null, or its policy is not a valid policy description
+     * @throws IllegalStateException       if the policy has a negative minimum age or ticket count
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the caller does not exist
+     * @throws UnauthorizedActionException if the caller lacks the permission
+     */
     @Transactional
     public void setCompanyPolicies(String token, CompanyPolicyConfigDTO config) {
         if (config == null) {
@@ -552,7 +671,21 @@ public class CompanyManagementService {
         log.info("Purchase policy updated for company {} by user {}", config.companyId(), userId);
     }
 
-    // UC-25 — recursive organizational tree (Owners only per II.4.15).
+    /**
+     * UC-25 — returns a company's role tree: the founder at the root, each member under the member who appointed
+     * them. Owners only (II.4.15).
+     *
+     * <p>While NaimElijah/Ticketeer#126 is open, the call fails with a {@code NullPointerException} when a member's
+     * appointer is no longer a member of the company, and members in an appointment cycle are missing from the
+     * returned tree.
+     *
+     * @param token     the owner's member token
+     * @param companyId the company
+     * @return the founder's node, the root of the tree
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the caller does not exist
+     * @throws UnauthorizedActionException if the caller is not an owner of the company
+     */
     @Transactional(readOnly = true)
     public OrganizationalTreeNodeDTO viewOrganizationalTree(String token, int companyId) {
         log.info("Attempting to view organizational tree for company {}", companyId);
@@ -577,12 +710,17 @@ public class CompanyManagementService {
         }
 
         log.info("Successfully retrieved organizational tree for company {}", companyId);
-        // using the helper method to build the tree starting from the founder (root of
-        // the tree)
         return buildOrganizationalTree(companyId, company.getFounderId());
     }
 
-    // Admin-only: list every company in the system regardless of ownership.
+    /**
+     * Lists every company in the system regardless of ownership, ordered by company id so that a default selection
+     * is stable. Admin-only.
+     *
+     * @param token an admin token
+     * @return every company, ordered by company id
+     * @throws InvalidTokenException if {@code token} is not a live admin token
+     */
     public List<ProductionCompanyDTO> adminListAllCompanies(String token) {
         requireSystemAdmin(token);
         // Sort by companyId so the default selection (the presenter falls back to the first
@@ -595,7 +733,16 @@ public class CompanyManagementService {
                 .toList();
     }
 
-    // Admin-only: build org tree for any company, bypassing the ownership check.
+    /**
+     * Returns the role tree of any company, without the owner check of {@link #viewOrganizationalTree}, and
+     * behaves the same way in the cases that method describes. Admin-only.
+     *
+     * @param token     an admin token
+     * @param companyId the company
+     * @return the founder's node, the root of the tree
+     * @throws InvalidTokenException    if {@code token} is not a live admin token
+     * @throws CompanyNotFoundException if the company does not exist
+     */
     public OrganizationalTreeNodeDTO adminViewOrgTree(String token, int companyId) {
         requireSystemAdmin(token);
         ProductionCompany company = companyRepository.getCompanyById(companyId);
@@ -607,21 +754,17 @@ public class CompanyManagementService {
         return buildOrganizationalTree(companyId, company.getFounderId());
     }
 
-    // *HELPER METHOD* — BFS build of the organizational tree for UC-25
-    // (viewOrganizationalTree).
+    // Builds the UC-25 organizational tree in two passes: a node per owner and manager, then each node
+    // attached under the member who appointed it. The founder's node is the root.
     private OrganizationalTreeNodeDTO buildOrganizationalTree(int companyId, int founderId) {
         ProductionCompany company = companyRepository.getCompanyById(companyId);
 
-        // gather all members (owners and managers) of the company in a single list for
-        // easy processing
         List<Integer> members = new ArrayList<>();
         members.addAll(company.getManagers());
         members.addAll(company.getOwnersIds());
 
         Map<Integer, OrganizationalTreeNodeDTO> userIdToNodeMap = new HashMap<>();
 
-        // First pass: create a node for each member (including founder) without setting
-        // children yet.
         for (Integer memberId : members) {
             User memberUser = userRepository.getUserById(memberId);
             CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(memberId, companyId);
@@ -637,18 +780,15 @@ public class CompanyManagementService {
             userIdToNodeMap.put(memberId, node);
         }
 
-        // Second pass: set the appointedByThisUser list for each node based on
-        // inviterId.
         for (Integer memberId : members) {
             if (memberId == founderId)
-                continue; // skip founder, they have no appointer
+                continue;
             CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(memberId, companyId);
             OrganizationalTreeNodeDTO node = userIdToNodeMap.get(memberId);
             OrganizationalTreeNodeDTO inviterNode = userIdToNodeMap.get(appt.getInviterId());
             inviterNode.appointedByThisUser().add(node);
         }
 
-        // return the founder's node, which is the root of the organizational tree
         return userIdToNodeMap.get(founderId);
     }
 
@@ -749,6 +889,17 @@ public class CompanyManagementService {
         }
     }
 
+    /**
+     * Returns the company's purchase policy. Requires the {@code EDIT_POLICIES} permission, which owners hold
+     * implicitly.
+     *
+     * @param token     the member's token
+     * @param companyId the company
+     * @return the company's purchase policy
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UserNotFoundException       if the caller does not exist
+     * @throws UnauthorizedActionException if the caller lacks the permission
+     */
     @Transactional(readOnly = true)
     public PurchasePolicyDTO getCompanyPurchasePolicy(String token, int companyId) {
         int userId = authenticate(token);

@@ -18,12 +18,24 @@ import com.ticketing.system.organization.domain.ProductionCompany;
  */
 public interface SpringDataProductionCompanyRepository extends JpaRepository<ProductionCompany, Integer> {
 
+    /**
+     * The company whose name equals {@code name}, if any.
+     */
     Optional<ProductionCompany> findByName(String name);
 
+    /**
+     * Whether a company's name equals {@code name}.
+     */
     boolean existsByName(String name);
 
+    /**
+     * The companies in the given status.
+     */
     List<ProductionCompany> findByCompanyStatus(CompanyStatus status);
 
+    /**
+     * The companies founded by the given user.
+     */
     List<ProductionCompany> findByFounderId(int founderId);
 
     /** Highest existing companyId (0 when empty) — seeds the assigned-id sequence across restarts. */

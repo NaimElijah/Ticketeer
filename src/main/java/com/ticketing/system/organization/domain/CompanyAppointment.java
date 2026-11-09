@@ -23,16 +23,23 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
-// V3 (task #20): a standalone organization aggregate root persisted through its own
-// CompanyAppointmentRepository — no longer an owned child of the User aggregate (that ownership
-// forced the foundational identity context to depend on organization). appointmentId is an
-// ASSIGNED @Id minted by the repository's nextId() (matching every other aggregate root here —
-// ProductionCompany/User/OrderReceipt — rather than @GeneratedValue), so both the Memory and JPA
-// adapters key it identically. companyId/targetId/inviterId stay plain by-id columns (never
-// @ManyToOne); role/status are stored by name; permissions live in a side-table (@ElementCollection
-// of permission names). @Version drives optimistic locking and lets Spring Data treat a freshly
-// constructed appointment (null version) as an INSERT. Fields are non-final with a protected no-arg
-// ctor so Hibernate can hydrate; the public ctor and factories still enforce the invariants.
+/**
+ * A member's appointment to a role in one production company, with the permissions it grants.
+ *
+ * <p>An aggregate root, persisted through its own repository. It starts {@link AppointmentStatus#PENDING}, or
+ * {@link AppointmentStatus#ACTIVE} for a company's founder, and moves through {@link #accept()},
+ * {@link #reject()} and {@link #revoke(int)}. {@link #checkInvariants()} holds at construction and after every
+ * transition: a {@link CompanyRole#Manager} lists at least one permission, an {@link CompanyRole#Owner} lists
+ * none and holds all of them implicitly, and role, status and creation time are set.
+ *
+ * <p>Persistence: {@code appointmentId} is an assigned id minted by the repository's {@code nextId()}, as for
+ * the other aggregate roots, rather than {@code @GeneratedValue}, so the Memory and Jpa adapters key it
+ * identically. {@code companyId}, {@code targetId} and {@code inviterId} are plain by-id columns, never
+ * associations; role and status are stored by name; permissions live in a side table. {@code @Version} drives
+ * optimistic locking and lets Spring Data treat a freshly constructed appointment (null version) as an insert.
+ * Fields are non-final with a protected no-argument constructor so Hibernate can hydrate; the public
+ * constructor and the factories enforce the invariants.
+ */
 @Entity
 @Table(name = "company_appointments")
 public class CompanyAppointment implements InvariantChecked {
@@ -40,7 +47,7 @@ public class CompanyAppointment implements InvariantChecked {
     private int appointmentId; // assigned identifier for the appointment (minted by the repository)
 
     @Column(name = "company_id", nullable = false)
-    private int companyId; // ID of the company this appointment belongs to
+    private int companyId;
 
     @Column(name = "target_id", nullable = false)
     private int targetId; // ID of the user being appointed
@@ -50,11 +57,11 @@ public class CompanyAppointment implements InvariantChecked {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private CompanyRole role; // Role assigned to the target user
+    private CompanyRole role;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private AppointmentStatus status; // Current status of the appointment
+    private AppointmentStatus status;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "appointment_permissions",
@@ -64,7 +71,7 @@ public class CompanyAppointment implements InvariantChecked {
     private Set<Permission> permissions; // Permissions granted to the target user
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt; // Timestamp of when the appointment was created
+    private LocalDateTime createdAt;
 
     @Version
     private Long version; // Optimistic-lock version; null on a freshly constructed (not-yet-persisted) appointment
@@ -72,6 +79,17 @@ public class CompanyAppointment implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected CompanyAppointment() { }
 
+    /**
+     * Creates an appointment and checks its invariants.
+     *
+     * @param appointmentId the id minted by the repository's {@code nextId()}
+     * @param targetId      the user being appointed
+     * @param inviterId     the user who made the appointment
+     * @param permissions   the permissions granted; {@code null} or empty means none. Copied, so the caller keeps
+     *                      no handle on it
+     * @throws IllegalStateException if an invariant is violated: a null role, status or creation time, a Manager
+     *                               without a permission, or an Owner with one
+     */
     public CompanyAppointment(
             int appointmentId,
             int companyId,
@@ -122,9 +140,10 @@ public class CompanyAppointment implements InvariantChecked {
         }
     }
 
-    // this constructor is specifically for the creation of the company founder
-    // appointment, which is always an active owner with no permissions (as owners
-    // have all permissions implicitly).
+    /**
+     * Creates the {@link AppointmentStatus#ACTIVE} Owner appointment of a company's founder, who holds all
+     * permissions implicitly. Used when a company is opened; the registering user is both target and inviter.
+     */
     public static CompanyAppointment FoundingAppointment(
             int appointmentId,
             int companyId,
@@ -143,6 +162,12 @@ public class CompanyAppointment implements InvariantChecked {
                 createdAt);
     }
 
+    /**
+     * Creates a {@link AppointmentStatus#PENDING} Manager appointment (UC-24).
+     *
+     * @param permissions the permissions the manager is granted
+     * @throws IllegalStateException if {@code permissions} is null or empty
+     */
     public static CompanyAppointment ManagerAppointment(
             int appointmentId,
             int companyId,
@@ -161,6 +186,9 @@ public class CompanyAppointment implements InvariantChecked {
                 createdAt);
     }
 
+    /**
+     * Creates a {@link AppointmentStatus#PENDING} Owner appointment (UC-23).
+     */
     public static CompanyAppointment OwnerAppointment(
             int appointmentId,
             int companyId,
@@ -179,10 +207,14 @@ public class CompanyAppointment implements InvariantChecked {
     }
 
     // ---------------------------------------------------------------------------
-    // Skeleton additions — AppointmentStatus lifecycle + accessors.
+    // AppointmentStatus lifecycle transitions and accessors.
     // ---------------------------------------------------------------------------
 
-    // UC-23 / UC-24 — PENDING -> ACTIVE on target acceptance.
+    /**
+     * UC-23 / UC-24 — moves a pending appointment to {@link AppointmentStatus#ACTIVE} on the target's acceptance.
+     *
+     * @throws IllegalStateException if the appointment is not pending
+     */
     public void accept() {
         if (this.status != AppointmentStatus.PENDING) {
             throw new IllegalStateException("Only pending appointments can be accepted.");
@@ -191,7 +223,11 @@ public class CompanyAppointment implements InvariantChecked {
         checkInvariants();
     }
 
-    // UC-23 / UC-24 — PENDING -> REJECTED on target rejection.
+    /**
+     * UC-23 / UC-24 — moves a pending appointment to {@link AppointmentStatus#REJECTED} on the target's rejection.
+     *
+     * @throws IllegalStateException if the appointment is not pending
+     */
     public void reject() {
         if (this.status != AppointmentStatus.PENDING) {
             throw new IllegalStateException("Only pending appointments can be rejected.");
@@ -200,8 +236,14 @@ public class CompanyAppointment implements InvariantChecked {
         checkInvariants();
     }
 
-    // UC-24 — ACTIVE -> REVOKED. Owner appointments do NOT support revoke (II.4.9
-    // Cancelled in v0).
+    /**
+     * UC-24 — moves an active appointment to {@link AppointmentStatus#REVOKED}. A Manager appointment is revoked
+     * by its inviter; an Owner appointment by its inviter (II.4.9) or its target (II.4.10).
+     *
+     * @param revokerId the user ending the appointment
+     * @throws IllegalStateException    if the appointment is not active
+     * @throws IllegalArgumentException if {@code revokerId} is not a user who may revoke this appointment
+     */
     public void revoke(int revokerId) {
         if (this.status != AppointmentStatus.ACTIVE) {
             throw new IllegalStateException("Only active appointments can be revoked.");
@@ -209,7 +251,7 @@ public class CompanyAppointment implements InvariantChecked {
         if (this.role == CompanyRole.Owner) {
             if (this.inviterId != revokerId && this.targetId != revokerId) {
                 // if the appointment is an owner appointment, either the original inviter or
-                // the target themselves can revoke it (per UC-24 owner revoke condition).
+                // the target themselves can revoke it (II.4.9, II.4.10).
                 throw new IllegalArgumentException("Only the original inviter or target can revoke this appointment.");
             }
         } else {
@@ -243,6 +285,10 @@ public class CompanyAppointment implements InvariantChecked {
         checkInvariants();
     }
 
+    /**
+     * Returns whether this appointment grants {@code permission}: it must be active, and either an Owner
+     * appointment or a Manager appointment that lists the permission.
+     */
     public boolean hasPermission(Permission permission) {
         if (this.status != AppointmentStatus.ACTIVE) {
             return false; // Inactive appointments do not grant permissions
