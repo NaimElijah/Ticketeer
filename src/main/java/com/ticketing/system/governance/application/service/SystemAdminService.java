@@ -501,7 +501,8 @@ public class SystemAdminService {
      * belong to the company and drops the rest without an error. A filter that ends up naming no event
      * at all, such as a company with no events, matches nothing. A {@code null} {@code filters}, or one
      * with every field {@code null}, matches every receipt. When an event filter applies, each record
-     * carries only the lines of those events. A record with no tickets is left out.
+     * carries only the lines of those events; its total is their sum, and its transactions are still
+     * the whole order's. Both dates are inclusive. A record with no tickets is left out.
      *
      * @param token   the caller's admin session token
      * @param filters the filters; may be {@code null}
@@ -574,7 +575,7 @@ public class SystemAdminService {
         if (f.eventIds() == null) {
             effectiveEventIds = companyEventIds;
         } else {
-            // (No exception is thrown; out-of-company eventIds are silently dropped.)
+            // No exception is thrown; out-of-company eventIds are silently dropped.
             Set<Integer> requestedSet = new HashSet<>(f.eventIds());
             effectiveEventIds = companyEventIds.stream()
                     .filter(requestedSet::contains)

@@ -11,7 +11,8 @@
  * reads) and {@code SalesSummaryCalculator}, which computes the headline sales figures over order
  * records into {@code application.dto.SalesSummaryDTO} (UC-22, UC-31). The services depend on those
  * contexts' driven ports, DTOs and domain types, and on identity's {@code AuthenticationService},
- * organization's {@code CompanyMembershipService} and catalog's {@code CompanyRatings}.
+ * organization's {@code CompanyMembershipService}, catalog's {@code CompanyRatings} and inbound
+ * {@code CatalogEventDisplayPort}, and sales' {@code OrderReceiptMapper}.
  *
  * <p>Declared {@code OPEN} so its query services stay directly callable by the presentation layer.
  */
