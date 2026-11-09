@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * Accumulates the outcome of every seeding step so {@code ScenarioRunner}
- * can print one classified summary at the end of a run. That summary is the
+ * can log one classified summary at the end of a run. That summary is the
  * whole point of the smoke-seed: it tells you, in a single place, which
  * real-service paths passed, which were skipped because the feature is a
  * known not-yet-built stub, and which FAILED — i.e. surfaced a real bug.

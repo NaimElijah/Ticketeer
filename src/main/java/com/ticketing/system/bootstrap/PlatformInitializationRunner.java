@@ -14,12 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Runs platform initialization (UC-1) at startup and decides whether a failure stops the boot
  * (ADR-003). An unreachable payment service or ticket issuer is the one failure that waiting can
- * fix: it is logged, the process boots with the market closed (UC-32 guards that), and
+ * fix: it is logged, the process boots with the market not open (UC-32 guards that), and
  * {@code MarketSelfHealScheduler} retries. Every other failure, such as a default admin that
  * cannot be created or persisted state that breaks an invariant, propagates out of this runner,
  * so {@code SpringApplication.run} fails and the process exits.
  *
- * <p>{@code @Order(0)} runs this before the dev seeders ({@code @Order(1)}/{@code (2)}).
+ * <p>{@code @Order(0)} runs this before {@code MarketOpener} and {@code DevUserSeeder}
+ * ({@code @Order(1)}) and {@code ScenarioRunner} ({@code @Order(2)}).
  * Excluded from the {@code test} profile so acceptance tests drive initialization explicitly.
  */
 @Component

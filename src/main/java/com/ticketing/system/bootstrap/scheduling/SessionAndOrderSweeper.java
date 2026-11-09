@@ -46,8 +46,9 @@ import com.ticketing.system.identity.domain.Session;
  *   <li><b>Expired carts</b> — ActiveOrders whose {@link CartLineItem} TTL
  *     (10 min from {@code addedAt}) has elapsed. The cart is unusable
  *     regardless of owner, so it's deleted and its tickets are released.
- *     This is the only place a Member's cart is destroyed without an
- *     explicit logout/end-session call.</li>
+ *     This is the only place a Member's cart is destroyed by expiry
+ *     rather than by an explicit call of the member, such as abandoning
+ *     the order or checking out.</li>
  * </ol>
  *
  * <p>The sweep and each of its passes are public so tests can drive them
@@ -190,8 +191,8 @@ public class SessionAndOrderSweeper {
      * inventory, deletes the order, and unlocks in reverse.
      *
      * <p>Lock order: {@code activeOrder → events[sorted]} prevents
-     * deadlocks with {@code ReservationService} and {@code CheckoutService}
-     * which follow the identical acquire sequence.
+     * deadlocks with {@code CheckoutService}, which takes its locks in the
+     * same order.
      *
      * <p>The locks are real only on the in-memory adapters. On JPA, {@code lockForUpdate} and
      * {@code unlock} are no-ops, and the order checked here is the copy the scan loaded, not a fresh
@@ -220,14 +221,9 @@ public class SessionAndOrderSweeper {
 
         activeOrderRepository.lockForUpdate(orderLockKey);
         try {
-            // If the order is in the middle of checkout, we should skip it and let the checkout flow handle it 
-            // (either complete successfully or fail and revert to PRE_CHECKOUT). Releasing inventory underneath an 
-            // active checkout risks causing a failed checkout for the user, which is disruptive. It's safer to let 
-            // the checkout flow handle expiration after it finishes its current work, since it will check for expiration 
-            // at that point and can clean up accordingly.
-            
-            // Note that this means expired orders that are CHECKOUT_IN_PROGRESS may not be cleaned up until their next expiration time 
-            // (10 min after the last item was added), but this is an acceptable tradeoff to avoid disrupting active checkouts.
+            // Releasing inventory underneath an active checkout would fail the buyer's purchase. The order
+            // is skipped; a later tick sweeps it if it is still expired once the checkout has finished or
+            // reverted to PRE_CHECKOUT.
             if (order.isCheckoutInProgress()) {
                 log.info("Skipping expired active order {} because checkout is in progress", order.getOrderKey());
                 return false;
@@ -252,20 +248,17 @@ public class SessionAndOrderSweeper {
             }
             
             try {
-                // Group line items by event and zone to aggregate the release calls
                 Map<Integer, Map<Integer, List<CartLineItem>>> grouped =
                         order.getItems().stream()
                                 .collect(Collectors.groupingBy(
                                         CartLineItem::geteventId,
                                         Collectors.groupingBy(CartLineItem::getzoneId)
                                 ));
-                // For each (event, zone) group, release the appropriate quantity back to inventory
                 for (Map.Entry<Integer, Map<Integer, List<CartLineItem>>> eventEntry : grouped.entrySet()) {
                     Event event = null;
                     try {
                         event = eventRepository.findById(eventEntry.getKey());
                     } catch (EventNotFoundException e) {
-                        // If the event is not found, log a warning and skip releasing tickets for this event
                         log.warn("Event with ID {} not found while releasing tickets for order of user id {}. Skipping.", eventEntry.getKey(), order.getUserId());
                         continue;
                     }
@@ -273,7 +266,7 @@ public class SessionAndOrderSweeper {
                         log.warn("Event with ID {} not found while releasing tickets for order of user id {}. Skipping.", eventEntry.getKey(), order.getUserId());
                         continue;
                     }
-                    // For each zone, release seated/standing independently. Each release is guarded so one
+                    // Each zone's release is guarded so one
                     // failure (e.g. a double-release race with abandonActiveOrder, or an event mid-edit)
                     // can't abort cleanup of the remaining zones/events or the rest of the sweep tick. The
                     // event is saved only if at least one release in it actually succeeded.
@@ -281,7 +274,6 @@ public class SessionAndOrderSweeper {
                     for (Map.Entry<Integer, List<CartLineItem>> zoneEntry : eventEntry.getValue().entrySet()) {
                         int zoneId = zoneEntry.getKey();
                         List<CartLineItem> items = zoneEntry.getValue();
-                        // Release seated seats (by seat label) and standing inventory (by quantity) independently.
                         List<String> seatNumbers = items.stream()
                                 .map(CartLineItem::getSeatNumber)
                                 .filter(s -> s != null)
@@ -313,7 +305,6 @@ public class SessionAndOrderSweeper {
                 activeOrderRepository.delete(order);
                 return true;
             } finally {
-                // Unlock events in reverse order of acquisition.
                 for (int i = sortedEventIds.size() - 1; i >= 0; i--) {
                     eventRepository.unlock(sortedEventIds.get(i));
                 }

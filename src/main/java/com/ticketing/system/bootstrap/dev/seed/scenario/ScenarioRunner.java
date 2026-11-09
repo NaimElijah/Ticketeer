@@ -77,7 +77,9 @@ import java.util.Optional;
  * scenario answer that names no committed scenario is asked again; if the console ends after one, the
  * boot stops with the valid choices named.
  * {@code seed.fail-fast=true} (the default outside {@code dev}) stops the scenario at the first unexpected
- * error and fails startup, as does a missing or unreadable scenario file (V3 2.a.ii, ADR-003).
+ * error and fails startup (V3 2.a.ii, ADR-003). Whatever {@code seed.fail-fast} says, a missing or
+ * unreadable scenario file, or one the parser refuses, fails startup in {@code reseed} and {@code reset}
+ * (ADR-021).
  */
 @Component
 @Profile("!test")

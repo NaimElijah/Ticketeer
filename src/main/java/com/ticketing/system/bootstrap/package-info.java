@@ -17,13 +17,15 @@
  *       {@link com.ticketing.system.bootstrap.DatasourceUrls} shows the datasource URL there, and in
  *       the seeder, without its query string.</li>
  *   <li>{@code bootstrap.config} — the module's bound configuration records.</li>
- *   <li>{@code bootstrap.scheduling} — the {@code @Scheduled} driving adapters (session/order
- *       sweeper, event completion, market opener/self-heal, notification polling) that trigger
- *       use cases on a timer.</li>
+ *   <li>{@code bootstrap.scheduling} — the driving adapters that trigger use cases on a timer or at
+ *       boot (session/order sweeper, event completion, market opener/self-heal, notification
+ *       polling), and the registry of connected UIs that the polling reads.</li>
  *   <li>{@code bootstrap.dev.seed} — the dataset seeding and {@code .scenario} replay engine.
  *       Despite the package name it runs in every profile except {@code test} whenever
- *       {@code seed.mode} is not {@code off}; {@code dev} sets it to {@code reseed}. Destructive
- *       modes are not yet refused outside {@code dev} (#78).</li>
+ *       {@code seed.mode} is not {@code off}; {@code dev} sets it to {@code reseed}. The
+ *       destructive modes ({@code wipe}, {@code reset}) proceed only with
+ *       {@code seed.assume-yes=true}. Running a committed scenario outside {@code dev} logs a WARN
+ *       (#78).</li>
  * </ul>
  *
  * <p>By nature it depends inward on many contexts' application ports and services, while nothing
