@@ -261,7 +261,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         }
     }
 
-    /** Create flow (eventId == "new"): validate locally, then hand off to the presenter. */
+    /** Create flow (the route names no saved event): checks the fields here, then hands off to the presenter. */
     private void createEvent() {
         errors.clear();
         String name = blankToNull(title.getValue());

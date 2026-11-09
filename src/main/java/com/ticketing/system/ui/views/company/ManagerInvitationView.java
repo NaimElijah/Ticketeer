@@ -39,7 +39,7 @@ public class ManagerInvitationView extends LkPage {
     private static final String PERMISSIONS = "Permissions";
     private static final String ENTER_INVITEE = "Enter a username or email to invite.";
 
-        // Map each display label to its domain Permission value (same order as PERMS list).
+        // Maps each checkbox label to its domain Permission value; the checkboxes appear in this order.
     private static final Map<String, Permission> PERM_MAP = new LinkedHashMap<>();
     static {
         PERM_MAP.put("Manage events",          Permission.MANAGE_INVENTORY);

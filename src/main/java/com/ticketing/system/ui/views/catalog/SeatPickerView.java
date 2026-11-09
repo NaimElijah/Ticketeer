@@ -78,6 +78,11 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private LkBtn holdButton;
     private final Div bodyHolder = new Div();
 
+    /**
+     * Creates the page; the zone is loaded when the route is entered.
+     *
+     * @param hold the reservation hold, whose length the page tells the visitor
+     */
     public SeatPickerView(SeatPickerPresenter presenter, ReservationHoldProperties hold) {
         this.presenter = presenter;
         this.hold = hold;

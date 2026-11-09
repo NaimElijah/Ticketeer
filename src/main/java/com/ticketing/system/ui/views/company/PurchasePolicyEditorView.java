@@ -58,7 +58,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
     private String  memberToken;
     private int     companyId    = -1;
     private int     eventId      = -1;
-    private boolean isEventLevel = false;          // default: company-level (fixes the old mislabel)
+    private boolean isEventLevel = false;          // default: company-level
 
     private Integer routeCompanyId;                // optional deep-link from the URL
     private Integer routeEventId;

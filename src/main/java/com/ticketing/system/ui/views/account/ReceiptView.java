@@ -43,15 +43,12 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Full-page receipt for one member-owned order (#276). Reached by clicking
- * "View" on the
- * {@code MyAccountView} orders grid ({@code receipt/{orderReceiptId}}). Loads
- * the real receipt
- * through {@link ReceiptPresenter}; the view never calls the service directly
- * nor uses
- * {@code try/catch} — it switches on the presenter's sealed {@code Outcome}. A
- * receipt that isn't
- * the signed-in member's renders the same not-found banner as a missing one.
+ * Full-page receipt for one member-owned order (#276). Reached by clicking "View" on the
+ * {@code MyAccountView} orders grid ({@code receipt/:receiptId}, the order receipt's id). Loads the
+ * receipt through {@link ReceiptPresenter}; the view never calls the service directly nor uses
+ * {@code try/catch} — it switches on the presenter's sealed {@code Outcome}. A receipt that isn't
+ * the signed-in member's renders the same not-found banner as a missing one. An order that still
+ * qualifies offers "Request Refund" here (#284), handled through {@link RefundPresenter}.
  */
 @Route(value = "receipt/:receiptId", layout = MainLayout.class)
 @PageTitle("Receipt · TicketHub")

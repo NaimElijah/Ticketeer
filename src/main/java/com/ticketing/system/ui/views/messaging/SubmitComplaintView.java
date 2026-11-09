@@ -125,7 +125,7 @@ public class SubmitComplaintView extends LkPage {
                 subject.getValue(), details.getValue(), about.getValue())) {
             case SubmitComplaintPresenter.Outcome.Success ok -> {
                 Toasts.success("Complaint submitted — we'll get back to you in your Support inbox.");
-                // Forward-compatible focus contract honored by SupportInboxView (#277).
+                // SupportInboxView opens the thread named by ?c= (#277).
                 UI.getCurrent().navigate(SupportInboxView.class,
                     QueryParameters.of("c", ok.conversationId()));
             }

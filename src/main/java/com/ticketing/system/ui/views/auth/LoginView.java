@@ -40,6 +40,12 @@ public class LoginView extends LkAuthCard {
     private final SessionIdentity sessionIdentity;
     private final LkFormErrors errors = new LkFormErrors();
 
+    /**
+     * Builds the sign-in form.
+     *
+     * @param sessionIdentity supplies the guest session id that a successful sign-in promotes; a dead
+     *     one is replaced with a fresh guest session first
+     */
     public LoginView(LoginPresenter presenter, SessionIdentity sessionIdentity) {
         super("Welcome back",
               "Sign in to buy tickets, manage events, and track your orders.");

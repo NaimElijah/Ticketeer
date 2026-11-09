@@ -69,6 +69,13 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
     private Span selectedLine;
     private LkBtn chooseBtn;
 
+    /**
+     * Creates the page; the event is loaded when the route is entered.
+     *
+     * @param sessionIdentity supplies the credential the event is loaded with: the member's token, or
+     *     a live guest session id
+     * @param hold            the reservation hold, whose length the page tells the visitor
+     */
     public EventDetailsView(EventDetailsPresenter presenter, SessionIdentity sessionIdentity,
                             ReservationHoldProperties hold) {
         this.presenter = presenter;

@@ -32,7 +32,7 @@ import java.util.List;
 /**
  * Admin outreach inbox (II.6.3.2): the admin's two-way DIRECT chats with members they've messaged.
  * Master/detail like {@code SupportInboxView}; each non-terminal thread has a reply bar plus a
- * "Close conversation" action (after which the member can no longer open it). Backed by
+ * "Close conversation" action (after which neither side can post to it). Backed by
  * {@link AdminInboxPresenter} → {@code MessagingService}.
  */
 @Route(value = "admin/inbox", layout = PlatformAdminLayout.class)

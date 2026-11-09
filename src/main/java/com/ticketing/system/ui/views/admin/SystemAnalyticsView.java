@@ -33,7 +33,7 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * System Analytics dashboard (UC-46 / #43, #279). Admin-only page reached from
- * the "Analytics" link in the platform-admin top bar. Shows the trading-market
+ * the "System Analytics" link in the platform-admin navigation. Shows the trading-market
  * status with Open / Close controls, plus live platform performance metrics
  * (visitor entry/exit, registrations, reservation/purchase rate and throughput).
  *

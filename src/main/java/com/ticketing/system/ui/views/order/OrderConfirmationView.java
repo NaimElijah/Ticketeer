@@ -89,9 +89,8 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
         String totalDisplay = (result != null)
             ? Money.format(Money.toCents(result.totalCharged()))
             : "$0.00";
-        // The real gateway transaction id (what WSEP `pay` returned), shown as-is so
-        // it matches the receipt's "Transaction <externalTransactionId>" — not a
-        // hex-mangled derivative.
+        // The gateway's transaction id, shown as-is so it matches the receipt's
+        // "Transaction <externalTransactionId>".
         String transactionDisplay = (result != null)
             ? String.valueOf(result.paymentTransactionId())
             : "—";
@@ -130,8 +129,7 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
 
         if (ticketId > 0) {
             row.put("ticketId", String.valueOf(ticketId));
-            // Show the barcode the issuer actually returned (real WSEP TIX code / stub code),
-            // not a value fabricated from the ticket id.
+            // The barcode is the one the ticket issuer returned; "Not yet issued" stands in when there is none.
             String value = (barcodeValue != null && !barcodeValue.isBlank()) ? barcodeValue : "Not yet issued";
             Span barcode = Lk.mono(value);
             barcode.addClassName("bz-barcode");

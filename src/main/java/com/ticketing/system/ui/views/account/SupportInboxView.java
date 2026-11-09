@@ -35,9 +35,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Member's Support inbox (#277): lists the member's outgoing conversations
- * (complaints + company inquiries) and lets them read each thread and reply,
- * all backed by {@link SupportInboxPresenter} → {@code MessagingService}.
+ * Member's Support inbox (#277): lists the member's conversations (the complaints and company
+ * inquiries they opened, and admin outreach sent to them) and lets them read each thread and
+ * reply where the thread takes a reply, all backed by {@link SupportInboxPresenter} →
+ * {@code MessagingService}.
  *
  * <p>Honors the {@code support?c=<conversationId>} focus contract introduced by
  * {@code SubmitComplaintView} (#267): navigating with that query param opens the

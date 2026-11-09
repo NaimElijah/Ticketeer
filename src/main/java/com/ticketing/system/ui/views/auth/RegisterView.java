@@ -83,7 +83,7 @@ public class RegisterView extends LkAuthCard {
         // Debounced live availability check — 300 ms after the last keystroke
         // the LAZY mode fires a value-change event; the presenter returns a
         // typed Outcome that drives the suffix icon, helper text, and the
-        // invalid styling. See [V2-AUTH-FORM-VAL] in wire-up-plan.md.
+        // invalid styling. See [V2-AUTH-FORM-VAL].
         username.setValueChangeMode(ValueChangeMode.LAZY);
         username.setValueChangeTimeout(300);
         username.addValueChangeListener(e -> applyUsernameFeedback(username, e.getValue()));

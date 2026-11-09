@@ -38,7 +38,7 @@ import java.util.List;
 
 /**
  * Member "New inquiry" composer (II.3.10). The member picks a production company (searchable, or
- * pre-filled via {@code ?company=<id>} from an event/company page's "Ask the organizer" button),
+ * pre-filled via {@code ?company=<id>} from an event page's "Ask the Organizer" button),
  * writes a title + description, and submits. The inquiry opens a two-way chat that the company's
  * eligible role-holders answer; replies surface in the member's Support inbox. Backed by
  * {@link NewInquiryPresenter} → {@code MessagingService}.

@@ -5,8 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Date-range presets for the Company Sales History filter. The filter narrows orders by their
- * purchase date. Pure (no Vaadin) so the window math is unit-testable.
+ * Date-range presets for the sales-history filters of {@code CompanySalesView} and
+ * {@link GlobalHistoryView}. A filter narrows orders by their purchase date. Pure (no Vaadin) so the
+ * window math is unit-testable.
  */
 public final class SalesDateRange {
 
@@ -19,7 +20,7 @@ public final class SalesDateRange {
 
     /**
      * Inclusive lower bound for {@code range} relative to {@code today}; {@code null} for
-     * "All time" (and any unknown value), meaning no lower bound. An order is in range when its
+     * "All time" (and for a {@code null} or unknown value), meaning no lower bound. An order is in range when its
      * purchase time is not before the returned bound.
      */
     public static LocalDateTime startOf(String range, LocalDate today) {
