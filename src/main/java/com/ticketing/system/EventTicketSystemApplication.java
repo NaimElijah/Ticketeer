@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  * {@code com.ticketing.system} and everything below it.
  *
  * <p>{@code @ConfigurationPropertiesScan} binds the {@code @ConfigurationProperties} records of every
- * module, such as those in {@code bootstrap.config}, so a missing or invalid setting stops the boot.
+ * module, such as those in {@code bootstrap.config}, so an invalid setting, or a missing one its record constrains, stops the boot.
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan

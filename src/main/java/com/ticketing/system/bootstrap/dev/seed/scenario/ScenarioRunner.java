@@ -192,6 +192,8 @@ public class ScenarioRunner implements ApplicationRunner {
      *         {@code expect-error} line names no operation, which is thrown mid-run whatever
      *         {@code seed.fail-fast} says
      * @throws SeedHarness.SeedAbortException when {@code seed.fail-fast} is on and a step fails
+     * @throws RuntimeException a database failure of the wipe or of the existing-user check, propagated
+     *         unchanged
      */
     @Override
     public void run(ApplicationArguments args) {

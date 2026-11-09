@@ -42,10 +42,12 @@ public final class ScenarioCommand {
         return op;
     }
 
+    /** The positional arguments: the list passed to the constructor, not a copy. */
     public List<String> positional() {
         return positional;
     }
 
+    /** The named arguments: the map passed to the constructor, not a copy. */
     public Map<String, String> named() {
         return named;
     }

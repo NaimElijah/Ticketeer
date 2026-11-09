@@ -24,8 +24,8 @@
  *       Despite the package name it runs in every profile except {@code test} whenever
  *       {@code seed.mode} is not {@code off}; {@code dev} sets it to {@code reseed}. The
  *       destructive modes ({@code wipe}, {@code reset}) proceed only with
- *       {@code seed.assume-yes=true}. Running a committed scenario outside {@code dev} logs a WARN
- *       (#78).</li>
+ *       {@code seed.assume-yes=true}, in any profile except {@code test}; refusing them outside
+ *       {@code dev} is #78. Running a committed scenario outside {@code dev} logs a WARN.</li>
  * </ul>
  *
  * <p>By nature it depends inward on many contexts' application ports and services, while nothing

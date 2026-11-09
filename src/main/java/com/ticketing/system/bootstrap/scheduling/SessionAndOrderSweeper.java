@@ -44,7 +44,8 @@ import com.ticketing.system.identity.domain.Session;
  *     cart (keyed by {@code userId}) is preserved per D9a — it will be
  *     re-attached to the next Member session on login.</li>
  *   <li><b>Expired carts</b> — ActiveOrders whose {@link CartLineItem} TTL
- *     (10 min from {@code addedAt}) has elapsed. The cart is unusable
+ *     (10 min by default, {@code constants.ticket-reservation-duration}, from {@code addedAt}) has
+ *     elapsed. The cart is unusable
  *     regardless of owner, so it's deleted and its tickets are released.
  *     This is the only place a Member's cart is destroyed by expiry
  *     rather than by an explicit call of the member, such as abandoning
@@ -196,7 +197,7 @@ public class SessionAndOrderSweeper {
     }
 
     /**
-     * Acquires locks in the same order as checkout/reservation
+     * Acquires locks in the same order as checkout
      * (active-order lock first, then events sorted by id), releases
      * inventory, deletes the order, and unlocks in reverse.
      *
@@ -277,10 +278,10 @@ public class SessionAndOrderSweeper {
                         log.warn("Event with ID {} not found while releasing tickets for order of user id {}. Skipping.", eventEntry.getKey(), order.getUserId());
                         continue;
                     }
-                    // Each zone's release is guarded so one
-                    // failure (e.g. a double-release race with abandonActiveOrder, or an event mid-edit)
-                    // can't abort cleanup of the remaining zones/events or the rest of the sweep tick. The
-                    // event is saved only if at least one release in it actually succeeded.
+                    // Each zone's release is guarded so one failure (e.g. a double-release race with
+                    // abandonActiveOrder, or an event mid-edit) can't abort cleanup of the remaining
+                    // zones/events or the rest of the sweep tick. The event is saved only if at least one
+                    // release in it actually succeeded.
                     boolean anyReleased = false;
                     for (Map.Entry<Integer, List<CartLineItem>> zoneEntry : eventEntry.getValue().entrySet()) {
                         int zoneId = zoneEntry.getKey();
