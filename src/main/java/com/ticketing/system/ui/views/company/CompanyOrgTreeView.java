@@ -28,6 +28,8 @@ import jakarta.annotation.security.PermitAll;
  * {@code OrganizationalTreeView}; a Vaadin view binds to one layout, so the two shells need
  * separate view classes. Gated by {@link Capability#VIEW_COMPANY_ORG_TREE} (Founder + Co-owner;
  * managers cannot view it, matching {@code CompanyManagementService.viewOrganizationalTree}).
+ *
+ * <p>Served at {@code /owner/org-tree}.
  */
 @Route(value = "owner/org-tree", layout = WorkspaceLayout.class)
 @PageTitle("Organizational Tree · Workspace")
@@ -38,6 +40,9 @@ public class CompanyOrgTreeView extends LkPage {
     private final OrgTreePresenter presenter;
     private final Div body = new Div();
 
+    /**
+     * Creates the page and renders the company's organizational tree.
+     */
     public CompanyOrgTreeView(OrgTreePresenter presenter) {
         this.presenter = presenter;
         title("Organizational Tree");

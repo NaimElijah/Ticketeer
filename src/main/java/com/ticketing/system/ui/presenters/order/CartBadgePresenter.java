@@ -24,6 +24,12 @@ public class CartBadgePresenter {
     private final ReservationService reservationService;
     private final SessionIdentity    identity;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param reservationService reads the visitor's active order
+     * @param identity           resolves the visitor's credential
+     */
     public CartBadgePresenter(ReservationService reservationService, SessionIdentity identity) {
         this.reservationService = reservationService;
         this.identity           = identity;
@@ -46,9 +52,24 @@ public class CartBadgePresenter {
         }
     }
 
+    /** Sealed outcome of {@link #loadBadge}, which the layout switches on. */
     public sealed interface Outcome {
+        /**
+         * The visitor has a cart.
+         *
+         * @param count            the number of lines in the cart
+         * @param remainingSeconds how long the cart's hold lasts, in seconds
+         */
         record Cart(int count, long remainingSeconds) implements Outcome { }
+
+        /** The visitor has no credential, or no order, or an order with no lines. */
         record Empty()                                implements Outcome { }
+
+        /**
+         * The read failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessageLogged}
+         */
         record Failure(String reason)                 implements Outcome { }
     }
 }

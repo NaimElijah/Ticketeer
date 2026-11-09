@@ -26,6 +26,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Admin's organizational-tree page, served at {@code /admin/org-tree}. A company list on the left
+ * selects the company whose founder → owners → managers appointment tree, with a legend, is shown on
+ * the right. {@code CompanyOrgTreeView} is the variant for a company's own workspace.
+ */
 @Route(value = "admin/org-tree", layout = PlatformAdminLayout.class)
 @PageTitle("Organizational Tree · Admin")
 @PermitAll
@@ -41,6 +46,9 @@ public class OrganizationalTreeView extends LkPage {
     private final Map<Integer, NativeButton> companyButtons = new HashMap<>();
     private Integer selectedCompanyId = null;
 
+    /**
+     * Creates the page and renders the company list with the selected company's tree.
+     */
     public OrganizationalTreeView(OrgTreePresenter presenter) {
         this.presenter = presenter;
         title("Organizational Tree");

@@ -19,6 +19,7 @@ public class AdminDashboardPresenter {
 
     private final SystemAnalyticsService systemAnalyticsService;
 
+    /** Creates the presenter over the service that computes the overview. */
     @Autowired
     public AdminDashboardPresenter(SystemAnalyticsService systemAnalyticsService) {
         this.systemAnalyticsService = systemAnalyticsService;
@@ -35,7 +36,18 @@ public class AdminDashboardPresenter {
 
     /** Sealed outcome the view switches on to render the KPI row. */
     public sealed interface Outcome {
+        /**
+         * The overview loaded.
+         *
+         * @param overview the platform's headline counters
+         */
         record Success(AdminOverviewDTO overview) implements Outcome { }
+
+        /**
+         * The load failed, including a token the service refused.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

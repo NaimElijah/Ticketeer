@@ -44,6 +44,8 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
  * Zone picker (V2-CAT-03 / V2-RES-01 / V2-RES-02). Loads the selected zone via presenter
  * and renders the picker matching its type — {@link VkSeatedZonePicker} for SEATED,
  * {@link VkQuantitySelector} for STANDING.
+ *
+ * <p>Served at {@code /events/:eventId/seats/:zoneId}. Open to guests.
  */
 @Route(value = "events/:eventId/seats/:zoneId", layout = MainLayout.class)
 @PageTitle("Pick Tickets · TicketHub")
@@ -78,6 +80,11 @@ public class SeatPickerView extends LkPage implements BeforeEnterObserver {
     private LkBtn holdButton;
     private final Div bodyHolder = new Div();
 
+    /**
+     * Creates the page; the zone is loaded when the route is entered.
+     *
+     * @param hold the reservation hold, whose length the page tells the visitor
+     */
     public SeatPickerView(SeatPickerPresenter presenter, ReservationHoldProperties hold) {
         this.presenter = presenter;
         this.hold = hold;

@@ -12,6 +12,13 @@ import com.vaadin.flow.component.html.Span;
  */
 public class VkStandingZone extends Div {
 
+    /**
+     * @param name     the zone's name
+     * @param sold     tickets sold
+     * @param reserved tickets held and not yet paid for
+     * @param capacity the zone's capacity; 0 shows an empty bar
+     * @param price    the price text, already formatted
+     */
     public VkStandingZone(String name, int sold, int reserved, int capacity, String price) {
         addClassName("vk-standing");
         // Occupied = sold + currently-held; "left" is the true available count.

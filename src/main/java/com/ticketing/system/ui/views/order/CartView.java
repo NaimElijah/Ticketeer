@@ -25,6 +25,11 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * The visitor's cart, served at {@code /cart}. It shows the reserved lines with a hold countdown and
+ * a Remove action for each, and an order summary whose Proceed to Checkout opens
+ * {@link CheckoutView}. Open to guests.
+ */
 @Route(value = "cart", layout = MainLayout.class)
 @PageTitle("Cart · TicketHub")
 @AnonymousAllowed
@@ -42,6 +47,9 @@ public class CartView extends LkPage {
     private Span sub, total, subText;
     private LkBtn proceedBtn;
 
+    /**
+     * Creates the page and loads the visitor's cart.
+     */
     public CartView(CartPresenter presenter) {
         this.presenter = presenter;
 

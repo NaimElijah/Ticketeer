@@ -29,6 +29,7 @@ public class MyInvitationsPresenter {
 
     private final CompanyManagementService companyManagementService;
 
+    /** Creates the presenter over the company management service. */
     @Autowired
     public MyInvitationsPresenter(CompanyManagementService companyManagementService) {
         this.companyManagementService = companyManagementService;
@@ -55,7 +56,7 @@ public class MyInvitationsPresenter {
         }
     }
 
-    /** Accepts the pending invitation for {@code companyId} (flips the member's role). */
+    /** Accepts the pending invitation for {@code companyId}, which makes the member's appointment active. */
     public ActionOutcome accept(String token, int companyId) {
         return respond(token, companyId, true);
     }
@@ -82,15 +83,38 @@ public class MyInvitationsPresenter {
 
     /** Sealed outcome the view switches on to render the grids or an empty state. */
     public sealed interface Outcome {
+        /**
+         * The invitations loaded.
+         *
+         * @param pending the offers still awaiting an answer
+         * @param history the invitations already answered or withdrawn
+         */
         record Success(List<InvitationDTO> pending, List<InvitationDTO> history) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Result of an accept/decline action the view reacts to. */
     public sealed interface ActionOutcome {
+        /** The service accepted the answer. */
         record Success() implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the answer or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }

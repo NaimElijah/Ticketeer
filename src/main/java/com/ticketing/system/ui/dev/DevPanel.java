@@ -37,6 +37,14 @@ import com.vaadin.flow.component.textfield.TextField;
 import java.util.EnumSet;
 import java.util.List;
 
+/**
+ * The dev-profile control panel: a floating "DEV" button that opens a dialog to switch the session
+ * between guest, member and admin, pick the current company, and list the capabilities the session
+ * holds. {@code DevPanelInitializer} attaches the button.
+ *
+ * <p>Its services sit in static fields that {@link #init} and {@link #bindBeans} fill, so the persona
+ * switches work only after the initializer has run.
+ */
 public final class DevPanel {
 
     private static final String SECTION_LABEL_COLOR = "#475569";
@@ -56,10 +64,20 @@ public final class DevPanel {
 
     private DevPanel() { }
 
+    /** @param rs the service that abandons a member's cart when the Guest or Member switch signs the member out */
     public static void init(ReservationService rs) {
         reservationService = rs;
     }
 
+    /**
+     * Gives the panel the services its persona switches call.
+     *
+     * @param auth            signs in the dev member and the admin
+     * @param signOutFlow     signs the current persona out
+     * @param sessionIdentity supplies the guest session id the member's login needs
+     * @param adminUsername   the platform admin's username, for the "Admin" persona
+     * @param adminPassword   the platform admin's password, for the "Admin" persona
+     */
     public static void bindBeans(AuthenticationService auth, SignOutFlow signOutFlow, SessionIdentity sessionIdentity,
                                  String adminUsername, String adminPassword) {
         AUTH = auth;
@@ -141,6 +159,7 @@ public final class DevPanel {
         return all.get(0);
     }
 
+    /** The floating "DEV" button, fixed at the page's lower right, that opens the panel. */
     public static Button trigger() {
         Icon bug = new Icon(VaadinIcon.BUG);
         bug.getStyle().set("width", "14px").set("height", "14px");
@@ -165,6 +184,10 @@ public final class DevPanel {
         return b;
     }
 
+    /**
+     * Opens the panel dialog. A persona or company change closes and reopens it so it shows the new
+     * state; "Apply &amp; reload" reloads the page. Needs a live UI.
+     */
     public static void show() {
         Dialog dialog = new Dialog();
         dialog.setHeaderTitle("Dev panel — session override");

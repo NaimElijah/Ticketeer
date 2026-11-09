@@ -26,14 +26,29 @@ public class MyProfilePresenter {
     private final MemberQueryService memberQueryService;
     private final SessionIdentity identity;
 
+    /** Creates the presenter over the profile query service and the resolver of the live member. */
     public MyProfilePresenter(MemberQueryService memberQueryService, SessionIdentity identity) {
         this.memberQueryService = memberQueryService;
         this.identity = identity;
     }
 
+    /** Sealed outcome the view switches on to render the profile or an error state. */
     public sealed interface Outcome {
+        /**
+         * The profile loaded.
+         *
+         * @param member the live member's profile projection
+         */
         record Success(MemberDTO member) implements Outcome { }
+
+        /** The visitor is not a live member: a guest, an admin, or a token revoked or expired. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The load failed for any other reason.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessageLogged}
+         */
         record Failure(String reason) implements Outcome { }
     }
 

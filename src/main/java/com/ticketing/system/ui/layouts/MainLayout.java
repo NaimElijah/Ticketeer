@@ -48,8 +48,9 @@ import java.util.Optional;
  * {@link AuthSession} state and the top-nav highlights the active section.
  *
  * <p>
- * System-admin entry points are deliberately not exposed here — the
- * admin workspace lives at its own endpoint behind a separate sign-in.
+ * The nav shows an "Admin" item, to {@link AdminDashboardView}, only to a user
+ * holding {@link Capability#ADMIN_WORKSPACE}. The admin workspace has its own
+ * shell ({@code PlatformAdminLayout}) behind a separate sign-in.
  */
 public class MainLayout extends AppLayout implements AfterNavigationObserver {
 
@@ -73,8 +74,11 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
     private final Clock clock;
 
     /**
-     * @param clock the application clock (ADR-008), for the cart badge's cache age and the seconds its
-     *              countdown has left
+     * @param cartBadgePresenter reads the cart for the top bar's badge whenever the cached badge is stale
+     * @param signOutFlow        runs when the member picks "Sign Out" in the account menu
+     * @param bellPresenter      stores a notification's read mark, and renders its age
+     * @param clock              the application clock (ADR-008), for the cart badge's cache age and the
+     *                           seconds its countdown has left
      */
     public MainLayout(CartBadgePresenter cartBadgePresenter, SignOutFlow signOutFlow,
             NotificationBellPresenter bellPresenter, Clock clock) {

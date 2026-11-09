@@ -42,5 +42,6 @@ public class LkTile extends RouterLink {
         add(iconSlot, titleSpan, descSpan, goSpan);
     }
 
+    /** Gives the tile the {@code on} highlight style. */
     public LkTile active() { addClassName("on"); return this; }
 }

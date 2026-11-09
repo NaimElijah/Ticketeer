@@ -31,6 +31,12 @@ import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Order confirmation, served at {@code /order-confirmed}. It shows the receipt number, the payment
+ * transaction id, the total and the issued tickets with their barcodes. It reads the result kept by
+ * {@code OrderSession}; with none, or one past its age limit, it sends the visitor to
+ * {@link BrowseEventsView}. Leaving for another page ends the confirmation. Open to guests.
+ */
 @Route(value = "order-confirmed", layout = MainLayout.class)
 @PageTitle("Order Confirmed · TicketHub")
 @AnonymousAllowed
@@ -57,6 +63,8 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
     }
 
     /**
+     * Creates the page; its content is built when the route is entered.
+     *
      * @param clock the application clock (ADR-008), for the confirmation's age
      */
     public OrderConfirmationView(Clock clock) {
@@ -89,9 +97,8 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
         String totalDisplay = (result != null)
             ? Money.format(Money.toCents(result.totalCharged()))
             : "$0.00";
-        // The real gateway transaction id (what WSEP `pay` returned), shown as-is so
-        // it matches the receipt's "Transaction <externalTransactionId>" — not a
-        // hex-mangled derivative.
+        // The gateway's transaction id, shown as-is so it matches the receipt's
+        // "Transaction <externalTransactionId>".
         String transactionDisplay = (result != null)
             ? String.valueOf(result.paymentTransactionId())
             : "—";
@@ -130,8 +137,7 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
 
         if (ticketId > 0) {
             row.put("ticketId", String.valueOf(ticketId));
-            // Show the barcode the issuer actually returned (real WSEP TIX code / stub code),
-            // not a value fabricated from the ticket id.
+            // The barcode is the one the ticket issuer returned.
             String value = (barcodeValue != null && !barcodeValue.isBlank()) ? barcodeValue : "Not yet issued";
             Span barcode = Lk.mono(value);
             barcode.addClassName("bz-barcode");

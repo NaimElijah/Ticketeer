@@ -34,16 +34,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * System-admin complaint queue (#269): lists the platform-wide member complaints, lets an admin
- * read each thread, reply, and mark a complaint resolved — all backed by
+ * System-admin complaint queue (#269): lists the platform-wide member complaints and lets an admin
+ * read each thread, filter by status group and open the response page for one — all backed by
  * {@link AdminComplaintQueuePresenter} → {@code MessagingService}.
  *
- * <p>Both reply and "Mark resolved" go through {@code respondToComplaint}: a reply auto-flips the
- * status to Responded; resolve sends a short closing note with status Resolved (the domain forbids
- * blank message bodies, so resolve can't be message-less).
+ * <p>The queue sends nothing itself. A complaint that is not yet resolved shows a "Resolve" action
+ * that opens {@link AdminComplaintRespondView}, where the admin's single response is sent through
+ * {@code respondToComplaint}; that call appends the response and resolves the complaint in one step.
  *
  * <p>Third wired master/detail messaging inbox after {@code SupportInboxView} (#277) and
  * {@code CompanyInquiryInboxView} (#268).
+ *
+ * <p>Served at {@code /admin/complaints}.
  */
 @Route(value = "admin/complaints", layout = PlatformAdminLayout.class)
 @PageTitle("Complaint Queue · Admin")
@@ -73,6 +75,9 @@ public class AdminComplaintQueueView extends LkPage {
     /** The status filter the last render built; {@code null} while a banner stands in for the queue. */
     private LkSelect statusSelect;
 
+    /**
+     * Creates the page and loads the complaint queue.
+     */
     public AdminComplaintQueueView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

@@ -27,6 +27,7 @@ public class AdminInboxPresenter {
 
     private final MessagingService messagingService;
 
+    /** Creates the presenter over the messaging service. */
     @Autowired
     public AdminInboxPresenter(MessagingService messagingService) {
         this.messagingService = messagingService;
@@ -129,15 +130,37 @@ public class AdminInboxPresenter {
 
     /** Sealed outcome the view switches on to render the inbox or an empty/error state. */
     public sealed interface Outcome {
+        /**
+         * The inbox loaded.
+         *
+         * @param conversations the admin's outreach conversations, newest first, possibly none
+         */
         record Success(List<ConversationDTO> conversations) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Result of a reply / close / open the view reacts to. */
     public sealed interface ActionOutcome {
+        /** The service carried out the action. */
         record Success() implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the action or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }

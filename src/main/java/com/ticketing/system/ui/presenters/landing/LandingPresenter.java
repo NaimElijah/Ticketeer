@@ -29,6 +29,7 @@ public class LandingPresenter {
 
     private final CatalogService catalogService;
 
+    /** Creates the presenter over the catalog service. */
     @Autowired
     public LandingPresenter(CatalogService catalogService) {
         this.catalogService = catalogService;
@@ -47,7 +48,19 @@ public class LandingPresenter {
 
     /** Sealed outcome the view switches on to render the poster rows or an empty state. */
     public sealed interface Outcome {
+        /**
+         * Both rows loaded.
+         *
+         * @param featured the best-rated on-sale events, at most the row's poster count
+         * @param upcoming the scheduled events with the soonest show date, at most the row's poster count
+         */
         record Success(List<EventSummaryDTO> featured, List<EventSummaryDTO> upcoming) implements Outcome { }
+
+        /**
+         * Either row failed to load.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

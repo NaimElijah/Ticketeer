@@ -26,6 +26,13 @@ public class MdConvRow extends NativeButton {
     private Span unreadDot;
     private final Div top;
 
+    /**
+     * @param iconName the {@link LkIcon} glyph name shown at the row's start
+     * @param subject  the conversation's subject
+     * @param who      the other party, under the subject
+     * @param time     the time or age text at the row's end, already formatted
+     * @param unread   the unread count as text for the badge; {@code null} or empty shows no badge
+     */
     public MdConvRow(String iconName, String subject, String who, String time, String unread) {
         addClassName("md-conv");
 
@@ -58,6 +65,7 @@ public class MdConvRow extends NativeButton {
         add(ic, body, timeSpan);
     }
 
+    /** Shows the row as the selected one; {@code active(true)}. */
     public MdConvRow active() { return active(true); }
 
     /**
@@ -97,6 +105,7 @@ public class MdConvRow extends NativeButton {
         return this;
     }
 
+    /** Runs {@code r} when the row is clicked; each call adds another listener. */
     public MdConvRow onSelect(Runnable r) {
         addClickListener(e -> r.run());
         return this;

@@ -54,6 +54,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Event create and edit form, served at {@code /owner/events/:eventId}. The id {@code new} opens the
+ * create form, which makes a draft event. Any other id opens the edit form for that event: it saves
+ * the details and the schedule, links to the venue-map, policy and sales pages, shows the status,
+ * and, for a member holding the cancel capability, offers to cancel the event. An id that is no
+ * number names no event.
+ */
 @Route(value = "owner/events/:eventId", layout = WorkspaceLayout.class)
 @PermitAll
 @RequireCapability(Capability.EDIT_COMPANY_EVENTS)
@@ -114,6 +121,9 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
     /** The event's name as loaded, for the cancel confirmation; the title field may hold an unsaved edit. */
     private String loadedEventName = "";
 
+    /**
+     * Creates the page; the event is loaded, or the create form prepared, when the route is entered.
+     */
     public EventManagementView(EventManagementPresenter presenter) {
         this.presenter = presenter;
         title(EDIT_TITLE);
@@ -261,7 +271,7 @@ public class EventManagementView extends LkPage implements BeforeEnterObserver, 
         }
     }
 
-    /** Create flow (eventId == "new"): validate locally, then hand off to the presenter. */
+    /** Create flow (the route names no saved event): checks the fields here, then hands off to the presenter. */
     private void createEvent() {
         errors.clear();
         String name = blankToNull(title.getValue());

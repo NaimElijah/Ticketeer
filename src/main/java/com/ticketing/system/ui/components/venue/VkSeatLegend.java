@@ -9,6 +9,7 @@ import com.vaadin.flow.component.html.Span;
  */
 public class VkSeatLegend extends Div {
 
+    /** Builds the legend, one swatch and label per {@link VkSeat.State}. */
     public VkSeatLegend() {
         addClassName("vk-legend");
         item(VkSeat.State.free, "Available");

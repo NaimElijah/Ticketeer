@@ -35,6 +35,12 @@ public class CompanyInquiryInboxPresenter {
     private final MessagingService messagingService;
     private final CompanyManagementService companyManagementService;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param messagingService         reads and answers the inquiries
+     * @param companyManagementService lists the companies the member belongs to
+     */
     @Autowired
     public CompanyInquiryInboxPresenter(MessagingService messagingService,
                                         CompanyManagementService companyManagementService) {
@@ -45,6 +51,13 @@ public class CompanyInquiryInboxPresenter {
     /**
      * Loads the member's companies plus the selected company's member inquiries. When
      * {@code companyId} is null (first load) or unknown, the first company is selected.
+     *
+     * @param token     the member's token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
+     * @param companyId the company to show, or {@code null} for the first
+     * @return {@link Outcome.NoCompany} when the member belongs to no company; {@link Outcome.Failure}
+     *     with {@code ServiceErrors}' text for any other failure, including a company whose inbox the
+     *     member may not read
      */
     public Outcome loadFor(String token, Integer companyId) {
         if (token == null) {
@@ -75,6 +88,9 @@ public class CompanyInquiryInboxPresenter {
      * Opens a single inquiry thread for the dedicated respond page, marking it read for the caller
      * first, so the thread it returns already counts nothing unread. A failed mark still shows the
      * thread; only an invalid or expired session stops the page.
+     *
+     * @param token          the member's token; {@code null} gives {@link SingleOutcome.NotAuthenticated}
+     * @param conversationId the inquiry to open
      */
     public SingleOutcome loadOne(String token, String conversationId) {
         if (token == null) {
@@ -96,7 +112,13 @@ public class CompanyInquiryInboxPresenter {
         }
     }
 
-    /** Appends a reply to {@code conversationId} on behalf of the signed-in company. */
+    /**
+     * Appends a reply to {@code conversationId} on behalf of the signed-in company.
+     *
+     * @param token          the member's token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param conversationId the inquiry to answer
+     * @param body           the reply text
+     */
     public ActionOutcome reply(String token, String conversationId, String body) {
         if (token == null) {
             return new ActionOutcome.NotAuthenticated();
@@ -115,9 +137,9 @@ public class CompanyInquiryInboxPresenter {
     }
 
     /**
-     * Closes {@code conversationId} (no further messages allowed). The issue's "mark resolved"
-     * maps here: no participant-callable resolve exists, so we reuse the close transition — the
-     * thread ends as CLOSED. (RESOLVED stays complaint/admin-only.)
+     * Closes {@code conversationId} (no further messages allowed). Backs the respond page's "Close
+     * Inquiry". A company cannot resolve a thread (only an admin's reply to a complaint does), so it
+     * ends as CLOSED.
      */
     public ActionOutcome close(String token, String conversationId) {
         if (token == null) {
@@ -183,24 +205,63 @@ public class CompanyInquiryInboxPresenter {
 
     /** Sealed outcome the view switches on to render the inbox or an empty/error state. */
     public sealed interface Outcome {
+        /**
+         * The inbox loaded.
+         *
+         * @param companies     the member's companies
+         * @param selected      the company whose inbox is shown; one of {@code companies}
+         * @param conversations the selected company's member inquiries, newest first, possibly none
+         */
         record Success(List<MyCompanyDTO> companies, MyCompanyDTO selected,
                        List<ConversationDTO> conversations) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /** The member belongs to no company. */
         record NoCompany() implements Outcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Sealed outcome for loading a single inquiry thread (respond page). */
     public sealed interface SingleOutcome {
+        /**
+         * The thread loaded.
+         *
+         * @param conversation the inquiry with its messages
+         */
         record Success(ConversationDTO conversation) implements SingleOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements SingleOutcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements SingleOutcome { }
     }
 
     /** Result of a reply / close / open the view reacts to. */
     public sealed interface ActionOutcome {
+        /** The service carried out the action. */
         record Success() implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the action or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }

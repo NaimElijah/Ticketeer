@@ -49,6 +49,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+/**
+ * Event search page, served at {@code /browse}. A filter sidebar (category, event name, keywords,
+ * artist, date range, price, event and company rating, country and city) and a sort choice
+ * re-query the catalogue on each change; the sort is applied to the loaded results. A
+ * {@code ?category=} query parameter preselects a category. Open to guests.
+ */
 @Route(value = "browse", layout = MainLayout.class)
 @PageTitle("Browse Events · TicketHub")
 @AnonymousAllowed
@@ -123,6 +129,12 @@ public class BrowseEventsView extends LkPage implements BeforeEnterObserver {
     private final Div filterErrorSlot = new Div();
     private Span resultsCountSpan;
 
+    /**
+     * Creates the page and runs the unfiltered search.
+     *
+     * @param identity supplies the credential the searches run with: the member's token, or a live
+     *     guest session id
+     */
     public BrowseEventsView(BrowseEventsPresenter presenter, SessionIdentity identity, DisplayTime displayTime) {
         this.presenter = presenter;
         this.identity = identity;

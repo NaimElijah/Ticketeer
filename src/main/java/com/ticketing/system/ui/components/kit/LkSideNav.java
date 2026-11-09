@@ -19,6 +19,13 @@ import java.util.List;
  */
 public class LkSideNav extends Nav {
 
+    /**
+     * One entry of the drawer.
+     *
+     * @param iconName the {@link LkIcon} glyph name shown before the label
+     * @param label    the entry's text, which {@link LkSideNav#setActive} matches
+     * @param target   the view the entry links to; {@code null} makes it plain text
+     */
     public record Item(String iconName, String label, Class<? extends Component> target) {
     }
 
@@ -29,6 +36,7 @@ public class LkSideNav extends Nav {
     private List<Item> itemDefs = List.of();
     private String activeLabel;
 
+    /** @param headingText the heading above the entries, which also names the landmark until {@link #label(String)} does */
     public LkSideNav(String headingText) {
         addClassName("lk-sidenav");
         heading.addClassName("lk-sidenav-h");
@@ -49,6 +57,13 @@ public class LkSideNav extends Nav {
         return this;
     }
 
+    /**
+     * Replaces the entries.
+     *
+     * @param items       the entries, in order; their labels should differ, since the active entry is
+     *                    chosen by label
+     * @param activeLabel the label of the entry to highlight; {@code null} highlights none
+     */
     public LkSideNav items(List<Item> items, String activeLabel) {
         this.itemDefs = items;
         for (Div el : itemEls)

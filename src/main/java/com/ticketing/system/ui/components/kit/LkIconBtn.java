@@ -15,11 +15,21 @@ public class LkIconBtn extends NativeButton {
 
     private String tooltip;
 
+    /**
+     * A button with no tooltip or accessible name; give one through the other constructor unless
+     * the surroundings name it.
+     *
+     * @param icon the button's icon; {@code null} for none
+     */
     public LkIconBtn(Component icon) {
         addClassName("lk-iconbtn");
         if (icon != null) add(icon);
     }
 
+    /**
+     * @param icon    the button's icon; {@code null} for none
+     * @param tooltip the tooltip, which also names the button; {@code null} gives it neither
+     */
     public LkIconBtn(Component icon, String tooltip) {
         this(icon);
         if (tooltip != null) {

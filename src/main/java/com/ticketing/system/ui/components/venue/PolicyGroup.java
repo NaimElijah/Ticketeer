@@ -19,6 +19,13 @@ public class PolicyGroup extends Div {
     private final Div addRow = new Div();
     private final boolean isAnd;
 
+    /**
+     * Builds the group. The operator pill and the two add buttons have no click handlers.
+     *
+     * @param op   the operator pill's text, shown in capitals; {@code "AND"} in any case styles the
+     *             group as AND, anything else as OR
+     * @param root whether this is the tree's outermost group
+     */
     public PolicyGroup(String op, boolean root) {
         this.isAnd = "AND".equalsIgnoreCase(op);
         addClassName("pe-group");

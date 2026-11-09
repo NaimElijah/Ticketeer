@@ -26,6 +26,7 @@ public class LkCard extends Section {
     private Footer footer;
     private boolean headerActive;
 
+    /** An empty card with no header until a title, subtitle or header-right component is set. */
     public LkCard() {
         addClassName("lk-card");
         header.addClassName("lk-card-h");
@@ -38,11 +39,13 @@ public class LkCard extends Section {
         add(body);
     }
 
+    /** A card headed by {@code titleText}; see {@link #title(String)}. */
     public LkCard(String titleText) {
         this();
         title(titleText);
     }
 
+    /** Sets the card's title; {@code null} or empty leaves the card without a heading. */
     public LkCard title(String t) {
         String text = t == null ? "" : t;
         titleText.setText(text);
@@ -64,6 +67,7 @@ public class LkCard extends Section {
         Lk.focusFromScript(titleText);
     }
 
+    /** Sets the line under the title; {@code null} or empty removes it. */
     public LkCard subtitle(String s) {
         subtitle.setText(s == null ? "" : s);
         if (s != null && !s.isEmpty()) {
@@ -76,6 +80,7 @@ public class LkCard extends Section {
         return this;
     }
 
+    /** Replaces the component at the header's right edge, such as a button; {@code null} removes it. */
     public LkCard headerRight(Component c) {
         headerRight.removeAll();
         if (c != null)
@@ -84,26 +89,31 @@ public class LkCard extends Section {
         return this;
     }
 
+    /** Sets the body's padding, in pixels; the default is 20. */
     public LkCard pad(int px) {
         body.getStyle().set("padding", px + "px");
         return this;
     }
 
+    /** Gives the card a primary-colour top border. */
     public LkCard accent() {
         addClassName("lk-card-accent");
         return this;
     }
 
+    /** Gives the card a red border. */
     public LkCard danger() {
         addClassName("lk-card-danger");
         return this;
     }
 
+    /** Lets the card's content overflow its bounds. */
     public LkCard flush() {
         addClassName("lk-card-flush");
         return this;
     }
 
+    /** Sets the card's footer to {@code cs}, replacing any earlier footer content. */
     public LkCard footer(Component... cs) {
         if (footer == null) {
             footer = new Footer();

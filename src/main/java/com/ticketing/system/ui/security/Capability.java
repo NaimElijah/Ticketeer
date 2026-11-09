@@ -6,15 +6,15 @@ package com.ticketing.system.ui.security;
  * session.
  *
  * <p>Capabilities are <em>not</em> roles. A role (Founder, Co-owner,
- * Manager) is a bundle of capabilities; persona-level routing markers
- * ({@link RequireCapability}, {@link RequireCapability}) gate broad
- * URL spaces. Capabilities answer "can this user do <em>this specific
+ * Manager) is a bundle of capabilities; {@link RequireCapability} gates a
+ * whole view on one of them. Capabilities answer "can this user do <em>this specific
  * thing</em>" and let one view adapt to multiple roles without
  * branching on enum strings.
  *
  * <p>Resolution: {@link Capabilities#forCurrentUser()} maps the
- * combined {@code AuthSession + CurrentCompanies + MockPermissions}
- * state to a {@code Set<Capability>}. {@link Capabilities#has(Capability)}
+ * {@code AuthSession} and {@code CurrentCompanies} state, plus the member's company
+ * memberships and a manager's permissions read through the organization service, to a
+ * {@code Set<Capability>}. {@link Capabilities#has(Capability)}
  * is the lookup callers use.
  */
 public enum Capability {

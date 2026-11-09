@@ -19,6 +19,11 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+/**
+ * System-admin workspace home, served at {@code /admin}. It shows the platform counters (active
+ * companies, live events, open complaints and 30-day revenue) and tiles that open the admin tools.
+ * When the overview cannot be loaded, the counters show dashes beside a warning banner.
+ */
 @Route(value = "admin", layout = PlatformAdminLayout.class)
 @PageTitle("Admin Workspace · Event Ticket Platform")
 @PermitAll
@@ -27,6 +32,9 @@ public class AdminDashboardView extends LkPage {
 
     private final AdminDashboardPresenter presenter;
 
+    /**
+     * Creates the page and loads the platform overview.
+     */
     public AdminDashboardView(AdminDashboardPresenter presenter) {
         this.presenter = presenter;
 

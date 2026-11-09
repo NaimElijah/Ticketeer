@@ -15,7 +15,8 @@ import com.vaadin.flow.server.VaadinSession;
  *
  * <p>After a successful login the same sessionId is promoted in place to
  * a Member session — the value stays valid, so no clearing is needed at
- * login time. {@link #clear()} is only called from sign-out.
+ * login time. {@link FreshGuestSession} replaces an ended or expired id, and calls
+ * {@link #clear()} only when it cannot start a new guest session.
  */
 public final class GuestSession {
 
@@ -30,11 +31,13 @@ public final class GuestSession {
         return (String) s.getAttribute(SESSION_ID_KEY);
     }
 
+    /** Pins {@code sessionId} as the visitor's guest session id; does nothing without a Vaadin session. */
     public static void setSessionId(String sessionId) {
         VaadinSession s = VaadinSession.getCurrent();
         if (s != null) s.setAttribute(SESSION_ID_KEY, sessionId);
     }
 
+    /** Forgets the guest session id; does nothing without a Vaadin session. */
     public static void clear() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s != null) s.setAttribute(SESSION_ID_KEY, null);

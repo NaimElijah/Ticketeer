@@ -19,15 +19,21 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+/**
+ * Profile page, served at {@code /my-profile}. It shows the signed-in member's username and email.
+ * For members only: an admin, who is no member, never reaches it (ADR-012).
+ */
 @Route(value = "my-profile", layout = MainLayout.class)
 @PageTitle("My Profile · TicketHub")
 @PermitAll
-// A signed-in member's own data: an admin, who is no member, never reaches it (ADR-012).
 @RequireCapability(Capability.MEMBER_ACCOUNT)
 public class MyProfileView extends LkPage {
 
     private final MyProfilePresenter presenter;
 
+    /**
+     * Creates the page and loads the member's profile.
+     */
     public MyProfileView(MyProfilePresenter presenter) {
         this.presenter = presenter;
         title("My Profile");

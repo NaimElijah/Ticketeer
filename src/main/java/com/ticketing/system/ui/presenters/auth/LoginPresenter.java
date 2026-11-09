@@ -23,6 +23,7 @@ public class LoginPresenter {
 
     private final AuthenticationService authenticationService;
 
+    /** Creates the presenter over the authentication service. */
     @Autowired
     public LoginPresenter(AuthenticationService authenticationService) {
         this.authenticationService = authenticationService;
@@ -33,6 +34,12 @@ public class LoginPresenter {
      * credentials and the current guest sessionId. Translates checked
      * domain exceptions into a typed outcome the view can render
      * without try/catch noise.
+     *
+     * @param username       the username as typed
+     * @param rawPassword    the password as typed
+     * @param guestSessionId the visitor's current guest session id; the service refuses a login
+     *     without a live one
+     * @return the {@link Outcome} for the service's answer; see its variants
      */
     public Outcome attemptLogin(String username, String rawPassword, String guestSessionId) {
         try {
@@ -58,16 +65,38 @@ public class LoginPresenter {
 
     /** Sealed outcome the view switches on to drive Toasts + navigation. */
     public sealed interface Outcome {
+        /**
+         * The member is signed in.
+         *
+         * @param loginDTO the member's token, restored active order and delivered notifications
+         */
         record Success(LoginDTO loginDTO) implements Outcome { }
+
+        /** The service refused the credentials ({@code AuthenticationFailedException}). */
         record InvalidCredentials() implements Outcome { }
+
         /**
          * Too many failed attempts on this username; the password was not checked.
          *
          * @param reason the lockout's own text, which says when to try again
          */
         record Locked(String reason) implements Outcome { }
+
+        /**
+         * The guest session id is missing, unknown, expired or not a guest's.
+         *
+         * @param reason the exception's message
+         */
         record GuestSessionMissing(String reason) implements Outcome { }
+
+        /** The database is unreachable, so the attempt could not be decided either way. */
         record ServiceUnavailable() implements Outcome { }
+
+        /**
+         * Any other failure.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

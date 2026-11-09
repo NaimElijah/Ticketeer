@@ -40,6 +40,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Event page, served at {@code /events/:eventId}. It shows the event's header, line-up, schedule,
+ * status and ratings, a venue map for picking a zone, a zone list with prices, and a Choose Tickets
+ * button that opens {@link SeatPickerView} for the picked zone. A signed-in member also gets an "Ask
+ * the Organizer" button that opens a new inquiry. An id that names no event shows a banner. Open to
+ * guests.
+ */
 @Route(value = "events/:eventId", layout = MainLayout.class)
 @PageTitle("Event · TicketHub")
 @AnonymousAllowed
@@ -69,6 +76,13 @@ public class EventDetailsView extends LkPage implements BeforeEnterObserver {
     private Span selectedLine;
     private LkBtn chooseBtn;
 
+    /**
+     * Creates the page; the event is loaded when the route is entered.
+     *
+     * @param sessionIdentity supplies the credential the event is loaded with: the member's token, or
+     *     a live guest session id
+     * @param hold            the reservation hold, whose length the page tells the visitor
+     */
     public EventDetailsView(EventDetailsPresenter presenter, SessionIdentity sessionIdentity,
                             ReservationHoldProperties hold) {
         this.presenter = presenter;

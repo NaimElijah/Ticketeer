@@ -72,9 +72,16 @@ public class LkPopover extends Div {
         popover.close();
     }
 
+    /** Sets where the panel opens relative to the trigger; the default is bottom end. */
     public LkPopover position(PopoverPosition p) { popover.setPosition(p); return this; }
+
+    /** Sets the panel's CSS width, such as {@code "392px"}. */
     public LkPopover width(String w)             { popover.setWidth(w); return this; }
+
+    /** Adds a theme variant to the panel. */
     public LkPopover variant(PopoverVariant v)   { popover.addThemeVariants(v); return this; }
+
+    /** Makes the panel modal, with a backdrop. */
     public LkPopover modal()                     { popover.setModal(true); popover.setBackdropVisible(true); return this; }
 
     /**
@@ -88,6 +95,9 @@ public class LkPopover extends Div {
         return this;
     }
 
+    /** The component whose click opens the panel. */
     public Component getTrigger() { return trigger; }
+
+    /** The wrapped Vaadin {@link Popover}, for settings this class does not expose. */
     public Popover getPopover()   { return popover; }
 }

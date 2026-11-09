@@ -12,9 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Presenter for the top-bar search (V2-SEARCH-01 / #281). Vaadin-free; backs the live
- * {@code LkSearchPanel}. Follows {@code BrowseEventsPresenter} — a debounced live search renders
- * its own empty / zero-results states, so this returns a plain list and degrades to empty on
- * failure rather than carrying a sealed Outcome.
+ * {@code LkSearchPanel}. Unlike {@code BrowseEventsPresenter}, which returns a {@code ListOutcome},
+ * this returns a plain list and degrades to empty on failure: a debounced live search renders its
+ * own empty / zero-results states, so a failed query reads as no results.
  */
 @Slf4j
 @Component
@@ -25,6 +25,7 @@ public class SearchPresenter {
 
     private final CatalogService catalogService;
 
+    /** Creates the presenter over the catalog service. */
     public SearchPresenter(CatalogService catalogService) {
         this.catalogService = catalogService;
     }

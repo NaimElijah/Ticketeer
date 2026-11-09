@@ -12,15 +12,14 @@ import com.vaadin.flow.component.notification.NotificationVariant;
  * Toast notifications wrapper — V2 req 3.5 implementation surface.
  *
  * <p>Centralises success / failure / warning toast styling so every presenter
- * reports action outcomes uniformly. Spec ownership: Mohamad (V2-CHECK-03).
- * Other lanes import this utility rather than calling
- * {@link Notification#show(String)} directly — that is an explicit
- * anti-pattern listed in {@code docs/vaadin-standards.html}.
+ * reports action outcomes uniformly (V2-CHECK-03). Callers use this
+ * utility rather than {@link Notification#show(String)} directly, so
+ * every toast has the same styling and close button.
  *
  * <p>Each toast carries an inline "×" close button so users can dismiss
- * immediately (without waiting for the auto-close). The kit's
- * {@code styles.css} pushes top-positioned notifications below the 56px
- * top bar so the card doesn't overlap with the bell / avatar.
+ * immediately (without waiting for the auto-close). The theme's
+ * {@code styles.css} pushes top-positioned notifications down, below the
+ * top bar, so the card doesn't overlap with the bell / avatar.
  */
 public final class Toasts {
 

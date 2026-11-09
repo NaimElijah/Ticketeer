@@ -21,8 +21,21 @@ public class MdThread extends Div {
     private static final String ARIA_LABEL = "aria-label";
     private static final String NAME = "Messages";
 
+    /**
+     * One message bubble.
+     *
+     * @param from the sender's name, shown above the bubble
+     * @param time the time text shown beside the name, already formatted
+     * @param me   whether the viewer sent it, which floats the bubble right
+     * @param text the message, shown as plain text
+     */
     public record Message(String from, String time, boolean me, String text) { }
 
+    /**
+     * Builds the thread.
+     *
+     * @param msgs the messages, top to bottom as shown; not {@code null}
+     */
     public MdThread(List<Message> msgs) {
         addClassName("md-thread");
         getElement().setAttribute(ROLE, ROLE_LOG);
@@ -31,6 +44,7 @@ public class MdThread extends Div {
         for (Message m : msgs) append(m);
     }
 
+    /** Adds {@code m} below the messages already shown. */
     public MdThread append(Message m) {
         Div msg = new Div();
         msg.addClassName("md-msg");

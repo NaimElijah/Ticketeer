@@ -34,6 +34,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Company workspace sales history, served at {@code /owner/sales}. It shows headline figures and a
+ * grid of the company's orders, narrowed by a date-range filter, with a Refresh button. The headline
+ * figures count only the lines that are not refunded; refunded orders stay listed with a tag.
+ */
 @Route(value = "owner/sales", layout = WorkspaceLayout.class)
 @PageTitle("Company Sales · TicketHub")
 @PermitAll
@@ -63,6 +68,9 @@ public class CompanySalesView extends LkPage {
     private String selectedRange = SalesDateRange.ALL_TIME;
     private LkFilterChip dateChip;
 
+    /**
+     * Creates the page and loads the company's sales report.
+     */
     public CompanySalesView(CompanySalesPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

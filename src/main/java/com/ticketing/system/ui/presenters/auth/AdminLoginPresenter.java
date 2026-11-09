@@ -22,6 +22,13 @@ public class AdminLoginPresenter {
     private final AuthenticationService authenticationService;
     private final UnreadAlertsSendBack unreadAlertsSendBack;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param authenticationService the service that signs the admin in
+     * @param unreadAlertsSendBack  returns a previously signed-in member's shown-but-unread alerts to
+     *     pending when the browser session becomes an admin's
+     */
     @Autowired
     public AdminLoginPresenter(AuthenticationService authenticationService,
             UnreadAlertsSendBack unreadAlertsSendBack) {
@@ -65,11 +72,33 @@ public class AdminLoginPresenter {
         OrderSession.clear();
     }
 
+    /** Sealed outcome of an admin sign-in attempt, which the view switches on. */
     public sealed interface Outcome {
+        /**
+         * The service signed the admin in. Nothing is stored yet; {@link #signIn} does that.
+         *
+         * @param authToken the admin's token
+         */
         record Success(AuthTokenDTO authToken) implements Outcome { }
+
+        /** The service refused the credentials ({@code AuthenticationFailedException}). */
         record InvalidCredentials() implements Outcome { }
+
+        /**
+         * Sign-in is refused for now after repeated failed attempts; the password was not checked.
+         *
+         * @param reason the lockout's own text, which says when to try again
+         */
         record Locked(String reason) implements Outcome { }
+
+        /** The database is unreachable, so the attempt could not be decided either way. */
         record ServiceUnavailable() implements Outcome { }
+
+        /**
+         * Any other failure.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

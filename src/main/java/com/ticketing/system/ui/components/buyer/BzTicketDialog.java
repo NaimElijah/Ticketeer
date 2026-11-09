@@ -22,6 +22,11 @@ public final class BzTicketDialog {
     /**
      * One ticket's display text, every field already formatted for the stub.
      *
+     * @param category       the category's label, shown in capitals; it also picks the header colours.
+     *                       Not {@code null}
+     * @param date           the event's date and time, under the title
+     * @param seat           the seat shown for the ticket, beside the zone
+     * @param barcode        the ticket's code, as text under a decorative bar pattern
      * @param orderReference the order as the stub shows it after "Order ", "#" included (e.g. {@code "#42"})
      */
     public record TicketInfo(
@@ -38,6 +43,11 @@ public final class BzTicketDialog {
 
     private BzTicketDialog() { }
 
+    /**
+     * Opens the dialog with the ticket stub and a Close button.
+     *
+     * @param ticket the ticket to show; its category must not be {@code null}
+     */
     public static void show(TicketInfo ticket) {
         Dialog d = new Dialog();
         d.setHeaderTitle("Your ticket");

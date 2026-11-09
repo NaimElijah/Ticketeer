@@ -57,6 +57,10 @@ public class PlatformAdminLayout extends AppLayout implements AfterNavigationObs
     private final SignOutFlow signOutFlow;
     private final NotificationBellPresenter bellPresenter;
 
+    /**
+     * @param signOutFlow   runs when the admin picks "Sign Out" in the account menu
+     * @param bellPresenter renders a notification's age; its mark-read refuses an admin session
+     */
     public PlatformAdminLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;

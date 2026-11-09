@@ -19,10 +19,10 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * in isolation (the view reads the token from {@code AuthSession} and passes it in, mirroring
  * {@code SupportInboxPresenter} / {@code CompanyInquiryInboxPresenter}).
  *
- * <p>Lists the platform-wide complaint queue ({@code viewAllComplaints}, admin-gated, status
- * filtered server-side). Complaints are one-shot: {@code respond} sends the admin's single reply
- * via {@code respondToComplaint}, which appends the message and resolves the thread (the member
- * can never reply). {@code loadOne} fetches a single complaint for the dedicated respond page.
+ * <p>Lists the platform-wide complaint queue ({@code viewAllComplaints}, admin-gated, fetched
+ * unfiltered and grouped by status here). Complaints are one-shot: {@code respond} sends the admin's
+ * single reply via {@code respondToComplaint}, which appends the message and resolves the thread (the
+ * member can never reply). {@code loadOne} fetches a single complaint for the dedicated respond page.
  */
 @Component
 public class AdminComplaintQueuePresenter {
@@ -34,6 +34,7 @@ public class AdminComplaintQueuePresenter {
 
     private final MessagingService messagingService;
 
+    /** Creates the presenter over the messaging service. */
     @Autowired
     public AdminComplaintQueuePresenter(MessagingService messagingService) {
         this.messagingService = messagingService;
@@ -44,6 +45,10 @@ public class AdminComplaintQueuePresenter {
      * OPEN+RESPONDED (not yet resolved), "Resolved" → RESOLVED+CLOSED (terminal). A single
      * server-side status can't express those groups, so the whole queue is fetched and grouped
      * in-memory ("All"/blank → no grouping).
+     *
+     * @param token the admin's token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param group "All", "Open" or "Resolved"; {@code null}, blank or any other value keeps every
+     *     complaint
      */
     public Outcome load(String token, String group) {
         if (token == null) {
@@ -79,6 +84,9 @@ public class AdminComplaintQueuePresenter {
      * Opens a single complaint thread for the dedicated respond page, marking it read for the caller
      * first, so the thread it returns already counts nothing unread. A failed mark still shows the
      * thread; only an invalid or expired session stops the page.
+     *
+     * @param token          the admin's token; {@code null} gives {@link SingleOutcome.NotAuthenticated}
+     * @param conversationId the complaint to open
      */
     public SingleOutcome loadOne(String token, String conversationId) {
         if (token == null) {
@@ -103,6 +111,10 @@ public class AdminComplaintQueuePresenter {
     /**
      * Sends the admin's single response to a complaint, which resolves it (one-shot — the member
      * cannot reply). The admin is resolved from the token by the service.
+     *
+     * @param token          the admin's token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param conversationId the complaint to answer
+     * @param body           the reply text
      */
     public ActionOutcome respond(String token, String conversationId, String body) {
         if (token == null) {
@@ -171,22 +183,57 @@ public class AdminComplaintQueuePresenter {
 
     /** Sealed outcome the view switches on to render the queue or an empty/error state. */
     public sealed interface Outcome {
+        /**
+         * The queue loaded.
+         *
+         * @param complaints the complaints in the chosen group, newest first, possibly none
+         */
         record Success(List<ConversationDTO> complaints) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Sealed outcome for loading a single complaint thread (respond page). */
     public sealed interface SingleOutcome {
+        /**
+         * The thread loaded.
+         *
+         * @param conversation the complaint with its messages
+         */
         record Success(ConversationDTO conversation) implements SingleOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements SingleOutcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements SingleOutcome { }
     }
 
     /** Result of a respond or an open the view reacts to. */
     public sealed interface ActionOutcome {
+        /** The service carried out the reply, or the thread was marked read. */
         record Success() implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the action or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }

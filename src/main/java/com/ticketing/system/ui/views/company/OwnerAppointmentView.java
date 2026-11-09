@@ -24,6 +24,11 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.PermitAll;
 
+/**
+ * Form for appointing a co-owner of the company in focus, served at {@code /owner/owners/appoint}.
+ * It takes the invitee's username or email and sends an invitation, which the invitee answers from
+ * their invitations page. A sent invitation returns to {@link MyCompaniesView}.
+ */
 @Route(value = "owner/owners/appoint", layout = WorkspaceLayout.class)
 @PageTitle("Appoint Co-Owner · TicketHub")
 @PermitAll
@@ -37,6 +42,9 @@ public class OwnerAppointmentView extends LkPage {
     private final TextField scope   = new TextField("Scope");
     private final LkFormErrors errors = new LkFormErrors();
 
+    /**
+     * Builds the appointment form for the company in focus.
+     */
     public OwnerAppointmentView(MyCompaniesPresenter membershipPresenter) {
         this.membershipPresenter = membershipPresenter;
         title("Appoint Co-Owner");

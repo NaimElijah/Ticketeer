@@ -28,8 +28,8 @@ import java.util.function.Consumer;
  *
  * <p>The dialog is fully built in the constructor (no UI context required); only
  * {@link #open()} needs a live UI, so it can be constructed in smoke tests. Save
- * is blocked client-side when nothing is checked, mirroring the backend rule that
- * a Manager must keep at least one permission.
+ * is refused by the dialog itself, with a warning toast, when nothing is checked,
+ * mirroring the backend rule that a Manager must keep at least one permission.
  */
 public class EditPermissionsDialog {
 
@@ -40,6 +40,17 @@ public class EditPermissionsDialog {
     private final Dialog dialog = new Dialog();
     private final Map<Permission, LkCheckRow> rows = new LinkedHashMap<>();
 
+    /**
+     * Builds the dialog, not yet open.
+     *
+     * @param managerName           the manager's name, shown in bold
+     * @param role                  the role shown in the badge beside the name
+     * @param currentPermissionNames the {@link Permission} constants' names the manager holds, to
+     *                              pre-check; {@code null} checks none
+     * @param onSave                receives the names of the checked permissions, in {@link Permission}
+     *                              order and never empty, after the dialog has closed; not called on
+     *                              cancel
+     */
     public EditPermissionsDialog(String managerName,
                                  String role,
                                  List<String> currentPermissionNames,
@@ -88,6 +99,7 @@ public class EditPermissionsDialog {
         dialog.getFooter().add(cancel, save);
     }
 
+    /** Opens the dialog; needs a live UI. */
     public void open() {
         dialog.open();
     }
