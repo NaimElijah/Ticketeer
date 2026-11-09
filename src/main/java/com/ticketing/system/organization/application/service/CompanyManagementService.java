@@ -60,11 +60,12 @@ import org.springframework.transaction.annotation.Transactional;
  * managers, answering appointments, editing a manager's permissions and the company's purchase policy, and
  * reading membership lists and the organizational tree.
  *
- * <p>Every method authenticates the caller's session token first. A member method accepts a member token only,
- * and the {@code admin}-prefixed methods an admin token only. A method that changes a membership publishes a
- * notice ({@code OwnerAppointmentPendingNotice}, {@code ManagerAppointmentPendingNotice},
- * {@code RoleChangedNotice} or {@code ManagerRevokedNotice}) that the notifications context consumes after
- * commit (ADR-004).
+ * <p>Every method authenticates the caller's session token; some reject malformed input before doing so. A
+ * member method accepts a member token only, and the {@code admin}-prefixed methods an admin token only.
+ * Appointing, accepting, editing permissions and revoking each publish a notice
+ * ({@code OwnerAppointmentPendingNotice}, {@code ManagerAppointmentPendingNotice}, {@code RoleChangedNotice} or
+ * {@code ManagerRevokedNotice}) that the notifications context consumes after commit (ADR-004); rejecting and
+ * registering do not.
  *
  * <p>Unless a method says otherwise, a token that is not live fails with {@code InvalidTokenException}, and an
  * expired one with {@code SessionExpiredException}.
@@ -118,7 +119,7 @@ public class CompanyManagementService {
      * @param token   the appointing owner's member token
      * @param request the company and the member to appoint; both ids must be positive
      * @throws IllegalArgumentException      if either id is not positive
-     * @throws UserNotFoundException         if the caller or the target does not exist
+     * @throws UserNotFoundException         if a user the call refers to does not exist
      * @throws UnauthorizedActionException   if the caller is not an owner of the company
      * @throws BusinessRuleViolationException if the target already has a pending appointment in the company or
      *                                        is already an active owner
@@ -163,7 +164,7 @@ public class CompanyManagementService {
      * @param token   the appointing owner's member token
      * @param request the company, the member to appoint and the permissions to grant
      * @throws IllegalArgumentException      if either id is not positive, or the permission list is null or empty
-     * @throws UserNotFoundException         if the caller or the target does not exist
+     * @throws UserNotFoundException         if a user the call refers to does not exist
      * @throws UnauthorizedActionException   if the caller is not an owner of the company
      * @throws BusinessRuleViolationException if the target already has an active or pending appointment in the
      *                                        company
@@ -273,7 +274,7 @@ public class CompanyManagementService {
      *
      * @param token the editing owner's member token
      * @param edit  the company, the manager and the new permission set
-     * @throws UserNotFoundException          if the caller or the manager does not exist
+     * @throws UserNotFoundException          if the manager does not exist
      * @throws IllegalArgumentException       if the new permission set is null or empty
      * @throws UnauthorizedActionException    if the caller is not an owner of the company, or did not appoint the
      *                                        manager
@@ -432,6 +433,7 @@ public class CompanyManagementService {
      *
      * @param token     the requesting owner's member token
      * @param companyId the company
+     * @return one entry per pending appointment
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the caller does not exist
      * @throws UnauthorizedActionException if the caller is not an owner of the company
@@ -460,10 +462,11 @@ public class CompanyManagementService {
     }
 
     /**
-     * Lists the companies in which the caller holds an active Owner appointment. Bridges a token to a company id
-     * for the owner workspace until a real current-company selector lands (V2-CADMIN-05).
+     * Lists the companies in which the caller holds an active Owner appointment. Feeds the owner-only workspace
+     * pages.
      *
      * @param token the member's token
+     * @return the companies, empty if the caller owns none
      * @throws UserNotFoundException if the caller does not exist
      */
     @Transactional(readOnly = true)
@@ -499,6 +502,7 @@ public class CompanyManagementService {
      * {@link #findOwnedCompanies} it keeps managers, since the owner workspace is reachable by them too.
      *
      * @param token the member's token
+     * @return the companies, empty if the caller belongs to none
      * @throws UserNotFoundException if the caller does not exist
      */
     @Transactional(readOnly = true)
@@ -534,6 +538,7 @@ public class CompanyManagementService {
      * placeholder name.
      *
      * @param token the member's token
+     * @return the invitations, empty if there are none
      * @throws UserNotFoundException if the caller does not exist
      */
     @Transactional(readOnly = true)
@@ -579,13 +584,14 @@ public class CompanyManagementService {
     /**
      * UC-18 — registers a new production company. The caller becomes its founder and first owner, through an
      * immediately active founding appointment created in the same transaction. The company starts
-     * {@code ACTIVE} with a rating of 0.
+     * {@code ACTIVE} with a stored rating of 0, which nothing reads or updates afterwards: the rating shown to
+     * users is derived by catalog's {@code CompanyRatings}.
      *
      * @param token   the registering member's token
      * @param request the company's name and description; surrounding whitespace is trimmed
      * @return the registered company
      * @throws UserNotFoundException          if the caller does not exist
-     * @throws IllegalArgumentException       if the name or the description is null or blank
+     * @throws IllegalArgumentException       if the name or the description is null or empty after trimming
      * @throws IllegalStateException          with {@link #COMPANY_NAME_TAKEN_MESSAGE} if a company already has
      *                                        that name
      * @throws BusinessRuleViolationException if the name or the description is longer than the user-text limit
@@ -632,13 +638,14 @@ public class CompanyManagementService {
     }
 
     /**
-     * Replaces the company's purchase policy with the one in {@code config}. Requires the
-     * {@code EDIT_POLICIES} permission, which owners hold implicitly. Only the purchase policy is stored; the
-     * config's discount policies are not.
+     * Replaces the company's purchase policy with the one in {@code config}; a null policy clears the company's
+     * policy. Requires the {@code EDIT_POLICIES} permission, which owners hold implicitly. Only the purchase
+     * policy is stored; the config's discount policies are not.
      *
      * @param token  the member's token
      * @param config the company and the policy to set
      * @throws IllegalArgumentException    if {@code config} is null, or its policy is not a valid policy description
+     * @throws IllegalStateException       if the policy has a negative minimum age or ticket count
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the caller does not exist
      * @throws UnauthorizedActionException if the caller lacks the permission
@@ -668,8 +675,12 @@ public class CompanyManagementService {
      * UC-25 — returns a company's role tree: the founder at the root, each member under the member who appointed
      * them. Owners only (II.4.15).
      *
+     * <p>While #126 is open, the call fails with a {@code NullPointerException} when a member's appointer is no
+     * longer a member of the company.
+     *
      * @param token     the owner's member token
      * @param companyId the company
+     * @return the founder's node, the root of the tree
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the caller does not exist
      * @throws UnauthorizedActionException if the caller is not an owner of the company
@@ -706,6 +717,7 @@ public class CompanyManagementService {
      * is stable. Admin-only.
      *
      * @param token an admin token
+     * @return every company, ordered by company id
      * @throws InvalidTokenException if {@code token} is not a live admin token
      */
     public List<ProductionCompanyDTO> adminListAllCompanies(String token) {
@@ -721,11 +733,12 @@ public class CompanyManagementService {
     }
 
     /**
-     * Returns the role tree of any company, without the owner check of {@link #viewOrganizationalTree}.
-     * Admin-only.
+     * Returns the role tree of any company, without the owner check of {@link #viewOrganizationalTree}, and
+     * fails in the same case as that method. Admin-only.
      *
      * @param token     an admin token
      * @param companyId the company
+     * @return the founder's node, the root of the tree
      * @throws InvalidTokenException    if {@code token} is not a live admin token
      * @throws CompanyNotFoundException if the company does not exist
      */
@@ -881,6 +894,7 @@ public class CompanyManagementService {
      *
      * @param token     the member's token
      * @param companyId the company
+     * @return the company's purchase policy
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UserNotFoundException       if the caller does not exist
      * @throws UnauthorizedActionException if the caller lacks the permission

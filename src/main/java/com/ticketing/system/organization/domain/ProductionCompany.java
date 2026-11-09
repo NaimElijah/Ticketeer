@@ -60,7 +60,7 @@ public class ProductionCompany implements InvariantChecked {
     private int founderId;
     /**
      * All current owners (includes {@link #founderId} at all times). Any owner
-     * can add or remove another owner; non-founder owners can also self-resign.
+     * can appoint another; revoking follows {@code CompanyAppointment.revoke}.
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "company_owner_ids", joinColumns = @JoinColumn(name = "company_id"))
@@ -102,9 +102,12 @@ public class ProductionCompany implements InvariantChecked {
     /**
      * Creates a company whose only owner is its founder, with no managers and a {@link NoPurchasePolicy}.
      *
-     * @param founderId the registering user, who becomes the first owner
-     * @param name      a non-blank name of at most {@link TextLimits#MAX_TEXT_LENGTH} characters
-     * @param rating    a finite value from 0 to 5, or {@code null}
+     * @param companyId     the company's id; positive
+     * @param founderId     the registering user, who becomes the first owner; positive
+     * @param name          a non-blank name of at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param companyStatus the company's status; not null
+     * @param description   at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param rating        a finite value from 0 to 5, or {@code null}
      * @throws BusinessRuleViolationException if {@code name} or {@code description} is longer than
      *                                        {@link TextLimits#MAX_TEXT_LENGTH}
      * @throws IllegalStateException          if an invariant is violated: a non-positive id, a blank name, a
@@ -273,9 +276,6 @@ public class ProductionCompany implements InvariantChecked {
         return this.companyStatus;
     }
 
-    /**
-     * Returns whether the company's status is {@link CompanyStatus#ACTIVE}.
-     */
     public boolean isActive() {
         return this.companyStatus == CompanyStatus.ACTIVE;
     }
@@ -320,14 +320,16 @@ public class ProductionCompany implements InvariantChecked {
     }
 
     /**
-     * Returns the company's rating, a value from 0 to 5, or {@code null} when none is set.
+     * Returns the stored rating, a value from 0 to 5, or {@code null} when none is set. Nothing reads or updates
+     * it after registration: the rating shown to users is derived by catalog's {@code CompanyRatings}.
      */
     public Double getRating() {
         return this.rating;
     }
 
     /**
-     * Sets the rating. On failure the rating is unchanged.
+     * Sets the stored rating, which nothing updates after registration (see {@link #getRating()}). On failure
+     * the rating is unchanged.
      *
      * @param rating a finite value from 0 to 5, or {@code null}
      * @throws IllegalStateException if {@code rating} is outside that range

@@ -18,15 +18,13 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 /**
- * Owns company-membership (appointment) behaviour that used to live on the {@code User} aggregate
- * (task #20). Every method that was an instance method on {@code User} taking {@code companyId} is
- * re-expressed here as a static-flavoured operation taking the appointed user's id ({@code userId})
- * plus the company/permission arguments, loading and persisting {@link CompanyAppointment} aggregates
- * through the {@link CompanyAppointmentRepository} instead of walking {@code user.companyAppointments}.
+ * Owns company membership: the appointment lifecycle (offering, accepting, rejecting and revoking a role, and
+ * editing a manager's permissions) and the queries that say who holds which role or permission in a company.
  *
- * <p>Stripping appointments off {@code User} is what makes the foundational {@code identity} context
- * stop importing {@code organization}; the invariants and exceptions here are preserved verbatim from
- * the former {@code User} methods so behaviour is identical.
+ * <p>Each operation takes the appointed user's id and the company, and loads and persists
+ * {@link CompanyAppointment} aggregates through the {@link CompanyAppointmentRepository}. New appointments are
+ * stamped from the platform clock. Other contexts use the {@code require...} and {@code has...} methods to check
+ * a member's role or permission.
  */
 @Service
 public class CompanyMembershipService {
@@ -187,6 +185,7 @@ public class CompanyMembershipService {
      * appointer may edit, and only Manager appointments carry explicit permissions.
      *
      * @param userId         the manager whose permissions change
+     * @param companyId      the company the manager belongs to
      * @param inviterId      the user making the edit
      * @param newPermissions the manager's full permission set after the edit; non-empty
      * @throws AppointmentNotFoundException   if the user has no active appointment in the company

@@ -16,7 +16,7 @@ public enum AppointmentStatus {
     REJECTED,
     /**
      * An active appointment that was ended. A Manager appointment is revoked by its inviter, an Owner
-     * appointment by its inviter or its target (II.4.9). A Manager appointment is also revoked when its holder
+     * appointment by its inviter (II.4.9) or its target (II.4.10). A Manager appointment is also revoked when its holder
      * accepts an Owner offer from the same inviter.
      */
     REVOKED

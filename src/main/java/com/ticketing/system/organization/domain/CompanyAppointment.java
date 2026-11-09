@@ -238,7 +238,7 @@ public class CompanyAppointment implements InvariantChecked {
 
     /**
      * UC-24 — moves an active appointment to {@link AppointmentStatus#REVOKED}. A Manager appointment is revoked
-     * by its inviter; an Owner appointment by its inviter or its target (II.4.9).
+     * by its inviter; an Owner appointment by its inviter (II.4.9) or its target (II.4.10).
      *
      * @param revokerId the user ending the appointment
      * @throws IllegalStateException    if the appointment is not active

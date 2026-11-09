@@ -26,7 +26,7 @@ public interface ProductionCompanyRepository extends IRepository<ProductionCompa
     void updateCompany(ProductionCompany company);
 
     /**
-     * UC-18 — finds the company with exactly this name, for the uniqueness check at registration.
+     * Finds the company with exactly this name.
      *
      * @param name the company name; {@code null} matches nothing
      * @return the company, or empty if there is none
@@ -34,7 +34,8 @@ public interface ProductionCompanyRepository extends IRepository<ProductionCompa
     Optional<ProductionCompany> findByName(String name);
 
     /**
-     * Returns whether a company with exactly this name exists; {@code null} matches nothing.
+     * UC-18 — returns whether a company with exactly this name exists, for the uniqueness check at
+     * registration; {@code null} matches nothing.
      */
     boolean existsByName(String name);
 
@@ -55,12 +56,13 @@ public interface ProductionCompanyRepository extends IRepository<ProductionCompa
     List<ProductionCompany> findAll();
 
     /**
-     * UC-18 — stores a newly registered company.
+     * Stores a company, new or existing. UC-18 registers a company through it.
      */
     void save(ProductionCompany company);
 
     /**
-     * UC-18 — mints the id of a company about to be registered. The id is not used by any stored company.
+     * UC-18 — mints the id of a company about to be registered. The id is unique among those this instance has
+     * minted; on the Jpa adapter it is also above the ids of the rows present when the instance first seeded.
      */
     int nextId();
 }

@@ -4,8 +4,8 @@ import com.ticketing.system.organization.domain.Permission;
 import java.util.List;
 
 /**
- * Output of {@code CompanyManagementService.viewOrganizationalTree} (UC-25): one member in a company's role
- * tree. The structure is recursive, and each node's children are the members it appointed.
+ * Output of {@code CompanyManagementService.viewOrganizationalTree} and {@code adminViewOrgTree} (UC-25): one
+ * member in a company's role tree. The structure is recursive, and each node's children are the members it appointed.
  *
  * @param userId              the member's user id
  * @param username            the member's username
