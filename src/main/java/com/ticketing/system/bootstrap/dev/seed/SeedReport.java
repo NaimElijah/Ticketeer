@@ -34,7 +34,9 @@ public final class SeedReport {
      *
      * @param stage  the report group the step belongs to
      * @param name   the step's label
-     * @param detail why the step ended as it did; {@code "ok"} for a PASS
+     * @param status how the step ended
+     * @param detail why the step ended as it did; {@code ok} for a plain step's PASS, the rejected
+     *               type for a negative assertion's
      */
     public record Entry(String stage, String name, Status status, String detail) {}
 

@@ -29,7 +29,8 @@ public record SeedProperties(@NotNull Mode mode, boolean failFast, boolean assum
         WIPE,
         /** Deletes all business data, then replays the scenario; needs {@code assumeYes}. */
         RESET,
-        /** Asks on the console for a mode and a scenario, then runs that choice. */
+        /** Asks on the console for a mode and, for {@code reseed} or {@code reset}, a scenario, then runs
+         * that choice. */
         ASK
     }
 }

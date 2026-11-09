@@ -143,7 +143,13 @@ public final class ScenarioOps {
         registry.put("add-coupon", this::addCoupon);
     }
 
-    /** Dispatch one command, recording its outcome through the harness. */
+    /**
+     * Dispatches one command, recording its outcome through the harness.
+     *
+     * @throws SeedHarness.SeedAbortException when the step fails and the harness is fail-fast
+     * @throws IllegalArgumentException when an {@code expect-error} line names no operation, which is
+     *         thrown mid-run whatever the harness's fail-fast setting
+     */
     public void execute(ScenarioCommand cmd, ScenarioContext ctx, SeedHarness harness) {
         if (cmd.op().equals(ScenarioParser.EXPECT_ERROR_OP)) {
             executeExpectError(cmd, ctx, harness);

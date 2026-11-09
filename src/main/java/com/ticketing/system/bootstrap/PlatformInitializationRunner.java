@@ -45,8 +45,8 @@ public class PlatformInitializationRunner implements ApplicationRunner {
      * failing.
      *
      * @param args the application arguments, unused
-     * @throws RuntimeException any initialization failure other than
-     *         {@link ExternalServiceUnavailableException}, which stops the boot (ADR-003)
+     * @throws RuntimeException any initialization failure except
+     *         {@link ExternalServiceUnavailableException}; it propagates and stops the boot (ADR-003)
      */
     @Override
     public void run(ApplicationArguments args) {

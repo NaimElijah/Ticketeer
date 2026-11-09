@@ -68,7 +68,8 @@ public class SessionAndOrderSweeper {
 
     /**
      * @param clock          the application clock, read once per tick (ADR-008)
-     * @param eventPublisher receives an {@code OrderExpiredEvent} for each cart the sweep releases
+     * @param eventPublisher receives an {@code OrderExpiredEvent} for each cart the order-expiry pass releases; a guest
+     *                       cart released because its session expired publishes none
      * @param systemMetrics  receives a visitor exit for each swept-out guest session
      */
     public SessionAndOrderSweeper(
@@ -87,8 +88,8 @@ public class SessionAndOrderSweeper {
     }
     
     /**
-     * One scheduled tick: sweeps expired sessions, then expired carts, in one transaction. Any
-     * exception rolls the whole tick back; the next tick sweeps again.
+     * One scheduled tick: sweeps expired sessions, then expired carts, in one transaction that commits
+     * or rolls back as a whole. A failure the release loop handles itself does not roll it back.
      */
     @Scheduled(fixedDelayString = "${sweeper.fixed-delay-ms:60000}")
     // F3/#371: the tick's inventory releases + row deletes commit as one transaction; an optimistic-lock
@@ -201,7 +202,8 @@ public class SessionAndOrderSweeper {
      *
      * <p>Lock order: {@code activeOrder → events[sorted]} prevents
      * deadlocks with {@code CheckoutService}, which takes its locks in the
-     * same order.
+     * same order, and {@code ReservationService}, which holds the order lock
+     * while the inventory port takes one event lock at a time.
      *
      * <p>The locks are real only on the in-memory adapters. On JPA, {@code lockForUpdate} and
      * {@code unlock} are no-ops, and the order checked here is the copy the scan loaded, not a fresh

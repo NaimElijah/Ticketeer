@@ -78,8 +78,8 @@ import java.util.Optional;
  * boot stops with the valid choices named.
  * {@code seed.fail-fast=true} (the default outside {@code dev}) stops the scenario at the first unexpected
  * error and fails startup (V3 2.a.ii, ADR-003). Whatever {@code seed.fail-fast} says, a missing or
- * unreadable scenario file, or one the parser refuses, fails startup in {@code reseed} and {@code reset}
- * (ADR-021).
+ * unreadable scenario file, or one the parser refuses, fails startup in {@code reseed}, and in
+ * {@code reset} once {@code seed.assume-yes} lets it proceed (ADR-021).
  */
 @Component
 @Profile("!test")
@@ -185,9 +185,12 @@ public class ScenarioRunner implements ApplicationRunner {
      * Runs the configured {@code seed.mode} against {@code seed.scenario}.
      *
      * @param args the application arguments, unused
-     * @throws IllegalStateException when {@code reseed} or {@code reset} cannot read the scenario file,
-     *         or in {@code ask} mode when the console ends after an unknown scenario answer
-     * @throws IllegalArgumentException when the parser refuses the scenario file
+     * @throws IllegalStateException when {@code reseed}, or {@code reset} once {@code seed.assume-yes}
+     *         lets it proceed, cannot read the scenario file, or in {@code ask} mode when the console
+     *         ends after an unknown scenario answer
+     * @throws IllegalArgumentException when the parser refuses the scenario file, or when an
+     *         {@code expect-error} line names no operation, which is thrown mid-run whatever
+     *         {@code seed.fail-fast} says
      * @throws SeedHarness.SeedAbortException when {@code seed.fail-fast} is on and a step fails
      */
     @Override

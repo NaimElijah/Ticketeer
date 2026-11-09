@@ -51,15 +51,14 @@ public final class SeedHarness {
      * Creates a harness that records into {@code report}.
      *
      * @param report   receives the outcome of every step
-     * @param failFast whether the first FAIL aborts the seed with a {@link SeedAbortException}
-     *                 instead of being collected into the report
+     * @param failFast whether the first FAIL, once recorded, also aborts the seed with a
+     *                 {@link SeedAbortException}; otherwise the seed goes on
      */
     public SeedHarness(SeedReport report, boolean failFast) {
         this.report = report;
         this.failFast = failFast;
     }
 
-    /** The report this harness records into, the one passed to the constructor. */
     public SeedReport report() {
         return report;
     }
