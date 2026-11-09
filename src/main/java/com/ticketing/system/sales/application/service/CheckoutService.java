@@ -68,7 +68,7 @@ import com.ticketing.system.identity.domain.User;
  * Checkout use case (UC-10): turns a buyer's cart into a receipt and tickets, for a member
  * ({@link #checkoutMember}) or a guest ({@link #checkoutGuest}).
  *
- * <p>The payment gateway and the ticket issuer are called outside any lock and database transaction,
+ * <p>The charge and issuance run outside any lock and database transaction,
  * so a slow external service never pins a connection. The Phase 3 database unit is the only transaction
  * this service opens, so its methods are not {@code @Transactional}; the refund requested on the failure
  * path runs after that transaction has ended. Market state is read through {@link MarketGate}.
@@ -232,13 +232,14 @@ public class CheckoutService {
      *
      * <p>A repeated call with an {@code idempotencyKey} that already completed for this member returns
      * the first result without charging again, and does so even if the market has closed since. The
-     * completed results are kept in memory, so a restart forgets them.
+     * completed results are kept in memory and bounded, so a restart forgets them.
      *
      * <p>If a phase fails, the cart and its places are left as they are when this attempt lost the freeze
-     * or when another attempt has frozen the cart. Otherwise the rollback is best-effort: the held places
+     * or when another attempt still running in this process has frozen the cart; a cart frozen by an
+     * attempt that is gone is rolled back. Otherwise the rollback is best-effort: the held places
      * are returned to stock and the cart is cleared, and a release that fails leaves the cart frozen.
-     * When the payment gateway reported a valid charge and the sale did not commit, a refund of the
-     * charged amount is requested from it. The member gets a purchase notice on success, and a failure
+     * When the payment gateway reported a charge of a valid amount and the sale did not commit, a refund
+     * of the charged amount is requested from it. The member gets a purchase notice on success, and a failure
      * notice on failure once the token has been accepted, except for a closed market, which publishes
      * none (ADR-004).
      *
@@ -886,8 +887,10 @@ public class CheckoutService {
     private void validateCanConfirmInventorySale(List<CartLineItem> boughtItems, String orderKey) {
         // The read-only ownership/status check (seat still RESERVED and owned by this order, enough
         // reserved standing stock) lives in the catalog inventory port. It is CALLER-LOCKED: sales
-        // holds the Phase-3 event buyer-locks across this check and the subsequent confirm, so the two
-        // are atomic against structural edits.
+        // holds the Phase-3 event buyer-locks across this check and the subsequent confirm, so on the
+        // in-memory adapters no structural edit falls between the two. On the Jpa adapters those locks are
+        // no-ops: the shared row lock on each event, taken when Phase 3 validates the events are on sale
+        // (ADR-015), and the @Version checks at commit guard it.
         inventoryPort.validateCanConfirmSale(toInventoryLines(boughtItems), orderKey);
     }
 
@@ -1069,7 +1072,7 @@ public class CheckoutService {
                 inventorySaleConfirmed);
 
         // Reset the CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart
-        // atomically under one lock scope. The guards inside the helper skip the rollback once the sale is
+        // under one lock scope. The guards inside the helper skip the rollback once the sale is
         // confirmed SOLD (a release would throw and the order is still CHECKOUT_IN_PROGRESS), when this
         // attempt's own freeze save failed, and when another attempt still in flight froze the order.
         // Mirrors handleGuestCheckoutFailure.
@@ -1110,7 +1113,7 @@ public class CheckoutService {
                 paymentResult != null,
                 inventorySaleConfirmed);
 
-        // Roll back inventory + cart + status atomically under one lock scope (see handleCheckoutFailure).
+        // Roll back inventory + cart + status under one lock scope (see handleCheckoutFailure).
         rollbackReservedInventoryAtomically(orderLockKey, order, inventorySaleConfirmed, freeze);
 
         if (inventorySaleConfirmed) {
@@ -1155,11 +1158,12 @@ public class CheckoutService {
         attemptsInFlight.computeIfPresent(orderKey, (key, attempts) -> attempts == 1 ? null : attempts - 1);
     }
 
-    // Atomic checkout-failure rollback: under a single order-write-lock + event-read-lock scope, reset the
-    // CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart. Folding these
-    // into one lock scope closes the window where a concurrent op (checkout retry, add-to-cart, expiry sweep)
-    // could interleave between the status reset and the cart clear, and lets eventRepository.save run under the
-    // event lock it requires. Reentrant-safe: in a Phase-3 failure the main flow already holds these locks, so
+    // Checkout-failure rollback: under a single order-write-lock + event-read-lock scope, reset the
+    // CHECKOUT_IN_PROGRESS status, return the reserved inventory to stock, and clear the cart. On the
+    // in-memory adapters, folding these into one lock scope closes the window where a concurrent op (checkout
+    // retry, add-to-cart, expiry sweep) could interleave between the status reset and the cart clear, and lets
+    // eventRepository.save run under the event lock it requires. On the Jpa adapters those locks are no-ops,
+    // and the @Version checks at commit guard the same interleavings. Reentrant-safe: in a Phase-3 failure the main flow already holds these locks, so
     // re-acquiring just bumps the hold count and the matching unlocks restore it.
     private void rollbackReservedInventoryAtomically(
             String orderLockKey,

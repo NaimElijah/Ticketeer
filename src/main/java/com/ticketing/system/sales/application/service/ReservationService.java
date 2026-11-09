@@ -43,7 +43,8 @@ import com.ticketing.system.shared.exception.UserFacingErrors;
  *
  * <p>A cart is found by user id for a member and by guest session id for a guest. Every change takes the
  * cart's order lock before the inventory port takes the event lock, so locks are always acquired in the
- * same order. A hold lasts the configured reservation window and is stamped with the cart's order key.
+ * same order. The order lock is real only on the in-memory adapters; on the Jpa adapters it is a no-op and
+ * {@code @Version} guards the cart. A hold lasts the configured reservation window and is stamped with the cart's order key.
  * Inventory changes go through catalog's {@code InventoryCommandPort}.
  *
  * <p>The write methods are transactional. A member gets a notice after each successful reserve or
@@ -739,8 +740,8 @@ public class ReservationService {
     }
 
     /**
-     * The member's cart, with event names on its lines. Looks the cart up by user id only; a guest's cart
-     * is read by {@link #restoreActiveOrderForGuest}.
+     * The member's cart, with event names on its lines. A guest's cart is read by
+     * {@link #restoreActiveOrderForGuest}.
      *
      * @param userId the member's user id
      * @return the cart, or {@code null} when the member has none
@@ -825,7 +826,8 @@ public class ReservationService {
      * <p>The timers are renewed only while the cart is fully valid. A missing or empty cart, one in
      * checkout, or one with a line whose hold has run out is left untouched, so the expiry sweeper's
      * path still rejects a stale cart. The renewal runs under the cart's order lock, the one the expiry
-     * sweeper takes first. No production code calls it yet.
+     * sweeper takes first; that lock is real only on the in-memory adapters, and on the Jpa adapters
+     * {@code @Version} guards the cart. No production code calls it yet.
      *
      * @param userId the member's user id
      * @return the cart, or {@code null} when the member has none
@@ -883,12 +885,15 @@ public class ReservationService {
      *
      * <p>Each line is released through the inventory port on its own, best-effort: a failed release is
      * logged at WARN and does not stop the others or the delete. The login cart merge calls it for a
-     * member cart that a guest cart replaces.
+     * member cart that a guest cart replaces. A lost race with another buyer in the zone is not absorbed
+     * per line: it fails the whole call.
      *
      * @param buyer the member (cart found by user id) or guest (cart found by session id) whose cart to
      *     abandon
      * @throws IllegalArgumentException if {@code buyer} is {@code null}
      * @throws IllegalStateException if the cart is in checkout
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if the call lost a race
+     *     with another buyer in a zone it releases
      */
     @Transactional
     public void abandonActiveOrder(BuyerContextDTO buyer) {

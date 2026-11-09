@@ -65,7 +65,7 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
 
     /**
      * One purchased place. The display fields are resolved when the record is built and are null when
-     * the event, company or port they come from is unavailable.
+     * the event or company they come from is missing, or no port was passed.
      *
      * @param seatNumber    the seat label; null for a standing zone
      * @param currentStatus the ticket's status now; a line with no stored ticket reads REFUNDED or PAID
