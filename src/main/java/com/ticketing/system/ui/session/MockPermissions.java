@@ -7,25 +7,20 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Per-company manager-permission grants stored on {@link VaadinSession}, and
- * the set of capabilities a manager can hold.
+ * Per-company manager-permission grants stored on {@link VaadinSession}.
  *
  * <p>{@link com.ticketing.system.ui.security.Capabilities} does not consult
  * the grant store: it resolves a manager's capabilities from the permissions
  * the organization service reports for the current company. Of this class,
- * only {@link #GRANTABLE} is read by the application, by {@code DevPanel},
- * which lists the capabilities a manager can hold.
+ * only {@link #GRANTABLE} is read by the application, by {@code DevPanel}.
  *
  * <p>{@link #GRANTABLE} is the closed set of capabilities this store accepts
- * as grants — capabilities outside this set
- * (e.g. {@link Capability#APPOINT_CO_OWNER},
- * {@link Capability#DISSOLVE_COMPANY}) are owner-only by design. It leaves out
- * {@link Capability#CANCEL_EVENT}, which a manager does hold, together with
- * {@link Capability#EDIT_COMPANY_EVENTS}, through the {@code MANAGE_INVENTORY} permission.
+ * as grants; {@link #grant} refuses any other, such as
+ * {@link Capability#APPOINT_CO_OWNER} or {@link Capability#DISSOLVE_COMPANY}.
  */
 public final class MockPermissions {
 
-    /** Capabilities that an owner can grant to a manager. */
+    /** The capabilities this store accepts as grants; {@code DevPanel} lists them. */
     public static final Set<Capability> GRANTABLE = EnumSet.of(
         Capability.VIEW_COMPANY_EVENTS,
         Capability.EDIT_COMPANY_EVENTS,
@@ -45,6 +40,12 @@ public final class MockPermissions {
 
     private MockPermissions() { }
 
+    /**
+     * The grant set the session holds for a company, created on first use with a default of
+     * {@code VIEW_COMPANY_EVENTS} and {@code RESPOND_INQUIRIES}. The set is the stored one, not a copy.
+     *
+     * @param companyId the company's id as text; {@code null} gives an empty set that is not stored
+     */
     @SuppressWarnings("unchecked")
     public static Set<Capability> forCompany(String companyId) {
         if (companyId == null) return EnumSet.noneOf(Capability.class);
@@ -60,21 +61,31 @@ public final class MockPermissions {
         return set;
     }
 
+    /** {@link #forCompany(String)} for the company in focus ({@code CurrentCompanies}). */
     public static Set<Capability> forCurrentCompany() {
         return forCompany(CurrentCompanies.currentCompanyIdAsString());
     }
 
+    /**
+     * Adds {@code c} to the company's grants.
+     *
+     * @throws IllegalArgumentException if {@code c} is not in {@link #GRANTABLE}
+     */
     public static void grant(String companyId, Capability c) {
         if (!GRANTABLE.contains(c))
             throw new IllegalArgumentException("Not grantable to managers: " + c);
         forCompany(companyId).add(c);
     }
 
+    /** Removes {@code c} from the company's grants. */
     public static void revoke(String companyId, Capability c) {
         forCompany(companyId).remove(c);
     }
 
-    /** Replace the manager's grant set wholesale (used by the edit-permissions dialog). */
+    /**
+     * Replaces the company's grant set wholesale with those of {@code caps} that are in
+     * {@link #GRANTABLE}; the others are dropped without an error.
+     */
     public static void setAll(String companyId, Set<Capability> caps) {
         VaadinSession s = VaadinSession.getCurrent();
         if (s == null) return;

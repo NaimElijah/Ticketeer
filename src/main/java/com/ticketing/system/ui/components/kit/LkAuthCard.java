@@ -23,6 +23,10 @@ public class LkAuthCard extends Div {
 
     private final Div card = new Div();
 
+    /**
+     * @param title    the card's title, which is the page's {@code h1}
+     * @param subtitle the line under the title; {@code null} or empty shows none
+     */
     public LkAuthCard(String title, String subtitle) {
         addClassName("auth-wrap");
         card.addClassName("auth-card");
@@ -67,7 +71,13 @@ public class LkAuthCard extends Div {
         return this;
     }
 
-    /** Footer paragraph with an optional trailing {@link RouterLink}, which the card ends with an arrow. */
+    /**
+     * Footer paragraph with an optional trailing {@link RouterLink}, which the card ends with an arrow.
+     *
+     * @param text       the footer text
+     * @param linkLabel  the link's text; the link is left out when this or {@code linkTarget} is {@code null}
+     * @param linkTarget the view the link opens
+     */
     public LkAuthCard foot(String text, String linkLabel, Class<? extends Component> linkTarget) {
         Paragraph foot = new Paragraph();
         foot.addClassName("auth-foot");

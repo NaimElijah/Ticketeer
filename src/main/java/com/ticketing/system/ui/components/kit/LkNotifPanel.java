@@ -24,6 +24,18 @@ import java.util.function.Function;
  */
 public class LkNotifPanel extends Div {
 
+    /**
+     * One row of the panel.
+     *
+     * @param notificationId the notification's id, handed to the panel's row-click callback; {@code null}
+     *                       or empty keeps that callback from running for this row
+     * @param iconName       the {@link LkIcon} glyph name shown at the row's start
+     * @param title          the row's heading
+     * @param body           the row's text
+     * @param time           the age text, already formatted
+     * @param unread         whether the row is shown as unread
+     * @param onClick        runs when the row is clicked; {@code null} for none
+     */
     public record Item(String notificationId, String iconName, String title, String body, String time, boolean unread, Runnable onClick) { }
 
     private static final String UNREAD = "Unread";
@@ -31,10 +43,22 @@ public class LkNotifPanel extends Div {
     private final NativeButton markAll;
     private final Div list = new Div();
 
+    /**
+     * A panel whose rows act only through their own {@link Item#onClick()}.
+     *
+     * @param headerTitle the heading
+     * @param items       the rows, in order; an empty list leaves the list empty
+     */
     public LkNotifPanel(String headerTitle, List<Item> items) {
         this(headerTitle, items, null);
     }
 
+    /**
+     * @param headerTitle the heading
+     * @param items       the rows, in order
+     * @param onRowClick  receives the id of a clicked row that has one, after that row's own
+     *                    {@link Item#onClick()}; {@code null} for none
+     */
     public LkNotifPanel(String headerTitle, List<Item> items, Consumer<String> onRowClick) {
         addClassName("lk-notif");
 
@@ -102,6 +126,7 @@ public class LkNotifPanel extends Div {
         return this;
     }
 
+    /** Runs {@code handler} when "Mark All Read" is clicked; each call adds another listener. */
     public LkNotifPanel onMarkAllRead(Runnable handler) {
         markAll.addClickListener(e -> handler.run());
         return this;
@@ -113,6 +138,7 @@ public class LkNotifPanel extends Div {
         return this;
     }
 
+    /** A "Notifications" panel of five fixed sample rows, none tied to a notification id. */
     public static LkNotifPanel buyer() {
         return new LkNotifPanel("Notifications", List.of(
             new Item("", "ticket", "Your Coldplay seats are confirmed", "Receipt #TKT-20847 · $504.00 paid", "2m", true, null),
@@ -123,6 +149,7 @@ public class LkNotifPanel extends Div {
         ));
     }
 
+    /** An "Admin alerts" panel of five fixed sample rows, none tied to a notification id. */
     public static LkNotifPanel admin() {
         return new LkNotifPanel("Admin alerts", List.of(
             new Item("", "comment",  "5 open complaints",          "Oldest is 2 days old — review the queue",        "2d", true,  null),

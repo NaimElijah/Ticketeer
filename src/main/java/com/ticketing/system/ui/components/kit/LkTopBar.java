@@ -23,7 +23,15 @@ import java.util.List;
  */
 public class LkTopBar extends Header {
 
+    /** The shell the bar belongs to; see the class comment. */
     public enum Variant { MAIN, ADMIN, PLATFORM }
+
+    /**
+     * One link of the main navigation.
+     *
+     * @param label  the link's text, which {@link LkTopBar#nav} matches against the active label
+     * @param target the view the link opens; {@code null} makes it plain text
+     */
     public record NavItem(String label, Class<? extends Component> target) { }
 
     // Accessible names of the popover panels (#188).
@@ -39,6 +47,7 @@ public class LkTopBar extends Header {
     private final Span rightSlot = new Span();
     private boolean rightAttached;
 
+    /** An empty bar of the given shell variant; add its parts by chaining. */
     public LkTopBar(Variant variant) {
         this.variant = variant;
         addClassName("lk-topbar");
@@ -51,8 +60,10 @@ public class LkTopBar extends Header {
     // Left / centre slots
     // ---------------------------------------------------------------------
 
+    /** Adds an inert brand line; see {@link #brand(String, String, Class)}. */
     public LkTopBar brand(String text) { return brand(text, null, null); }
 
+    /** Adds an inert brand line with a crumb; see {@link #brand(String, String, Class)}. */
     public LkTopBar brand(String text, String crumb) { return brand(text, crumb, null); }
 
     /** Brand line that navigates to {@code target} when clicked. */
@@ -116,6 +127,11 @@ public class LkTopBar extends Header {
         return this;
     }
 
+    /**
+     * Adds the search trigger, which opens {@code panel} in a popup named "Search".
+     *
+     * @param panel the popup's content, such as a live {@link LkSearchPanel}
+     */
     public LkTopBar search(Component panel) {
         Span trigger = new Span();
         trigger.addClassName("lk-topbar-search");
@@ -130,9 +146,16 @@ public class LkTopBar extends Header {
         return this;
     }
 
+    /** Adds the search trigger with {@link LkSearchPanel#defaults()}, fixed sample content. */
     public LkTopBar searchDefault() { return search(LkSearchPanel.defaults()); }
 
-    /** Add a single right-aligned text/icon link (e.g. "← Back to site"). */
+    /**
+     * Add a single right-aligned text/icon link (e.g. "← Back to site").
+     *
+     * @param label    the link's text
+     * @param iconName the {@link LkIcon} glyph name before the text; {@code null} for none
+     * @param target   the view the link opens; {@code null} makes it plain text
+     */
     public LkTopBar rightLink(String label, String iconName, Class<? extends Component> target) {
         Span spacer = new Span();
         spacer.getStyle().set("flex", "1");
@@ -186,6 +209,13 @@ public class LkTopBar extends Header {
     // Right slot — bell / account / guest actions
     // ---------------------------------------------------------------------
 
+    /**
+     * Adds a bell whose popup shows a fixed {@code panel}; the bell is not updated afterwards.
+     *
+     * @param panel      the popup's content
+     * @param badgeCount the unread count shown on the bell; {@code null} or empty shows no badge
+     * @param ariaLabel  the bell's and popup's accessible name; {@code null} for "Notifications"
+     */
     public LkTopBar bell(Component panel, String badgeCount, String ariaLabel) {
         ensureRightSlot();
         NativeButton bell = new NativeButton();
@@ -210,6 +240,12 @@ public class LkTopBar extends Header {
         return this;
     }
 
+    /**
+     * Adds a bell with fixed sample notifications ({@link LkNotifPanel#buyer()} or
+     * {@link LkNotifPanel#admin()}) and a fixed badge count.
+     *
+     * @param adminVariant whether to show the admin sample instead of the buyer one
+     */
     public LkTopBar bellDefault(boolean adminVariant) {
         return bell(adminVariant ? LkNotifPanel.admin() : LkNotifPanel.buyer(),
                     adminVariant ? "5" : "3",
@@ -262,10 +298,21 @@ public class LkTopBar extends Header {
         return this;
     }
 
+    /** Adds the account button with the theme's avatar colours; see {@link #account(String, String, Component, String, String)}. */
     public LkTopBar account(String initials, String tooltip, Component menu) {
         return account(initials, tooltip, menu, null, null);
     }
 
+    /**
+     * Adds the avatar button, which opens {@code menu} in a popup named "Account menu".
+     *
+     * @param initials the initials drawn in the avatar; hidden from screen readers
+     * @param tooltip  the user's name, shown as the tooltip and appended to the button's accessible name;
+     *                 {@code null} for neither
+     * @param menu     the popup's content, such as an {@link LkAccountMenu}
+     * @param bg       a CSS background colour for the avatar; {@code null} for the theme's
+     * @param fg       a CSS text colour for the initials; {@code null} for the theme's
+     */
     public LkTopBar account(String initials, String tooltip, Component menu, String bg, String fg) {
         ensureRightSlot();
         NativeButton avatar = new NativeButton();
@@ -300,6 +347,7 @@ public class LkTopBar extends Header {
         return this;
     }
 
+    /** The shell variant this bar was built for. */
     public Variant getVariant() { return variant; }
 
     private void ensureRightSlot() {

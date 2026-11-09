@@ -49,6 +49,7 @@ public final class RecentSearches {
         s.setAttribute(KEY, next);
     }
 
+    /** Forgets the recorded searches; does nothing without a Vaadin session. */
     public static void clear() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s != null) s.setAttribute(KEY, null);

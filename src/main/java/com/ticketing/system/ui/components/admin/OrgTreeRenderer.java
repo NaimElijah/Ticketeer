@@ -11,12 +11,25 @@ import com.vaadin.flow.component.html.UnorderedList;
 
 import java.util.stream.Collectors;
 
+/**
+ * An organizational tree as nested lists of cards, one card per member: initial, username and role. A
+ * founder's card says "Company Founder", a manager's lists their permissions, and a member who appointed
+ * others carries their cards nested below. {@code OrgTreeLegend} explains the colours.
+ */
 public class OrgTreeRenderer extends Composite<Div> {
 
     private static final String ROLE = "role";
     private static final String ROLE_LIST = "list";
     private static final String ARIA_HIDDEN = "aria-hidden";
 
+    /**
+     * Builds the chart for a whole tree.
+     *
+     * @param root the tree's root node. Every node needs a non-empty username and a non-null
+     *             {@code appointedByThisUser} list, and a manager a non-null {@code grantedPermissions}
+     *             list. A node is shown as the founder if {@code isFounder()}, as an owner if its role is
+     *             {@code "Owner"}, and as a manager otherwise.
+     */
     public OrgTreeRenderer(OrganizationalTreeNodeDTO root) {
         Div tree = getContent();
         tree.addClassName("org-chart");

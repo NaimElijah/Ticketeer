@@ -46,6 +46,11 @@ public class VkSeat extends NativeButton {
 
     private final String num;
 
+    /**
+     * @param state the seat's initial state
+     * @param num   the seat number shown on the tile and in its accessible name; {@code null} shows no
+     *              number and names the seat "Seat"
+     */
     public VkSeat(State state, String num) {
         this.num = num;
         addClassName("vk-seat");

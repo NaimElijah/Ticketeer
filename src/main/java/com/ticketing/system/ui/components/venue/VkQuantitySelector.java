@@ -39,6 +39,12 @@ public class VkQuantitySelector extends Div {
     private final Span countDisplay;
     private final Span pricePreview;
 
+    /**
+     * @param availableCount    the most tickets that can be picked; 0 means sold out
+     * @param priceCentsEach    one ticket's price, in cents, for the price preview
+     * @param onSelectionChange runs after each change of the quantity the user makes; not run for the
+     *                          initial quantity; may be {@code null}
+     */
     public VkQuantitySelector(int availableCount, int priceCentsEach, Runnable onSelectionChange) {
         this.maxQuantity = availableCount;
         this.priceCentsEach = priceCentsEach;
@@ -83,10 +89,12 @@ public class VkQuantitySelector extends Div {
         return (quantity > 0) ? InventorySelectionDTO.standing(quantity) : null;
     }
 
+    /** Whether a quantity is selected, which is always so unless the zone is sold out. */
     public boolean hasSelection() {
         return quantity > 0;
     }
 
+    /** The quantity shown, 0 when the zone is sold out. */
     public int getQuantity() {
         return quantity;
     }

@@ -21,6 +21,10 @@ public final class BzRefundDialog {
     /**
      * Opens the refund confirm for one order. {@code onConfirm} is invoked (with the typed reason)
      * only if the member confirms; it is never called on cancel/dismiss.
+     *
+     * @param orderLabel the order as the prompt names it
+     * @param amount     the amount to refund, in dollars, shown with two decimals
+     * @param onConfirm  receives the reason text, empty when none was typed; may be {@code null}
      */
     public static void open(String orderLabel, double amount, Consumer<String> onConfirm) {
         TextArea reason = new TextArea("Reason for refund");

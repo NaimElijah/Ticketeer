@@ -24,6 +24,7 @@ public class LkRadio extends NativeLabel {
         add(group);
     }
 
+    /** Sets the label shown above the options. */
     public LkRadio label(String t) {
         labelSpan.setText(t);
         if (!hasLabel) {
@@ -33,6 +34,13 @@ public class LkRadio extends NativeLabel {
         return this;
     }
 
+    /**
+     * Replaces the options.
+     *
+     * @param selected the text of the option drawn as chosen; {@code null} or text matching none
+     *                 draws none as chosen
+     * @param options  the options' texts, in order
+     */
     public LkRadio options(String selected, String... options) {
         group.removeAll();
         for (String opt : options) {

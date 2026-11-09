@@ -44,6 +44,12 @@ public class LkTextRows extends Div implements HasValidationProperties {
     private boolean readOnly = false;
     private Integer textLimit;
 
+    /**
+     * Builds the input with one empty row.
+     *
+     * @param labelText      the label above the rows, which also names each row's field
+     * @param addButtonLabel the "Add" button's text
+     */
     public LkTextRows(String labelText, String addButtonLabel) {
         addClassName("lk-text-rows");
         getStyle().set("display", "flex").set("flex-direction", "column").set("gap", "6px");
@@ -66,6 +72,7 @@ public class LkTextRows extends Div implements HasValidationProperties {
         rebuild();
     }
 
+    /** Sets the placeholder of every row, present and future; {@code null} sets none. */
     public LkTextRows placeholder(String p) {
         this.placeholder = p == null ? "" : p;
         rows.forEach(t -> t.setPlaceholder(this.placeholder));

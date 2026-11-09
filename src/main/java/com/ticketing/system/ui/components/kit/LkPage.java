@@ -19,6 +19,7 @@ public class LkPage extends Div {
     private final Div actions = new Div();
     private boolean headInserted;
 
+    /** A page with no heading row until a title, subtitle or actions are set. */
     public LkPage() {
         addClassName("lk-page");
         getStyle().set("margin", "0 auto");
@@ -30,17 +31,20 @@ public class LkPage extends Div {
         headRow.add(titleCol, actions);
     }
 
+    /** A page whose {@code h1} is {@code titleText}. */
     public LkPage(String titleText) {
         this();
         title(titleText);
     }
 
+    /** Sets the page's {@code h1}; {@code null} sets it empty. */
     public LkPage title(String t) {
         this.title.setText(t == null ? "" : t);
         ensureHead();
         return this;
     }
 
+    /** Sets the line under the title; {@code null} or empty removes it. */
     public LkPage subtitle(String s) {
         subtitle.setText(s == null ? "" : s);
         if (s != null && !s.isEmpty()) {
@@ -53,6 +57,7 @@ public class LkPage extends Div {
         return this;
     }
 
+    /** Replaces the components at the right of the heading row, such as buttons. */
     public LkPage actions(Component... cs) {
         this.actions.removeAll();
         if (cs != null)
@@ -61,6 +66,7 @@ public class LkPage extends Div {
         return this;
     }
 
+    /** Adds {@code cs} to the page body, below the heading row. */
     @Override
     public void add(Component... cs) {
         for (Component c : cs) {

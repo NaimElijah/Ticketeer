@@ -13,15 +13,25 @@ import com.vaadin.flow.component.html.Span;
  */
 public class LkMenu extends Div {
 
+    /** A menu of {@code children}, typically {@link Item}, {@link Label} and {@link Divider}; none leaves it empty. */
     public LkMenu(Component... children) {
         addClassName("lk-menu");
         if (children != null && children.length > 0) add(children);
     }
 
-    /** Convenience: append items and return self. */
+    /**
+     * Convenience: append items and return self. The appended item has no click handler, so these
+     * suit a menu that is only shown.
+     */
     public LkMenu item(String label) { add(new Item(label)); return this; }
+
+    /** Appends an item with an icon; see {@link #item(String)}. */
     public LkMenu item(String iconName, String label) { add(new Item(iconName, label)); return this; }
+
+    /** Appends a section label. */
     public LkMenu label(String text) { add(new Label(text)); return this; }
+
+    /** Appends a divider line. */
     public LkMenu divider() { add(new Divider()); return this; }
 
     // ---------------- nested ----------------
@@ -36,6 +46,7 @@ public class LkMenu extends Div {
         private Span hintSlot;
         private boolean hasIcon;
 
+        /** An item with a text label and no icon. */
         public Item(String label) {
             addClassName("lk-menu-item");
             labelSlot.addClassName("lk-menu-lbl");
@@ -44,11 +55,16 @@ public class LkMenu extends Div {
             add(labelSlot);
         }
 
+        /**
+         * @param iconName the {@link LkIcon} glyph name for a 16 px icon before the label
+         * @param label    the item's text
+         */
         public Item(String iconName, String label) {
             this(label);
             icon(new LkIcon(iconName, 16));
         }
 
+        /** Shows {@code icon} before the label, replacing an earlier one. */
         public Item icon(Component icon) {
             if (!hasIcon) {
                 getElement().insertChild(0, iconSlot.getElement());
@@ -59,6 +75,7 @@ public class LkMenu extends Div {
             return this;
         }
 
+        /** Shows {@code text} as a hint after the label, replacing an earlier one. */
         public Item hint(String text) {
             if (hintSlot == null) {
                 hintSlot = new Span();
@@ -69,8 +86,14 @@ public class LkMenu extends Div {
             return this;
         }
 
+        /** Styles the item as a destructive action, such as "Sign Out". */
         public Item danger() { addClassName("danger"); return this; }
 
+        /**
+         * Highlights the item and adds a check mark to it. Call it once per item; each call adds
+         * another check mark. For a single choice use {@link #choice(boolean)}, which also tells
+         * screen readers.
+         */
         public Item active() {
             addClassName("on");
             add(new LkIcon("check", 15));
@@ -92,6 +115,7 @@ public class LkMenu extends Div {
             return chosen ? active() : this;
         }
 
+        /** Runs {@code r} when the item is clicked; each call adds another listener. */
         public Item onClick(Runnable r) {
             addClickListener(e -> r.run());
             return this;
@@ -100,6 +124,7 @@ public class LkMenu extends Div {
 
     /** Tiny uppercase section label. */
     public static class Label extends Div {
+        /** A section label showing {@code text}. */
         public Label(String text) {
             addClassName("lk-menu-label");
             Span lbl = new Span(text);
@@ -118,6 +143,7 @@ public class LkMenu extends Div {
 
     /** 1px horizontal rule. */
     public static class Divider extends Div {
+        /** A divider line. */
         public Divider() {
             addClassName("lk-menu-div");
         }

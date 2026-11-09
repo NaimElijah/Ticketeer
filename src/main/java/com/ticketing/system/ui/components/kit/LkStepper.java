@@ -14,6 +14,7 @@ public class LkStepper extends NativeLabel {
     private final Span value = new Span();
     private boolean hasLabel;
 
+    /** @param value the quantity text shown between the buttons; the buttons have no click handlers */
     public LkStepper(String value) {
         addClassName("lk-field");
         labelSpan.addClassName("lk-label");
@@ -28,6 +29,7 @@ public class LkStepper extends NativeLabel {
         add(stepperBox);
     }
 
+    /** Sets the label shown above the stepper. */
     public LkStepper label(String t) {
         labelSpan.setText(t);
         if (!hasLabel) {
@@ -37,6 +39,7 @@ public class LkStepper extends NativeLabel {
         return this;
     }
 
+    /** Sets the field's CSS width, such as {@code "120px"}. */
     public LkStepper width(String w) {
         getStyle().set("width", w);
         return this;

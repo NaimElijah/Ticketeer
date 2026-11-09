@@ -32,11 +32,13 @@ public final class GuestSession {
         return (String) s.getAttribute(SESSION_ID_KEY);
     }
 
+    /** Pins {@code sessionId} as the visitor's guest session id; does nothing without a Vaadin session. */
     public static void setSessionId(String sessionId) {
         VaadinSession s = VaadinSession.getCurrent();
         if (s != null) s.setAttribute(SESSION_ID_KEY, sessionId);
     }
 
+    /** Forgets the guest session id; does nothing without a Vaadin session. */
     public static void clear() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s != null) s.setAttribute(SESSION_ID_KEY, null);

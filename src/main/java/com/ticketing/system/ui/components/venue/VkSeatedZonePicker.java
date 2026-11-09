@@ -30,6 +30,11 @@ public class VkSeatedZonePicker extends Div {
     /**
      * Presentation-layer seat descriptor — decoupled from the domain {@code Seat}
      * entity so the component works with both real service data and stub data.
+     *
+     * @param label        identifies the seat: shown on its tile, and the value the selection carries
+     * @param x            the tile's left edge, in pixels from the picker's left; cut to a whole pixel
+     * @param y            the tile's top edge, in pixels from the picker's top; cut to a whole pixel
+     * @param initialState the seat's state at construction; only a free seat can be picked
      */
     public record SeatModel(String label, double x, double y, VkSeat.State initialState) {}
 
@@ -38,6 +43,11 @@ public class VkSeatedZonePicker extends Div {
     private final Set<String>         clickable = new HashSet<>(); // only initially-free seats
     private final Runnable onSelectionChange;
 
+    /**
+     * @param seats             the zone's seats; their labels must be distinct
+     * @param onSelectionChange runs after each change of the selection, including {@link #deselect} and
+     *                          {@link #clearSelection}; may be {@code null}
+     */
     public VkSeatedZonePicker(List<SeatModel> seats, Runnable onSelectionChange) {
         this.onSelectionChange = onSelectionChange;
         addClassName("vk-seated-picker");
@@ -85,6 +95,7 @@ public class VkSeatedZonePicker extends Div {
         return InventorySelectionDTO.seated(new ArrayList<>(selected));
     }
 
+    /** Whether any seat is selected. */
     public boolean hasSelection() {
         return !selected.isEmpty();
     }

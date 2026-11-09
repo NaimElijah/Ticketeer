@@ -92,6 +92,10 @@ public class WorkspaceLayout extends AppLayout implements AfterNavigationObserve
     private final SignOutFlow signOutFlow;
     private final NotificationBellPresenter bellPresenter;
 
+    /**
+     * @param signOutFlow   runs when the user picks "Sign Out" in the account menu
+     * @param bellPresenter stores the read of a notification the bell shows read, and renders its age
+     */
     public WorkspaceLayout(SignOutFlow signOutFlow, NotificationBellPresenter bellPresenter) {
         this.signOutFlow = signOutFlow;
         this.bellPresenter = bellPresenter;

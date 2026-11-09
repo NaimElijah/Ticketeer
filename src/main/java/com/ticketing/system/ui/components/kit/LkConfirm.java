@@ -40,6 +40,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class LkConfirm extends Dialog {
 
+    /** How serious the confirmed action is, which sets the dialog's accent colour and icon. */
     public enum Severity {
         info("var(--primary)", "info"),
         warn("var(--warn)", "warning"),
@@ -62,10 +63,23 @@ public class LkConfirm extends Dialog {
     private final Button cancel = new Button("Cancel");
     private final Button confirm = new Button("Confirm");
 
+    /**
+     * A {@link Severity#warn} confirmation.
+     *
+     * @param title the dialog's title, also its accessible name
+     * @param body  the text under the title; shown as plain text, with line breaks kept
+     * @see #LkConfirm(String, String, Severity)
+     */
     public LkConfirm(String title, String body) {
         this(title, body, Severity.warn);
     }
 
+    /**
+     * @param title    the dialog's title, also its accessible name
+     * @param body     the text under the title; shown as plain text, with line breaks kept; {@code null}
+     *                 or empty shows none
+     * @param severity the accent colour and icon
+     */
     public LkConfirm(String title, String body, Severity severity) {
         setWidth("min(440px, 100vw - 32px)");
         setMaxWidth("92vw");
@@ -125,11 +139,13 @@ public class LkConfirm extends Dialog {
         return this;
     }
 
+    /** Sets the confirm button's label; the default is "Confirm". */
     public LkConfirm confirmText(String text) {
         confirm.setText(text);
         return this;
     }
 
+    /** Sets the cancel button's label; the default is "Cancel". */
     public LkConfirm cancelText(String text) {
         cancel.setText(text);
         return this;

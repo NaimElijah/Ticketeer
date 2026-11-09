@@ -26,6 +26,7 @@ public class NotificationSessionListener implements VaadinServiceInitListener {
 
     private final INotificationService notificationService;
 
+    /** @param notificationService moves the member's SENT notifications back to PENDING */
     public NotificationSessionListener(INotificationService notificationService) {
         this.notificationService = notificationService;
     }

@@ -23,6 +23,7 @@ public class MdReplyBar extends Div {
     private final Button    send  = new Button("Send");
     private SendHandler onSend;
 
+    /** Builds the bar with an empty field. Send does nothing until {@link #onSend(SendHandler)} sets a handler. */
     public MdReplyBar() {
         addClassName("md-reply");
         input.setPlaceholder("Write a reply…");

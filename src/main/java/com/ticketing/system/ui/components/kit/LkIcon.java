@@ -98,14 +98,22 @@ public class LkIcon extends Span {
                 "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" });
     }
 
+    /** An 18 px icon. */
     public LkIcon(String name) {
         this(name, 18, 1.7);
     }
 
+    /** An icon of {@code size} px, with the default stroke. */
     public LkIcon(String name, int size) {
         this(name, size, 1.7);
     }
 
+    /**
+     * @param name   the glyph's name, such as {@code "ticket"} or {@code "bell"}; a name with no glyph
+     *               gives an empty icon
+     * @param size   the icon's width and height, in pixels
+     * @param stroke the stroke width, in the 24-unit viewBox's units
+     */
     public LkIcon(String name, int size, double stroke) {
         addClassName("lk-icon");
         getStyle()

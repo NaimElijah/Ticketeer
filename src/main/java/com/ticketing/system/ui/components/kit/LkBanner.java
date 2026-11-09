@@ -11,9 +11,11 @@ import com.vaadin.flow.component.html.Span;
  */
 public class LkBanner extends Div {
 
+    /** The banner's colour and meaning. */
     public enum Tone {
         warn, info, error;
 
+        /** The theme class that gives the banner this tone. */
         public String cls() {
             return "lk-banner-" + name();
         }
@@ -24,6 +26,7 @@ public class LkBanner extends Div {
     private final Div actionSlot = new Div();
     private Tone tone = Tone.warn;
 
+    /** An empty {@link Tone#warn} banner; fill it with {@link #setIcon}, {@link #setBody} and {@link #setAction}. */
     public LkBanner() {
         addClassName("lk-banner");
         addClassName(tone.cls());
@@ -32,6 +35,11 @@ public class LkBanner extends Div {
         add(iconSlot, bodySlot, actionSlot);
     }
 
+    /**
+     * @param tone    the banner's tone
+     * @param icon    the leading icon; {@code null} for none
+     * @param message the banner's text
+     */
     public LkBanner(Tone tone, Component icon, String message) {
         this();
         tone(tone);
@@ -40,6 +48,7 @@ public class LkBanner extends Div {
         bodySlot.setText(message);
     }
 
+    /** Replaces the banner's tone. */
     public LkBanner tone(Tone t) {
         for (Tone v : Tone.values())
             removeClassName(v.cls());
@@ -48,6 +57,7 @@ public class LkBanner extends Div {
         return this;
     }
 
+    /** Replaces the leading icon; {@code null} removes it. */
     public LkBanner setIcon(Component icon) {
         iconSlot.removeAll();
         if (icon != null)
@@ -55,6 +65,7 @@ public class LkBanner extends Div {
         return this;
     }
 
+    /** Replaces the message with {@code cs}, for a message that is more than text; {@code null} empties it. */
     public LkBanner setBody(Component... cs) {
         bodySlot.removeAll();
         if (cs != null)
@@ -62,6 +73,7 @@ public class LkBanner extends Div {
         return this;
     }
 
+    /** Replaces the trailing action, such as a button; {@code null} removes it. */
     public LkBanner setAction(Component c) {
         actionSlot.removeAll();
         if (c != null)

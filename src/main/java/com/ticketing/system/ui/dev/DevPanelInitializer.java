@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 @org.springframework.context.annotation.Profile("dev")
 public class DevPanelInitializer implements VaadinServiceInitListener {
 
+    /** Hands the services to {@link DevPanel}; Spring supplies each parameter. */
     public DevPanelInitializer(ReservationService reservationService,
                                AuthenticationService authenticationService,
                                SignOutFlow signOutFlow,

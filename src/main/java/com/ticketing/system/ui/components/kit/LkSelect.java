@@ -36,6 +36,11 @@ public class LkSelect extends Div {
 
     private List<String> options;
 
+    /**
+     * @param value   the option text shown first; it is not checked against {@code options}
+     * @param options the choices, in the order shown; the select keeps this list, so do not change it
+     *                afterwards (replace it with {@link #setOptions})
+     */
     public LkSelect(String value, List<String> options) {
         this.options = options;
         addClassName("lk-field");
@@ -80,17 +85,24 @@ public class LkSelect extends Div {
         return this;
     }
 
+    /** Marks the label with a required asterisk; it checks nothing. */
     public LkSelect required() {
         if (req.getParent().isEmpty())
             labelSpan.add(req);
         return this;
     }
 
+    /** Sets the field's CSS width, such as {@code "220px"}. */
     public LkSelect width(String w) {
         getStyle().set("width", w);
         return this;
     }
 
+    /**
+     * Sets what runs after the user picks an option, or {@link #setValue} changes the value; it
+     * replaces any earlier handler and receives the new option text. Picking the option already shown
+     * runs it too.
+     */
     public LkSelect onChange(Consumer<String> handler) {
         this.onChange = handler;
         return this;
@@ -104,6 +116,7 @@ public class LkSelect extends Div {
         trigger.focus();
     }
 
+    /** The option text shown. */
     public String getValue() {
         return currentValue;
     }

@@ -30,5 +30,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface RequireCapability {
+    /** The capability a user must hold to open the view. */
     Capability value();
 }

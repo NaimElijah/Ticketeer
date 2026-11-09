@@ -42,6 +42,10 @@ public class SessionIdentity {
     private final AuthenticationService authenticationService;
     private final FreshGuestSession freshGuestSession;
 
+    /**
+     * @param authenticationService answers whether the stored token and the guest session id are live
+     * @param freshGuestSession     resets the session when either is not
+     */
     public SessionIdentity(AuthenticationService authenticationService, FreshGuestSession freshGuestSession) {
         this.authenticationService = authenticationService;
         this.freshGuestSession = freshGuestSession;

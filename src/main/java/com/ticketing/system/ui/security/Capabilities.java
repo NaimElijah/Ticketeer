@@ -89,10 +89,12 @@ public final class Capabilities {
             Capability.MANAGE_COMPLAINTS,
             Capability.VIEW_ORG_TREES));
 
+    /** Whether the current session holds {@code c}; see {@link #forCurrentUser()}. */
     public static boolean has(Capability c) {
         return forCurrentUser().contains(c);
     }
 
+    /** Whether the current session holds every capability in {@code cs}; true for none. */
     public static boolean hasAll(Capability... cs) {
         Set<Capability> mine = forCurrentUser();
         for (Capability c : cs) {
@@ -103,6 +105,7 @@ public final class Capabilities {
         return true;
     }
 
+    /** Whether the current session holds at least one capability in {@code cs}; false for none. */
     public static boolean hasAny(Capability... cs) {
         Set<Capability> mine = forCurrentUser();
         for (Capability c : cs) {
@@ -113,6 +116,20 @@ public final class Capabilities {
         return false;
     }
 
+    /**
+     * The capabilities of the current session, as a new set on every call.
+     *
+     * <ul>
+     *   <li>A signed-out visitor holds the guest capabilities.</li>
+     *   <li>An admin holds those and the admin capabilities, and no company capability.</li>
+     *   <li>A member holds those and the member capabilities, plus the workspace and role
+     *       capabilities of the current company, or of the first company when none is current; a
+     *       member with no company, or whose token is dead, gets no company capability.</li>
+     * </ul>
+     *
+     * <p>Side effect: for a member it reads the member's companies from the organization service, once
+     * per request (class comment). A failure other than a dead token propagates.
+     */
     public static Set<Capability> forCurrentUser() {
         Set<Capability> caps = EnumSet.copyOf(GUEST_BASE);
 

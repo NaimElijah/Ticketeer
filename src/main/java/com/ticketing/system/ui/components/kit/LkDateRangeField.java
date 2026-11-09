@@ -37,8 +37,13 @@ public class LkDateRangeField extends Div {
     private String currentValue;
     private Consumer<String> onChange;
 
+    /** A field showing "Any time". */
     public LkDateRangeField() { this("Any time"); }
 
+    /**
+     * @param initial the preset text shown first; it is not checked against the presets, and
+     *                picking a preset replaces it
+     */
     public LkDateRangeField(String initial) {
         addClassName("lk-field");
         labelSpan.addClassName("lk-label");
@@ -75,16 +80,25 @@ public class LkDateRangeField extends Div {
         return this;
     }
 
+    /** Sets the field's CSS width, such as {@code "220px"}. */
     public LkDateRangeField width(String w) { getStyle().set("width", w); return this; }
 
+    /**
+     * Sets what runs when the value changes, by a pick or {@link #setValue}; it replaces any earlier
+     * handler and receives the new preset text. Picking the preset already shown does not run it.
+     */
     public LkDateRangeField onChange(Consumer<String> handler) {
         this.onChange = handler;
         return this;
     }
 
+    /** The preset text shown, such as {@code "Next 7 days"}. */
     public String getValue() { return currentValue; }
 
-    /** Programmatically set the value (e.g. from a "Clear all" reset). Fires onChange. */
+    /**
+     * Programmatically set the value (e.g. from a "Clear all" reset). Fires onChange, unless
+     * {@code value} is {@code null} or already shown, which does nothing.
+     */
     public LkDateRangeField setValue(String value) {
         if (value == null || value.equals(currentValue)) return this;
         show(value);

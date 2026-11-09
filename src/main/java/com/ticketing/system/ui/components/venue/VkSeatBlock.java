@@ -26,7 +26,22 @@ public class VkSeatBlock extends Div {
 
     private final List<VkSeat> seats = new ArrayList<>();
 
+    /**
+     * A block without a heading, its first row labelled "A".
+     *
+     * @param rows one string per row, one state code per seat
+     * @see #VkSeatBlock(String[], String, char)
+     */
     public VkSeatBlock(String[] rows) { this(rows, null, 'A'); }
+
+    /**
+     * @param rows         one string per row, one state code per seat in column order; any character
+     *                     other than the codes above reads as free. Seats are numbered from 1 in each row.
+     * @param label        a heading above the rows; {@code null} for none
+     * @param startRowChar the letter of the first row's label, {@code 'A'} or later; later rows
+     *                     continue the sequence ({@code Z} is followed by {@code AA})
+     * @throws IllegalArgumentException if there is a row and {@code startRowChar} is below {@code 'A'}
+     */
     public VkSeatBlock(String[] rows, String label, char startRowChar) {
         addClassName("vk-seatblock");
         if (label != null) {

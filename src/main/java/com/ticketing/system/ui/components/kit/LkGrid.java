@@ -23,20 +23,27 @@ import java.util.Map;
  */
 public class LkGrid extends Div {
 
+    /** A column's text alignment. */
     public enum Align {
         LEFT, RIGHT, CENTER;
 
+        /** The CSS {@code text-align} value for this alignment. */
         public String css() {
             return name().toLowerCase(Locale.ROOT);
         }
     }
 
+    /** One column: its header, the row-map key its cells read, its alignment and its width. */
     public static class Col {
+        /** The header text; a blank header is read to screen readers as "Actions". */
         public final String header;
+        /** The key of the row map whose value fills this column's cells. */
         public final String key;
         public final Align align;
+        /** A CSS width such as {@code "120px"}; {@code null} leaves it to the table. */
         public final String width;
 
+        /** Creates a column; {@code align} and {@code width} may be {@code null}. */
         public Col(String header, String key, Align align, String width) {
             this.header = header;
             this.key = key;
@@ -55,10 +62,12 @@ public class LkGrid extends Div {
     private boolean dense;
     private String name;
 
+    /** An empty grid; configure columns and rows, then call {@link #build()}. */
     public LkGrid() {
         addClassName("lk-grid-wrap");
     }
 
+    /** Uses the compact row spacing. Call before {@link #build()}. */
     public LkGrid dense() {
         dense = true;
         return this;
@@ -76,14 +85,24 @@ public class LkGrid extends Div {
         return this;
     }
 
+    /** Adds a left-aligned column of automatic width. */
     public LkGrid col(String header, String key) {
         return col(header, key, Align.LEFT, null);
     }
 
+    /** Adds a column of automatic width. */
     public LkGrid col(String header, String key, Align align) {
         return col(header, key, align, null);
     }
 
+    /**
+     * Adds a column.
+     *
+     * @param header the header text; blank shows no header and is read to screen readers as "Actions"
+     * @param key    the key of each row map whose value fills the column's cells
+     * @param align  the cell alignment; {@code null} is left
+     * @param width  a CSS width such as {@code "120px"}; {@code null} for automatic
+     */
     public LkGrid col(String header, String key, Align align, String width) {
         columns.add(new Col(header, key, align, width));
         return this;

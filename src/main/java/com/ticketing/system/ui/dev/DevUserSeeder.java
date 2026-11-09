@@ -40,6 +40,7 @@ public class DevUserSeeder implements ApplicationRunner {
 
     private final AuthenticationService authenticationService;
 
+    /** @param authenticationService starts the guest session and registers the member */
     public DevUserSeeder(AuthenticationService authenticationService) {
         this.authenticationService = authenticationService;
     }

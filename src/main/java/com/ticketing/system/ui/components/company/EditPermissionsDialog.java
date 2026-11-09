@@ -40,6 +40,17 @@ public class EditPermissionsDialog {
     private final Dialog dialog = new Dialog();
     private final Map<Permission, LkCheckRow> rows = new LinkedHashMap<>();
 
+    /**
+     * Builds the dialog, not yet open.
+     *
+     * @param managerName           the manager's name, shown in bold
+     * @param role                  the role shown in the badge beside the name
+     * @param currentPermissionNames the {@link Permission} constants' names the manager holds, to
+     *                              pre-check; {@code null} checks none
+     * @param onSave                receives the names of the checked permissions, in {@link Permission}
+     *                              order and never empty, after the dialog has closed; not called on
+     *                              cancel
+     */
     public EditPermissionsDialog(String managerName,
                                  String role,
                                  List<String> currentPermissionNames,
@@ -88,6 +99,7 @@ public class EditPermissionsDialog {
         dialog.getFooter().add(cancel, save);
     }
 
+    /** Opens the dialog; needs a live UI. */
     public void open() {
         dialog.open();
     }

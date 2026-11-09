@@ -40,46 +40,54 @@ public final class Lk {
 
     private Lk() { }
 
+    /** The page heading in the kit's style; a page has one. */
     public static H1 h1(String text) {
         H1 h = new H1(text);
         h.addClassName("lk-h1");
         return h;
     }
 
+    /** A section heading in the kit's style, under the page's {@code h1}. */
     public static H2 h2(String text) {
         H2 h = new H2(text);
         h.addClassName("lk-h2");
         return h;
     }
 
+    /** A subsection heading in the kit's style, under an {@code h2}. */
     public static H3 h3(String text) {
         H3 h = new H3(text);
         h.addClassName("lk-h3");
         return h;
     }
 
+    /** Plain text in a span, with no styling of its own. */
     public static Span txt(String text) {
         return new Span(text);
     }
 
+    /** Text in the {@code --muted} colour, for secondary information. */
     public static Span muted(String text) {
         Span s = new Span(text);
         s.getStyle().set("color", "var(--muted)");
         return s;
     }
 
+    /** Text in the monospace font, such as an id or a code. */
     public static Span mono(String text) {
         Span s = new Span(text);
         s.addClassName("lk-mono");
         return s;
     }
 
+    /** Text in the {@code --faint} colour, for the least prominent information. */
     public static Span faint(String text) {
         Span s = new Span(text);
         s.getStyle().set("color", "var(--faint)");
         return s;
     }
 
+    /** A horizontal rule between blocks of content. */
     public static Div divider() {
         Div d = new Div();
         d.addClassName("bz-divider");
@@ -142,6 +150,13 @@ public final class Lk {
         return component;
     }
 
+    /**
+     * A message with the reason it came about appended.
+     *
+     * @param base   the message
+     * @param reason why; {@code null} or blank leaves none
+     * @return {@code "base: reason"}, or {@code "base."} when there is no reason
+     */
     public static String withReason(String base, String reason) {
         return (reason != null && !reason.isBlank()) ? base + ": " + reason : base + ".";
     }

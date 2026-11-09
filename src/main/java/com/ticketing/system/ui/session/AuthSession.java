@@ -63,6 +63,7 @@ public final class AuthSession {
 
     // -- Reads ------------------------------------------------------------
 
+    /** Whether the current Vaadin session holds a sign-in, a member's or an admin's. */
     public static boolean isSignedIn() {
         return isSignedIn(VaadinSession.getCurrent());
     }
@@ -77,6 +78,7 @@ public final class AuthSession {
         return session != null && Boolean.TRUE.equals(session.getAttribute(SIGNED_IN_KEY));
     }
 
+    /** Whether the current sign-in is an admin's, as the {@code AuthTokenDTO} given to {@link #storeAuth} said. */
     public static boolean isAdmin() {
         return isAdmin(VaadinSession.getCurrent());
     }
@@ -90,6 +92,7 @@ public final class AuthSession {
         return session != null && Boolean.TRUE.equals(session.getAttribute(ADMIN_KEY));
     }
 
+    /** The signed-in username; {@code null} when signed out or without a Vaadin session. */
     public static String displayName() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s == null) return null;
@@ -103,6 +106,10 @@ public final class AuthSession {
         return (String) s.getAttribute(TOKEN_KEY);
     }
 
+    /**
+     * The id the current sign-in stored; {@code null} when signed out. Member and admin ids share one
+     * id space (ADR-012), so read it together with {@link #isAdmin()}.
+     */
     public static Integer userId() {
         return userId(VaadinSession.getCurrent());
     }
@@ -119,6 +126,7 @@ public final class AuthSession {
         return (Integer) session.getAttribute(USER_ID_KEY);
     }
 
+    /** When the stored token expires, in epoch milliseconds; 0 when signed out. */
     public static long expiresAtEpochMillis() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s == null) return 0L;
