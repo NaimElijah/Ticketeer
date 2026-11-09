@@ -53,7 +53,8 @@ public class MyCompaniesPresenter {
 
     /**
      * The live member's company in focus, by {@link SelectedCompany}'s rule; {@code null} for a guest,
-     * an admin, a member of no company, or a member of several who has selected none of them.
+     * an admin, a member of no company, or a member of several who has selected none of them or whose
+     * selection is a company they do not belong to.
      */
     public UserCompanyDTO currentCompany() {
         return SelectedCompany.among(memberships(), UserCompanyDTO::companyId).orElse(null);
@@ -103,7 +104,10 @@ public class MyCompaniesPresenter {
         record Success() implements AppointOutcome {}
         record NotAuthenticated() implements AppointOutcome {}
         record NoCompany() implements AppointOutcome {}
-        /** The member belongs to several companies and has not selected one of them. */
+        /**
+         * The member belongs to several companies and has selected none of them, or the selection is a
+         * company they do not belong to.
+         */
         record ChooseCompany() implements AppointOutcome {}
         record UserNotFound(String username) implements AppointOutcome {}
         record Failure(String reason) implements AppointOutcome {}

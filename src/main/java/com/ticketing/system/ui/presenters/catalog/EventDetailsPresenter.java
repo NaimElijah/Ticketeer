@@ -16,15 +16,16 @@ import com.ticketing.system.ui.support.ServiceErrors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * MVP presenter for {@code EventDetailsView} (#272). Loads the public event detail plus a
- * best-effort venue/zone summary and returns a sealed {@link Outcome} the view switches on —
- * the view never calls services directly nor uses {@code try/catch}.
+ * MVP presenter for {@code EventDetailsView} (#272). Loads the public event detail plus its
+ * venue/zone summary and returns a sealed {@link Outcome} the view switches on —
+ * the view never calls services directly nor uses {@code try/catch}. Only the organizer's rating
+ * is best-effort: a failure to read it leaves the page without a rating and fails nothing.
  */
 @Slf4j
 @Component
 public class EventDetailsPresenter {
 
-    /** Fallback grid when an event has no (accessible) venue map yet. */
+    /** Fallback grid size, in rows and in columns, when an event has no venue map yet. */
     private static final int DEFAULT_GRID = 3;
 
     private final CatalogService catalogService;

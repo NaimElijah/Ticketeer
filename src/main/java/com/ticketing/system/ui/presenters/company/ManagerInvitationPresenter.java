@@ -32,8 +32,8 @@ public class ManagerInvitationPresenter {
      * Appoints {@code inviteeUsername} as a pending manager of the selected company.
      *
      * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
-     *     when they own one or more but none of them is selected, or the selection is one they do not
-     *     own. The appointment is not attempted then
+     *     when they own several and have selected none of them, or the selection is a company they do
+     *     not own. The appointment is not attempted then
      */
     public Outcome invite(String token, String inviteeUsername, List<Permission> permissions) {
         if (token == null) return new Outcome.NotAuthenticated();
@@ -61,7 +61,10 @@ public class ManagerInvitationPresenter {
         record NotAuthenticated() implements Outcome {}
         /** The caller owns no company. */
         record NoCompany() implements Outcome {}
-        /** The caller owns a company, but none of theirs is selected in the workspace. */
+        /**
+         * The caller owns several companies and has selected none of them, or the selection is a company
+         * they do not own.
+         */
         record ChooseCompany() implements Outcome {}
         record UserNotFound(String username) implements Outcome {}
         record Failure(String reason) implements Outcome {}

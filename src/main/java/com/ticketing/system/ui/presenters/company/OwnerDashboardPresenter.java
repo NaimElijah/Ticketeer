@@ -22,8 +22,6 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * <p>Resolves the signed-in member's companies (owners + managers, real data) and the live
  * dashboard counters for the selected one. A single {@link #loadFor(String, Integer)} drives both
  * the first render (null companyId → default to the first company) and selector re-selection.
- * Per-company capability/persona re-resolution is still owned by the mock resolver (#256), so the
- * selector only re-renders stats + subtitle.
  */
 @Component
 public class OwnerDashboardPresenter {

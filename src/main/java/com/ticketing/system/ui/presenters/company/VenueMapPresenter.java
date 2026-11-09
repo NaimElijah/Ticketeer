@@ -45,7 +45,8 @@ public class VenueMapPresenter {
             // The venue map must be saved to the EVENT's own company — not "the caller's first
             // company". Resolving from the event (a) targets the correct company for a multi-company
             // owner and (b) works for a manager granted CONFIGURE_VENUE, who has no Owner appointment
-            // for an owner-only lookup to return. getEventDetail itself requires CONFIGURE_VENUE.
+            // for an owner-only lookup to return. getEventDetail needs only active membership of the
+            // event's company; configureVenueMap is what checks CONFIGURE_VENUE.
             int companyId = Integer.parseInt(
                     eventService.getEventDetail(token, Integer.parseInt(eventId)).companyId());
             eventService.configureVenueMap(token, companyId, config);

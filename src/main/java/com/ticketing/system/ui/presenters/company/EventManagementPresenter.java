@@ -177,7 +177,10 @@ public class EventManagementPresenter {
         record Success(String eventId) implements CreateOutcome {}
         record NotAuthenticated() implements CreateOutcome {}
         record NoCompany() implements CreateOutcome {}
-        /** The caller belongs to several companies and has not selected one of them. */
+        /**
+         * The caller belongs to several companies and has selected none of them, or the selection is a
+         * company they do not belong to.
+         */
         record ChooseCompany() implements CreateOutcome {}
         record InvalidInput(String reason) implements CreateOutcome {}
         record Failure(String reason) implements CreateOutcome {}

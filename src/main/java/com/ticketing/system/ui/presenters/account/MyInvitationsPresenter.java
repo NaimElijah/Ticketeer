@@ -55,7 +55,7 @@ public class MyInvitationsPresenter {
         }
     }
 
-    /** Accepts the pending invitation for {@code companyId} (flips the member's role). */
+    /** Accepts the pending invitation for {@code companyId}, which makes the member's appointment active. */
     public ActionOutcome accept(String token, int companyId) {
         return respond(token, companyId, true);
     }

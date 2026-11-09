@@ -19,8 +19,8 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * in isolation (the view reads the token from {@code AuthSession} and passes it in, mirroring
  * {@code SupportInboxPresenter} / {@code CompanyInquiryInboxPresenter}).
  *
- * <p>Lists the platform-wide complaint queue ({@code viewAllComplaints}, admin-gated, status
- * filtered server-side). Complaints are one-shot: {@code respond} sends the admin's single reply
+ * <p>Lists the platform-wide complaint queue ({@code viewAllComplaints}, admin-gated, fetched
+ * unfiltered and grouped by status here). Complaints are one-shot: {@code respond} sends the admin's single reply
  * via {@code respondToComplaint}, which appends the message and resolves the thread (the member
  * can never reply). {@code loadOne} fetches a single complaint for the dedicated respond page.
  */

@@ -8,11 +8,16 @@ import com.ticketing.system.ui.session.CurrentCompanies;
 
 /**
  * Picks the company a workspace action applies to out of the caller's companies: the one selected in
- * the workspace ({@link CurrentCompanies}), which is the company the capability gate checked. The
- * caller's company list is unordered, so its first entry can be any of them and is never a default.
- * A selection the caller does not belong to counts as no selection, not as a cue to pick another one,
- * so an action never lands in a company other than the one on screen. With nothing selected, a
- * caller with exactly one company gets that company, since there is nothing to choose.
+ * the workspace ({@link CurrentCompanies}). The caller's company list is unordered, so its first entry
+ * can be any of them and is never a default here. A selection the caller does not belong to counts as
+ * no selection, not as a cue to pick another one, so an action never lands in a company other than the
+ * one on screen. With nothing selected, a caller with exactly one company gets that company, since
+ * there is nothing to choose.
+ *
+ * <p>The capability gate reads the same selection but falls back differently: with nothing selected,
+ * or a selection the caller does not belong to, it takes the role from the caller's first membership.
+ * So the gate checks the company picked here only when the selection is one of the caller's companies,
+ * or the caller has exactly one.
  */
 final class SelectedCompany {
 

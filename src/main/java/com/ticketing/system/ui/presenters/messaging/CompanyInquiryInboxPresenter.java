@@ -115,9 +115,9 @@ public class CompanyInquiryInboxPresenter {
     }
 
     /**
-     * Closes {@code conversationId} (no further messages allowed). The issue's "mark resolved"
-     * maps here: no participant-callable resolve exists, so we reuse the close transition — the
-     * thread ends as CLOSED. (RESOLVED stays complaint/admin-only.)
+     * Closes {@code conversationId} (no further messages allowed). The inbox's "mark resolved"
+     * maps here: only an admin's reply to a complaint resolves a conversation, so a company's
+     * "resolve" reuses the close transition and the thread ends as CLOSED.
      */
     public ActionOutcome close(String token, String conversationId) {
         if (token == null) {

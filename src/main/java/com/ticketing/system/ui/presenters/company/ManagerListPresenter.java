@@ -40,7 +40,8 @@ public class ManagerListPresenter {
      * Loads the manager roster of the selected company.
      *
      * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
-     *     when they own one or more but none of them is selected, or the selection is one they do not own
+     *     when they own several and have selected none of them, or the selection is a company they do not
+     *     own
      */
     public Outcome loadRoster(String token) {
         if (token == null) {
@@ -119,7 +120,10 @@ public class ManagerListPresenter {
         record NotAuthenticated() implements Outcome { }
         /** The caller owns no company. */
         record NoCompany() implements Outcome { }
-        /** The caller owns a company, but none of theirs is selected in the workspace. */
+        /**
+         * The caller owns several companies and has selected none of them, or the selection is a company
+         * they do not own.
+         */
         record ChooseCompany() implements Outcome { }
         record Failure(String reason) implements Outcome { }
     }

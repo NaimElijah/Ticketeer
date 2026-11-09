@@ -27,8 +27,8 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * <p>Owns ALL policy logic and the editable model ({@link Node}/{@link Group}/{@link Rule}/{@link KeptRule}):
  * identity, context resolution (which companies/events the owner can edit), load/save,
  * DTO&lt;-&gt;model conversion, structural mutations, the D3 tree JSON, the plain-English
- * description, and validation. Stays stateless (like CheckoutPresenter) — the view holds a
- * single {@link Group} root as its UI state and only renders what the presenter returns.
+ * description, and validation. Holds no per-user state: the view holds a single {@link Group} root as
+ * its UI state and only renders what the presenter returns.
  */
 @Component
 public class PurchasePolicyEditorPresenter {
@@ -155,7 +155,7 @@ public class PurchasePolicyEditorPresenter {
         return "n-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
-    /** A fresh, empty policy (AND of nothing). Replaces the old hard-coded sample. */
+    /** A fresh, empty policy (AND of nothing). */
     public Group emptyPolicy() {
         return new Group(Op.AND);
     }
