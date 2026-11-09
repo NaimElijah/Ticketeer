@@ -31,10 +31,23 @@ public class PlatformInitializationRunner implements ApplicationRunner {
 
     private final SystemAdminService systemAdminService;
 
+    /**
+     * Creates the runner over the service that owns the platform lifecycle.
+     *
+     * @param systemAdminService the service whose {@code initializePlatform()} this runner calls
+     */
     public PlatformInitializationRunner(SystemAdminService systemAdminService) {
         this.systemAdminService = systemAdminService;
     }
 
+    /**
+     * Initializes the platform, logging an unreachable payment or ticket-issuing service instead of
+     * failing.
+     *
+     * @param args the application arguments, unused
+     * @throws RuntimeException any initialization failure other than
+     *         {@link ExternalServiceUnavailableException}, which stops the boot (ADR-003)
+     */
     @Override
     public void run(ApplicationArguments args) {
         try {

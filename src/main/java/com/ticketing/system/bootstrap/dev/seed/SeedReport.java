@@ -17,24 +17,45 @@ import java.util.Map;
  */
 public final class SeedReport {
 
-    public enum Status { PASS, SKIPPED, FAIL, BLOCKED }
+    /** How a seeding step ended; {@code SeedHarness} documents each case. */
+    public enum Status {
+        /** The step ran and succeeded. */
+        PASS,
+        /** The step threw {@link UnsupportedOperationException}: a known, not-yet-built feature. */
+        SKIPPED,
+        /** The step threw any other exception, or a negative assertion did not hold. */
+        FAIL,
+        /** The step was not attempted because a prerequisite failed. */
+        BLOCKED
+    }
 
+    /**
+     * One recorded step.
+     *
+     * @param stage  the report group the step belongs to
+     * @param name   the step's label
+     * @param detail why the step ended as it did; {@code "ok"} for a PASS
+     */
     public record Entry(String stage, String name, Status status, String detail) {}
 
     private final List<Entry> entries = new ArrayList<>();
 
+    /** Appends one step's outcome. Not thread-safe: a report belongs to one seed pass. */
     public void record(String stage, String name, Status status, String detail) {
         entries.add(new Entry(stage, name, status, detail));
     }
 
+    /** The number of recorded steps that ended with {@code status}. */
     public long count(Status status) {
         return entries.stream().filter(e -> e.status() == status).count();
     }
 
+    /** Whether any recorded step is a FAIL; SKIPPED and BLOCKED steps do not count. */
     public boolean hasFailures() {
         return count(Status.FAIL) > 0;
     }
 
+    /** A snapshot of the recorded steps in recording order; later records do not change it. */
     public List<Entry> entries() {
         return List.copyOf(entries);
     }

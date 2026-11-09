@@ -49,6 +49,10 @@ public class NotificationPollingScheduler {
         this.sessionIdentity = sessionIdentity;
     }
 
+    /**
+     * One scheduled tick: queues a delivery on every UI connected at the time of the call. It returns
+     * without waiting for them; each runs under its UI's session lock.
+     */
     @Scheduled(fixedDelayString = "${notifications.poll-delay-ms:60000}")
     public void poll() {
         for (UI ui : uiRegistry.getActiveUIs()) {

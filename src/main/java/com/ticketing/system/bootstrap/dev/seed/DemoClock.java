@@ -20,6 +20,11 @@ public final class DemoClock {
 
     private final Instant anchor;
 
+    /**
+     * Anchors the clock at the current instant.
+     *
+     * @param clock read once, here; later changes of {@code clock} do not move the anchor
+     */
     public DemoClock(Clock clock) {
         this.anchor = clock.instant();
     }
@@ -29,34 +34,42 @@ public final class DemoClock {
         return anchor;
     }
 
+    /** The anchor minus {@code days} whole days of 24 hours. */
     public Instant minusDays(int days) {
         return anchor.minus(days, ChronoUnit.DAYS);
     }
 
+    /** The anchor plus {@code days} whole days of 24 hours. */
     public Instant plusDays(int days) {
         return anchor.plus(days, ChronoUnit.DAYS);
     }
 
+    /** The anchor minus {@code weeks} weeks of 7 days. */
     public Instant minusWeeks(int weeks) {
         return anchor.minus(weeks * 7L, ChronoUnit.DAYS);
     }
 
+    /** The anchor plus {@code weeks} weeks of 7 days. */
     public Instant plusWeeks(int weeks) {
         return anchor.plus(weeks * 7L, ChronoUnit.DAYS);
     }
 
+    /** The anchor minus {@code months} "months" of a fixed 30 days, not calendar months. */
     public Instant minusMonths(int months) {
         return anchor.minus(months * 30L, ChronoUnit.DAYS);
     }
 
+    /** The anchor plus {@code months} "months" of a fixed 30 days, not calendar months. */
     public Instant plusMonths(int months) {
         return anchor.plus(months * 30L, ChronoUnit.DAYS);
     }
 
+    /** The anchor minus {@code hours} hours. */
     public Instant minusHours(int hours) {
         return anchor.minus(hours, ChronoUnit.HOURS);
     }
 
+    /** The anchor plus {@code hours} hours. */
     public Instant plusHours(int hours) {
         return anchor.plus(hours, ChronoUnit.HOURS);
     }

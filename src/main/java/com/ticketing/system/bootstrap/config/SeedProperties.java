@@ -20,5 +20,16 @@ import jakarta.validation.constraints.NotNull;
 public record SeedProperties(@NotNull Mode mode, boolean failFast, boolean assumeYes, @NotBlank String scenario) {
 
     /** What the seeder does at boot. */
-    public enum Mode { OFF, RESEED, WIPE, RESET, ASK }
+    public enum Mode {
+        /** Seeds and wipes nothing. */
+        OFF,
+        /** Replays the scenario unless a user it registers already exists. */
+        RESEED,
+        /** Deletes all business data and seeds nothing; the boot goes on. Needs {@code assumeYes}. */
+        WIPE,
+        /** Deletes all business data, then replays the scenario; needs {@code assumeYes}. */
+        RESET,
+        /** Asks on the console for a mode and a scenario, then runs that choice. */
+        ASK
+    }
 }

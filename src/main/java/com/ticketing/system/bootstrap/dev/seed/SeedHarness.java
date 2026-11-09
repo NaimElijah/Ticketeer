@@ -25,30 +25,53 @@ import java.util.Optional;
 @Slf4j
 public final class SeedHarness {
 
+    /** A seeding action that returns nothing and may throw a checked exception. */
     @FunctionalInterface
     public interface ThrowingRunnable { void run() throws Exception; }
 
+    /** A seeding action that returns a value and may throw a checked exception. */
     @FunctionalInterface
     public interface ThrowingSupplier<T> { T get() throws Exception; }
 
     /** Thrown to abort the seed in fail-fast mode. */
     public static final class SeedAbortException extends RuntimeException {
+
+        /**
+         * @param message names the stage and the step that failed
+         * @param cause   the failure that aborted the seed; {@code null} when a negative assertion
+         *                failed because nothing was thrown
+         */
         public SeedAbortException(String message, Throwable cause) { super(message, cause); }
     }
 
     private final SeedReport report;
     private final boolean failFast;
 
+    /**
+     * Creates a harness that records into {@code report}.
+     *
+     * @param report   receives the outcome of every step
+     * @param failFast whether the first FAIL aborts the seed with a {@link SeedAbortException}
+     *                 instead of being collected into the report
+     */
     public SeedHarness(SeedReport report, boolean failFast) {
         this.report = report;
         this.failFast = failFast;
     }
 
+    /** The report this harness records into, the one passed to the constructor. */
     public SeedReport report() {
         return report;
     }
 
-    /** Run an action expected to succeed. */
+    /**
+     * Runs an action expected to succeed and records its outcome as PASS, SKIPPED or FAIL.
+     *
+     * @param stage the report group the step belongs to
+     * @param name  the step's label in the report and the log
+     * @param action the step
+     * @throws SeedAbortException when the action fails and {@code failFast} is on
+     */
     public void step(String stage, String name, ThrowingRunnable action) {
         stepReturning(stage, name, () -> {
             action.run();
@@ -56,7 +79,17 @@ public final class SeedHarness {
         });
     }
 
-    /** Run an action whose value later steps depend on. Empty on SKIP or FAIL. */
+    /**
+     * Runs an action whose value later steps depend on and records its outcome as PASS, SKIPPED or
+     * FAIL. An {@link Error} is not recorded; it propagates.
+     *
+     * @param stage  the report group the step belongs to
+     * @param name   the step's label in the report and the log
+     * @param action the step
+     * @return the action's value; empty when the step is SKIPPED or FAILs without aborting, and when
+     *         the action returns {@code null}
+     * @throws SeedAbortException when the action fails and {@code failFast} is on
+     */
     public <T> Optional<T> stepReturning(String stage, String name, ThrowingSupplier<T> action) {
         try {
             T value = action.get();
@@ -85,8 +118,12 @@ public final class SeedHarness {
      * superclass or a cause does not count. FAIL if nothing throws ("guard not enforced") or another type
      * is thrown; that failure names both types.
      *
+     * @param stage              the report group the step belongs to
+     * @param name               the step's label in the report and the log
      * @param expectedSimpleName the expected exception's {@link Class#getSimpleName()}, e.g.
      *                           {@code IllegalStateException}
+     * @param action             the step expected to throw
+     * @throws SeedAbortException when the assertion fails and {@code failFast} is on
      */
     public void expectFailure(String stage, String name, String expectedSimpleName, ThrowingRunnable action) {
         try {
@@ -117,7 +154,14 @@ public final class SeedHarness {
         }
     }
 
-    /** Record a step we could not attempt because a prerequisite failed. */
+    /**
+     * Records a step that was not attempted because a prerequisite failed, as BLOCKED. It never
+     * aborts the seed, whatever {@code failFast} says.
+     *
+     * @param stage  the report group the step belongs to
+     * @param name   the step's label in the report and the log
+     * @param reason what the step was waiting for
+     */
     public void blocked(String stage, String name, String reason) {
         report.record(stage, name, SeedReport.Status.BLOCKED, reason);
         log.warn("seed: BLOCKED [{}] {} — {}", stage, name, reason);

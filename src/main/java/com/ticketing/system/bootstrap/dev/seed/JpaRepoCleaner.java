@@ -56,6 +56,10 @@ public class JpaRepoCleaner implements RepoCleaner {
     private final SpringDataSessionRepository sessions;
     private final SpringDataUserRepository users;
 
+    /**
+     * Creates the cleaner over the ten Spring Data repositories it clears; the admins' repository is
+     * deliberately absent.
+     */
     public JpaRepoCleaner(
             SpringDataTicketRepository tickets,
             SpringDataOrderReceiptRepository receipts,

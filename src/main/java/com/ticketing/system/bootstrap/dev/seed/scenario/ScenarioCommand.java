@@ -19,6 +19,14 @@ public final class ScenarioCommand {
     private final List<String> positional;
     private final Map<String, String> named;
 
+    /**
+     * Creates a command; the lists and maps are kept, not copied.
+     *
+     * @param line       the 1-based line number in the scenario file, used in error messages
+     * @param op         the operation name, lower-cased by the parser
+     * @param positional the positional arguments in file order, with quotes removed
+     * @param named      the {@code key=value} arguments in file order, with quotes removed from values
+     */
     public ScenarioCommand(int line, String op, List<String> positional, Map<String, String> named) {
         this.line = line;
         this.op = op;
@@ -42,12 +50,18 @@ public final class ScenarioCommand {
         return named;
     }
 
-    /** Positional arg at {@code index}, or {@code null} if absent. */
+    /** Positional arg at {@code index} (0-based), or {@code null} if absent. */
     public String pos(int index) {
         return index >= 0 && index < positional.size() ? positional.get(index) : null;
     }
 
-    /** Positional arg at {@code index}; throws a located error if missing. */
+    /**
+     * Positional arg at {@code index} (0-based).
+     *
+     * @param what what the argument is, named in the error
+     * @throws IllegalArgumentException when the argument is absent or blank; the message names the line,
+     *         the operation, {@code what} and the 1-based position
+     */
     public String requirePos(int index, String what) {
         String v = pos(index);
         if (v == null || v.isBlank()) {
@@ -57,15 +71,23 @@ public final class ScenarioCommand {
         return v;
     }
 
+    /** The named arg {@code key}, or {@code null} if absent. */
     public String named(String key) {
         return named.get(key);
     }
 
+    /** The named arg {@code key}, or {@code fallback} if absent. An empty value counts as present. */
     public String named(String key, String fallback) {
         String v = named.get(key);
         return v == null ? fallback : v;
     }
 
+    /**
+     * The named arg {@code key} as an integer, or {@code fallback} if absent.
+     *
+     * @throws IllegalArgumentException when the value, trimmed, is not an integer; the message names the
+     *         line and the operation
+     */
     public int intNamed(String key, int fallback) {
         String v = named.get(key);
         if (v == null) {
@@ -78,12 +100,21 @@ public final class ScenarioCommand {
         }
     }
 
+    /**
+     * The named arg {@code key} as a boolean, or {@code fallback} if absent. A present value is
+     * {@code true} only if, trimmed, it is {@code true} in any letter case; anything else is {@code false}.
+     */
     public boolean boolNamed(String key, boolean fallback) {
         String v = named.get(key);
         return v == null ? fallback : Boolean.parseBoolean(v.trim());
     }
 
-    /** Named arg parsed as a {@code Double}, or {@code null} if absent. Located error on bad numbers. */
+    /**
+     * Named arg parsed as a {@code Double}, or {@code null} if absent.
+     *
+     * @throws IllegalArgumentException when the value, trimmed, is not a finite number; the message names
+     *         the line and the operation
+     */
     public Double doubleNamed(String key) {
         String v = named.get(key);
         if (v == null) {

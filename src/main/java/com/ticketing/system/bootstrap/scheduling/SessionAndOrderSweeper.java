@@ -66,6 +66,11 @@ public class SessionAndOrderSweeper {
     private final ApplicationEventPublisher eventPublisher;
     private final ISystemMetrics systemMetrics;
 
+    /**
+     * @param clock          the application clock, read once per tick (ADR-008)
+     * @param eventPublisher receives an {@code OrderExpiredEvent} for each cart the sweep releases
+     * @param systemMetrics  receives a visitor exit for each swept-out guest session
+     */
     public SessionAndOrderSweeper(
             SessionRepository sessionRepository,
             ActiveOrderRepository activeOrderRepository,
@@ -81,6 +86,10 @@ public class SessionAndOrderSweeper {
         this.systemMetrics = systemMetrics;
     }
     
+    /**
+     * One scheduled tick: sweeps expired sessions, then expired carts, in one transaction. Any
+     * exception rolls the whole tick back; the next tick sweeps again.
+     */
     @Scheduled(fixedDelayString = "${sweeper.fixed-delay-ms:60000}")
     // F3/#371: the tick's inventory releases + row deletes commit as one transaction; an optimistic-lock
     // conflict rolls the tick back and the next @Scheduled pass re-sweeps (retry via cadence — no Spring-Retry dep).
