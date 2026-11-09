@@ -21,8 +21,8 @@ import jakarta.persistence.Converter;
  * — acceptable for this render-only payload, and not a type our notifications use.
  *
  * <p>A null map is written as an empty map ({@code {}}), and a null or blank column reads as an empty
- * map. A map Jackson cannot serialize, or a column that is not a JSON object, fails with
- * {@link IllegalStateException}.
+ * map. A map Jackson cannot serialize, or a column that is a JSON array or scalar, fails with
+ * {@link IllegalStateException}; the literal {@code null} reads as null.
  *
  * <p>Lives next to {@link Notification} (referenced by its {@code @Convert}) rather than in
  * the infrastructure layer, so a core class never imports downward. JPA instantiates the

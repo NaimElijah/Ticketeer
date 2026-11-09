@@ -26,6 +26,7 @@ public interface NotificationRepository extends IRepository<Notification, String
      *         transaction the save opens (none within a caller's) gets no connection
      *         ({@code CannotCreateTransactionException}) or fails to commit
      *         ({@code TransactionSystemException})
+     * @throws org.springframework.dao.DataAccessException if the store fails
      */
     void save(Notification notification);
 
