@@ -23,7 +23,7 @@ public interface AdminRepository extends IRepository<Admin, Integer> {
      */
     Admin findByUsername(String username);
 
-    /** All system admins. Read by the boot-time password rotation (ADR-014). */
+    /** All system admins. Read by the boot-time password rotation (ADR-014, ADR-021). */
     List<Admin> findAll();
 
     /**

@@ -18,7 +18,7 @@ public interface SessionRepository extends IRepository<Session, String> {
     /** Persist a new or updated session. */
     void save(Session session);
 
-    /** Look up by sessionId — the primary key. */
+    /** Look up by sessionId — the primary key. Empty for an unknown or {@code null} id. */
     Optional<Session> findById(String sessionId);
 
     /**
@@ -31,7 +31,7 @@ public interface SessionRepository extends IRepository<Session, String> {
      */
     boolean existsByUserId(int userId);
 
-    /** Idempotent — no-op when the session is unknown. */
+    /** Idempotent — no-op when the session is unknown or the id is {@code null}. */
     void delete(String sessionId);
 
     /**

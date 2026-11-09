@@ -47,7 +47,7 @@ public class JpaUserRepository implements UserRepository {
     private final AtomicInteger idSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
-    /** Creates the adapter over its Spring Data repository; it reads the database only on first use. */
+    /** Creates the adapter over its Spring Data repository; {@link #nextId} seeds its counter on first use. */
     public JpaUserRepository(SpringDataUserRepository data) {
         this.data = data;
     }

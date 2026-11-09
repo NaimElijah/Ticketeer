@@ -558,16 +558,14 @@ public class AuthenticationService {
      * — disjoint-pool rule), applies the shared lock-after-N policy, audit-logs every failure, and
      * issues an ADMIN-role JWT so the backend admin gate can authorize it.
      *
-     * <p>The username is trimmed before the lookup and before attempts are counted. An unknown
-     * username and a wrong password raise the same exception, after the same password-hash work.
+     * <p>The username is trimmed before the lookup. An unknown username and a wrong password raise
+     * the same exception, after the same password-hash work.
      *
      * @param username    the admin's username
      * @param rawPassword the password as typed
      * @return the admin token, its expiry in epoch milliseconds, the admin's id and username, with
      *     the admin flag set
-     * @throws AccountLockedException        the username's attempt window already holds
-     *                                       {@code auth.lockout.max-attempts} attempts; the password
-     *                                       is not checked
+     * @throws AccountLockedException        sign-in is locked out under the {@code auth.lockout} policy
      * @throws AuthenticationFailedException invalid credentials
      */
     // Read-WRITE: generateAdminToken persists a brand-new Session row. A read-only transaction

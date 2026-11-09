@@ -12,11 +12,12 @@ public interface PasswordHasher {
      * Hashes a raw password for storage. UC-11.
      *
      * <p>Every call produces a different string for the same password, because each carries a fresh
-     * salt. A password longer than 72 bytes in UTF-8 is more than BCrypt reads;
-     * {@code AuthenticationService} refuses one at registration.
+     * salt. {@code AuthenticationService} refuses a password too long to hash at registration.
      *
      * @param rawPassword the password as the user typed it
      * @return the hash to store, with its salt embedded
+     * @throws IllegalArgumentException if {@code rawPassword} is {@code null} or longer than 72 bytes
+     *     in UTF-8, the most BCrypt reads
      */
     String hash(String rawPassword);
 
@@ -25,7 +26,8 @@ public interface PasswordHasher {
      *
      * @param rawPassword the candidate password
      * @param storedHash  a hash made by {@link #hash}
-     * @return {@code true} only if {@code rawPassword} produced {@code storedHash}
+     * @return {@code true} if {@code rawPassword} matches {@code storedHash} under BCrypt's comparison;
+     *     {@code false} otherwise, and when either argument is {@code null}
      */
     boolean matches(String rawPassword, String storedHash);
 }

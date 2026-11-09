@@ -31,14 +31,13 @@ public interface SessionManager {
 
     /**
      * Saves a new Member session row for {@code userId} and issues a member JWT bound to it. UC-12.
-     * Sign-in itself promotes the guest's session and issues its token through
-     * {@link #generateTokenForSession}; no production code calls this method.
+     * No production code calls this method; member sign-in uses {@link #generateTokenForSession}.
      */
     String generateToken(int userId, String username);
 
     /**
-     * Issues a member JWT bound to an existing Session row. Used by promote-on-login so the Guest's
-     * sessionId is preserved into the Member flow and any attached cart survives.
+     * Issues a member JWT bound to an existing Session row. Used at member sign-in, so any attached
+     * cart survives.
      *
      * @throws IllegalArgumentException if {@code session} is null
      * @throws IllegalStateException if {@code session} is not a Member session (a Guest or an
@@ -150,6 +149,7 @@ public interface SessionManager {
      *     malformed, bad signature, revoked, or not bound to its session row
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     String extractSessionId(String token);
 
@@ -159,6 +159,12 @@ public interface SessionManager {
     /**
      * Epoch millis at which a live member or admin token expires (read from the {@code exp}
      * claim). UC-12.
+     *
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException
+     *     malformed, bad signature, revoked, or not bound to its session row
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException
+     *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     long extractExpiration(String token);
 

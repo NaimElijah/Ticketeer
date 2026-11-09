@@ -14,9 +14,10 @@
  *       repository adapters and the BCrypt / JWT security adapters.</li>
  * </ul>
  *
- * <p>Identity has no inbound port: other contexts use its {@code SessionManager},
- * {@code UserRepository}, {@code AdminRepository} and the {@code User} entity directly. The module is
- * declared {@code Type.OPEN}; the module map in {@code HexagonalRulesTest} is the boundary gate.
+ * <p>Identity has no inbound port: other contexts use its ports and entities directly, among them
+ * {@code SessionManager}, {@code UserRepository}, {@code AdminRepository}, {@code PasswordHasher},
+ * {@code User} and {@code Admin}. The module is declared {@code Type.OPEN}; the module map in
+ * {@code HexagonalRulesTest} is the boundary gate.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Identity & Access", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.identity;
