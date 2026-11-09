@@ -32,8 +32,9 @@ import jakarta.persistence.Version;
  * A production company: the aggregate root for its identity, status, owners, managers and purchase policy.
  *
  * <p>The founder is the first owner and stays one. The owner list and the manager list never share a user, an
- * invariant {@link #checkInvariants()} enforces. Each member's role and permissions are held by
- * {@link CompanyAppointment}, not here.
+ * invariant {@link #checkInvariants()} enforces. Permissions are held only by {@link CompanyAppointment}; the
+ * two lists repeat the role its active appointment states, and {@code CompanyManagementService} keeps them in
+ * step.
  *
  * <p>Persistence: {@code companyId} is an assigned id minted by {@code nextId()}, never
  * {@code @GeneratedValue}; {@code founderId} is a plain by-id column; the status is stored by name;

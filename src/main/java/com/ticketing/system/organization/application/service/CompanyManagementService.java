@@ -463,7 +463,7 @@ public class CompanyManagementService {
 
     /**
      * Lists the companies in which the caller holds an active Owner appointment. Feeds the owner-only workspace
-     * pages.
+     * pages (V2-CADMIN-05).
      *
      * @param token the member's token
      * @return the companies, empty if the caller owns none
@@ -675,8 +675,9 @@ public class CompanyManagementService {
      * UC-25 — returns a company's role tree: the founder at the root, each member under the member who appointed
      * them. Owners only (II.4.15).
      *
-     * <p>While #126 is open, the call fails with a {@code NullPointerException} when a member's appointer is no
-     * longer a member of the company.
+     * <p>While NaimElijah/Ticketeer#126 is open, the call fails with a {@code NullPointerException} when a member's
+     * appointer is no longer a member of the company, and members in an appointment cycle are missing from the
+     * returned tree.
      *
      * @param token     the owner's member token
      * @param companyId the company
@@ -734,7 +735,7 @@ public class CompanyManagementService {
 
     /**
      * Returns the role tree of any company, without the owner check of {@link #viewOrganizationalTree}, and
-     * fails in the same case as that method. Admin-only.
+     * behaves the same way in the cases that method describes. Admin-only.
      *
      * @param token     an admin token
      * @param companyId the company

@@ -23,8 +23,8 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
  *
  * <p>Each operation takes the appointed user's id and the company, and loads and persists
  * {@link CompanyAppointment} aggregates through the {@link CompanyAppointmentRepository}. New appointments are
- * stamped from the platform clock. Other contexts use the {@code require...} and {@code has...} methods to check
- * a member's role or permission.
+ * stamped from the platform clock. Other contexts use the {@code require...}, {@code has...} and {@code is...}
+ * methods to check a member's role or permission.
  */
 @Service
 public class CompanyMembershipService {

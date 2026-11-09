@@ -15,6 +15,9 @@ public enum Permission {
     EDIT_POLICIES,
     /** Viewing the company's sales figures in reporting. */
     VIEW_SALES,
-    /** Answering customer inquiries addressed to the company in messaging. */
+    /**
+     * Answering customer inquiries addressed to the company in messaging; also shows the open-inquiry count
+     * on the company dashboard.
+     */
     RESPOND_TO_INQUIRIES
 }

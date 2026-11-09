@@ -251,7 +251,7 @@ public class CompanyAppointment implements InvariantChecked {
         if (this.role == CompanyRole.Owner) {
             if (this.inviterId != revokerId && this.targetId != revokerId) {
                 // if the appointment is an owner appointment, either the original inviter or
-                // the target themselves can revoke it (per UC-24 owner revoke condition).
+                // the target themselves can revoke it (II.4.9, II.4.10).
                 throw new IllegalArgumentException("Only the original inviter or target can revoke this appointment.");
             }
         } else {
