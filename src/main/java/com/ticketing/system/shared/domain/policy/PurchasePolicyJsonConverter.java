@@ -1,9 +1,5 @@
 package com.ticketing.system.shared.domain.policy;
 
-// NOTE: no import of organization.domain.ProductionCompany — the class is referenced only by a
-// fully-qualified {@link} in the Javadoc below, so an import would be unused and would (wrongly)
-// make this shared-kernel type depend on the organization context. Kept out to keep policy a clean
-// shared citizen.
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,10 +17,10 @@ import jakarta.persistence.Converter;
  * existing getters and dispatches on a small {@code "type"} tag, so there is no reflection or
  * polymorphic-deserialization magic; reconstruction calls the same public constructors recursively.
  *
- * <p>Shared by both policy owners — {@link com.ticketing.system.organization.domain.ProductionCompany}
- * (B5) and Event (B9). JPA instantiates the converter itself (it is not a Spring bean), so it holds
- * its own {@link ObjectMapper}. Lives next to the policies it serializes — a domain-to-domain
- * reference, not a downward one.
+ * <p>Shared by both policy owners — {@code com.ticketing.system.organization.domain.ProductionCompany}
+ * (B5) and Event (B9). It names neither in code, because the shared kernel may not depend on those
+ * contexts. JPA instantiates the converter itself (it is not a Spring bean), so it holds
+ * its own {@link ObjectMapper}.
  */
 @Converter
 public class PurchasePolicyJsonConverter implements AttributeConverter<PurchasePolicy, String> {

@@ -1,8 +1,12 @@
 package com.ticketing.system.shared.exception;
 
-// Specific subclass of EntityNotFoundException for Ticket lookups.
-// Differs from TicketNotAvailableException: 'NotFound' = no such ticket exists;
-// 'NotAvailable' = ticket exists but its status forbids the operation.
+/**
+ * The {@link EntityNotFoundException} for a ticket lookup: no such ticket exists. A ticket that
+ * exists but whose status forbids the operation is {@link TicketNotAvailableException}.
+ *
+ * <p>No production code throws it today: {@code TicketRepository.findById} returns {@code null} for
+ * an unknown id.
+ */
 public class TicketNotFoundException extends EntityNotFoundException {
 
     public TicketNotFoundException(Object ticketId) {

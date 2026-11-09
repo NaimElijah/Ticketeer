@@ -1,7 +1,13 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when a transaction is attempted while the market is not OPEN.
-// UC-32 (admin must open the market before transactions are allowed).
+/**
+ * Thrown when a reservation or checkout is attempted while the market is not {@code OPEN}
+ * ({@code ReservationService}, {@code CheckoutService}), and when an admin opens the market of a
+ * platform that is still uninitialized ({@code SystemAdminService}). UC-32: the market must be open
+ * before transactions are allowed.
+ *
+ * <p>The message reaches the user.
+ */
 public class MarketNotOpenException extends DomainException {
 
     public MarketNotOpenException() {

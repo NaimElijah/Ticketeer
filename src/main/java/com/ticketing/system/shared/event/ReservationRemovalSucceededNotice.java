@@ -3,8 +3,8 @@ package com.ticketing.system.shared.event;
 /**
  * Integration event published by the sales context (ReservationService) when a member
  * successfully removes a ticket reservation from their cart. The notifications context listens
- * for it and raises a removal-success notification. Mirrors the former
- * {@code INotificationService.notifyRemoveTicketReservationSuccess} call.
+ * for it and raises a removal-success notification. The listener hands its components to
+ * {@code INotificationService.notifyRemoveTicketReservationSuccess}.
  */
 public record ReservationRemovalSucceededNotice(
         int userId,    // the member who removed the reservation

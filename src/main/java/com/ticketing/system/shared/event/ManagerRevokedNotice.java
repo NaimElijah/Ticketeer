@@ -3,8 +3,8 @@ package com.ticketing.system.shared.event;
 /**
  * Integration event published by the organization context (CompanyManagementService) when a
  * member's manager appointment in a company is revoked. The notifications context listens for it
- * and raises a manager-revoked notification. Mirrors the former
- * {@code INotificationService.notifyManagerRevoked} call.
+ * and raises a manager-revoked notification. The listener hands its components to
+ * {@code INotificationService.notifyManagerRevoked}.
  */
 public record ManagerRevokedNotice(
         int userId,          // the member whose appointment was revoked

@@ -40,7 +40,10 @@ package com.ticketing.system.shared;
  *   <li><b>In-memory implementations</b> ({@code Memory…Repository}, active only
  *       under the {@code test} and {@code memory} profiles together) use a per-id
  *       {@link java.util.concurrent.locks.ReentrantLock} via
- *       {@code RepositoryLocks}. Reentrant: same thread re-locking is safe.</li>
+ *       {@code RepositoryLocks}. Reentrant: same thread re-locking is safe.
+ *       {@code MemoryEventRepository} is the exception: it takes the write side of a per-id
+ *       read/write lock ({@code RepositoryReadWriteLocks}), so a buyer's read lock and a
+ *       lifecycle write exclude each other.</li>
  *   <li><b>JPA-backed implementations</b> ({@code Jpa…Repository}, active in every
  *       other run, ADR-005) make {@code lockForUpdate} and
  *       {@code unlock} <b>no-ops</b>, with one exception. Concurrency is handled

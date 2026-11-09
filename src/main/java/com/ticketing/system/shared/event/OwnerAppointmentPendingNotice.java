@@ -3,8 +3,8 @@ package com.ticketing.system.shared.event;
 /**
  * Integration event published by the organization context (CompanyManagementService) when a
  * member receives a pending owner appointment they must accept or reject. The notifications
- * context listens for it and raises a pending-appointment notification. Mirrors the former
- * {@code INotificationService.notifyOwnerAppointmentPending} call.
+ * context listens for it and raises a pending-appointment notification. The listener hands its components to
+ * {@code INotificationService.notifyOwnerAppointmentPending}.
  */
 public record OwnerAppointmentPendingNotice(
         int userId,          // the member who received the pending owner appointment

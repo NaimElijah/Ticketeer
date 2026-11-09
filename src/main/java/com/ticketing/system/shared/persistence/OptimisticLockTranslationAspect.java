@@ -46,8 +46,7 @@ public class OptimisticLockTranslationAspect {
             "Someone else changed this at the same moment — please retry.";
 
     /** Every public application-service method — the same surface {@code LoggingAspect} traces:
-     *  {@code com.ticketing.system.<context>.application.service}. The legacy Core.Application.services
-     *  clause was dropped once that package was emptied (Step 8). */
+     *  {@code com.ticketing.system.<context>.application.service}. */
     @Pointcut("execution(public * com.ticketing.system..application.service..*(..))")
     public void applicationService() {
     }

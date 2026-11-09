@@ -5,8 +5,8 @@ import java.util.List;
 /**
  * Integration event published by the sales context (CheckoutService) when a buyer's checkout
  * completes successfully. The notifications context listens for it and raises a purchase-confirmed
- * notification. Carries exactly the arguments of the former
- * {@code INotificationService.notifyPurchaseCompleted} call so delivery is unchanged.
+ * notification. Its components are the arguments of
+ * {@code INotificationService.notifyPurchaseCompleted}, which the listener calls with them.
  */
 public record PurchaseCompletedNotice(
         int userId,               // the member who completed the purchase

@@ -3,8 +3,8 @@ package com.ticketing.system.shared.event;
 /**
  * Integration event published by the sales context (ReservationService) when a member's
  * attempt to remove a ticket reservation fails. The notifications context listens for it and
- * raises a removal-failure notification. Mirrors the former
- * {@code INotificationService.notifyRemoveTicketReservationFailure} call.
+ * raises a removal-failure notification. The listener hands its components to
+ * {@code INotificationService.notifyRemoveTicketReservationFailure}.
  */
 public record ReservationRemovalFailedNotice(
         int userId,    // the member whose removal attempt failed

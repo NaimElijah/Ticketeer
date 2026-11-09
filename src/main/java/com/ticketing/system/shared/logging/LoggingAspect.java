@@ -41,8 +41,7 @@ public class LoggingAspect {
 
     /**
      * Matches every public method in a bounded context's {@code application.service} package
-     * ({@code com.ticketing.system.<context>.application.service}). The legacy
-     * {@code Core.Application.services} clause was dropped once that package was emptied (Step 8).
+     * ({@code com.ticketing.system.<context>.application.service}).
      */
     @Pointcut("execution(public * com.ticketing.system..application.service..*(..))")
     public void applicationService() {

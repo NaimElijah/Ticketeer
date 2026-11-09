@@ -1,8 +1,12 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when an Owner attempts to edit an Event/VenueMap/Policy field that is
-// frozen because tickets have already been sold. II.3.5.2 / II.4.5.2 immutability.
-// UC-19, UC-20, UC-21.
+/**
+ * Reserved for an edit of an event, venue map or policy field that is frozen because tickets have
+ * been sold. II.3.5.2 / II.4.5.2 immutability. UC-19, UC-20, UC-21.
+ *
+ * <p>No production code throws it today; {@code Event} refuses a venue-map change after sales with
+ * an {@link IllegalStateException}.
+ */
 public class EventNotEditableException extends DomainException {
 
     public EventNotEditableException(Object eventId, String field) {

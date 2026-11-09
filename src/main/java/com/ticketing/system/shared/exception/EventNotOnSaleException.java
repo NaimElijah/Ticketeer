@@ -1,8 +1,12 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when reservation/checkout is attempted on an event whose status is not ON_SALE.
-// (DRAFT, SCHEDULED-but-not-yet-published, SOLD_OUT, CANCELED, COMPLETED → all reject.)
-// UC-9, UC-10.
+/**
+ * Thrown when checkout finds an event that is neither {@code ON_SALE} nor {@code SOLD_OUT}
+ * ({@code InventoryService.validateEventsOnSale}). UC-9, UC-10.
+ *
+ * <p>{@code SOLD_OUT} passes on purpose: a buyer whose tickets were reserved before the event sold
+ * out may still complete the purchase. The message reaches the user.
+ */
 public class EventNotOnSaleException extends DomainException {
 
     public EventNotOnSaleException(Object eventId, String currentStatus) {

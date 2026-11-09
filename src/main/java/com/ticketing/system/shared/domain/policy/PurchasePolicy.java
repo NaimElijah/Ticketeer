@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain so catalog/organization can depend on it without an upward edge)
+package com.ticketing.system.shared.domain.policy;
 
 /**
  * A rule that decides whether a purchase (reserve or checkout) is allowed for a given context.

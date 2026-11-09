@@ -1,7 +1,10 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when a sender attempts to post to a Conversation they're not a participant of,
-// or when a participant of an unexpected type is supplied.
+/**
+ * Thrown when someone who is not a participant of a conversation tries to act on it: to reply
+ * ({@code Conversation.addMessage}), to mark it read ({@code Conversation.markReadBy}) or to act on it
+ * through {@code MessagingService}. The message reaches the user.
+ */
 public class InvalidParticipantException extends DomainException {
 
     public InvalidParticipantException(Object participantId, Object conversationId) {

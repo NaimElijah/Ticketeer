@@ -3,8 +3,8 @@ package com.ticketing.system.shared.event;
 /**
  * Integration event published by the sales context (ReservationService) when a member
  * successfully reserves tickets. The notifications context listens for it and raises a
- * reservation-success notification. Mirrors the former
- * {@code INotificationService.notifyTicketReservationSuccess} call.
+ * reservation-success notification. The listener hands its components to
+ * {@code INotificationService.notifyTicketReservationSuccess}.
  */
 public record TicketReservationSucceededNotice(
         int userId,    // the member who reserved the tickets
