@@ -15,7 +15,9 @@ import com.ticketing.system.notifications.domain.NotificationStatus;
  */
 public interface SpringDataNotificationRepository extends JpaRepository<Notification, String> {
 
+    /** A derived query: the member's notifications in the given status, in no particular order. */
     List<Notification> findByRecipientUserIdAndStatus(int recipientUserId, NotificationStatus status);
 
+    /** A derived query: all of the member's notifications, in no particular order. */
     List<Notification> findByRecipientUserId(int recipientUserId);
 }

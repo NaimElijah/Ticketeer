@@ -2,11 +2,20 @@ package com.ticketing.system.notifications.application.port.in;
 
 import java.util.List;
 
-// High-level, application-facing notification facade. Each notifyXxx method translates a
-// business event into a Notification domain object and delegates to NotificationDispatchService,
-// which stores it as PENDING; its deliverPending pushes it later. The low-level push channel
-// (WebSocket / SSE / email) is a separate port, PushNotificationService.
-// V1 implementation is NotificationService.
+/**
+ * High-level, application-facing notification facade. Each {@code notifyXxx} method translates a
+ * business event into a {@code Notification} domain object and delegates to
+ * {@code NotificationDispatchService}, which stores it as PENDING; its {@code deliverPending} pushes it
+ * later. The low-level push channel (WebSocket / SSE / email) is a separate port,
+ * {@code PushNotificationService}. {@code markRead} and {@code revertSentToPending} move stored
+ * notifications along their lifecycle. {@code NotificationService} implements it.
+ *
+ * <p>The name keeps its legacy prefix, because dropping it would collide with the implementation (see
+ * the package documentation).
+ *
+ * <p>Each {@code notifyXxx} method fails with {@link IllegalStateException} for a non-positive
+ * {@code userId} (or {@code recipientUserId}), since the {@code Notification} it builds refuses one.
+ */
 public interface INotificationService {
 
     /**
@@ -19,6 +28,12 @@ public interface INotificationService {
      */
     void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> ticketIds);
 
+    /**
+     * Tells a member their purchase failed.
+     *
+     * @param userId  the buyer
+     * @param string why it failed; becomes the notification's text as given
+     */
     void notifyPurchaseFailed(int userId, String string);
 
     /**
@@ -63,10 +78,33 @@ public interface INotificationService {
      */
     void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity);
 
+    /**
+     * Tells a member an event they hold tickets for was cancelled. The text names the event and shows
+     * no id; the id stays in the notification's data payload.
+     *
+     * @param userId    the ticket holder
+     * @param eventId   the cancelled event
+     * @param eventName the event's name, shown in the text; not null
+     */
     void notifyEventCancelled(int userId, int eventId, String eventName);
 
+    /**
+     * Tells a member their manager role in a company was revoked.
+     *
+     * @param userId      the former manager
+     * @param companyId   the company
+     * @param companyName the company's name, shown in the text; not null
+     */
     void notifyManagerRevoked(int userId, int companyId, String companyName);
 
+    /**
+     * Tells a member they hold a pending owner appointment in a company, which they must accept or
+     * reject.
+     *
+     * @param userId      the invited member
+     * @param companyId   the company the appointment is in
+     * @param companyName the company's name, shown in the text; not null
+     */
     void notifyOwnerAppointmentPending(int userId, int companyId, String companyName);
 
     /**
@@ -79,6 +117,14 @@ public interface INotificationService {
      */
     void notifyManagerAppointmentPending(int userId, int companyId, String companyName);
 
+    /**
+     * Tells a member their role in a company was updated.
+     *
+     * @param userId      the member whose role changed
+     * @param companyId   the company
+     * @param companyName the company's name, shown in the text; not null
+     * @param newRole     the new role, shown in the text as given; not null
+     */
     void notifyRoleChanged(int userId, int companyId, String companyName, String newRole);
 
     /**
@@ -87,6 +133,12 @@ public interface INotificationService {
      * and shown on their next poll or login.
      * {@code conversationId} lets the UI deep-link to the thread; {@code senderLabel} is a
      * human-readable origin (e.g. "a system admin", "a production company").
+     *
+     * @param recipientUserId the member who receives the alert
+     * @param conversationId  the conversation the message belongs to; not null
+     * @param senderLabel     the origin shown in the text; not null
+     * @param subject         the conversation's subject, shown in the text; null reads as empty
+     * @param snippet         a short preview of the message body; null reads as empty
      */
     void notifyNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String snippet);

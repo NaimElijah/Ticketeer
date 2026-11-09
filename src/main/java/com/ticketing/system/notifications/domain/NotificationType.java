@@ -1,8 +1,13 @@
 package com.ticketing.system.notifications.domain;
 
-// Categorizes Notification entities (UC-35 design walkthrough).
-// Which types must be sent (UC-35, I.5) is OQ-4 in docs/requirements/requirements.md; see #63.
-// A new constant needs a migration that re-adds ck_notifications_type with it (ADR-007).
+/**
+ * What a {@link Notification} is about (UC-35). The constants are grouped by the audience the
+ * requirements name: buyers (I.5.2), producers (I.5.1) and any member (I.5.3).
+ *
+ * <p>Which types must be sent is OQ-4 in {@code docs/requirements/requirements.md}; see #63. Today no
+ * code raises REFUND_ISSUED, CART_EXPIRING, EVENT_SOLD_OUT or COMPANY_CLOSED. The type is stored by name,
+ * so a new constant needs a migration that re-adds {@code ck_notifications_type} with it (ADR-007).
+ */
 public enum NotificationType {
     // Buyer-facing (I.5.2)
     PURCHASE_CONFIRMED,

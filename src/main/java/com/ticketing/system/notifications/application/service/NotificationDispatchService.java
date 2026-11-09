@@ -33,6 +33,12 @@ public class NotificationDispatchService {
     private final NotificationRepository notificationRepository;
     private final PushNotificationService pushService; // low-level push channel (used by deliverPending)
 
+    /**
+     * Wires the service to the notification store and the push channel.
+     *
+     * @param notificationRepository where notifications are stored and read
+     * @param pushService            the channel {@link #deliverPending} pushes through
+     */
     public NotificationDispatchService(
             NotificationRepository notificationRepository,
             PushNotificationService pushService) {
@@ -43,8 +49,15 @@ public class NotificationDispatchService {
     /**
      * Central dispatch point for all notifications.
      * Persists the notification as PENDING; the polling scheduler delivers it
-     * to the bell on the next tick. Live WebSocket/SSE push (#225) will replace
-     * the scheduler path when implemented.
+     * to the bell on the next tick, or a login does (see {@link #deliverPending}). Live WebSocket/SSE
+     * push (#225) will replace the scheduler path when implemented.
+     *
+     * <p>Joins the caller's transaction when there is one, and otherwise stores the notification in its
+     * own.
+     *
+     * @param notification the notification to store; its status must be PENDING
+     * @throws IllegalArgumentException if the notification is not PENDING; nothing is stored
+     * @throws org.springframework.dao.DataAccessException if the store fails
      */
     @Transactional
     public void dispatch(Notification notification) {
@@ -59,15 +72,26 @@ public class NotificationDispatchService {
         notificationRepository.save(notification);
     }
 
-    // UC-35: triggered from a domain event.
+    /**
+     * UC-35: the entry point meant to turn a domain event into a notification. Not implemented; notices
+     * reach notifications through {@code NotificationEventListener} instead.
+     *
+     * @param domainEvent the event that would trigger a notification
+     * @throws UnsupportedOperationException always
+     */
     public void dispatchFromEvent(Object domainEvent) {
-        // This will eventually resolve the notification details from the event 
+        // This will eventually resolve the notification details from the event
         // and call dispatch(Notification).
         throw new UnsupportedOperationException("UC-35: not implemented");
     }
 
-    // UC-36: store an offline notification in PENDING state.
-    // Deprecated: logic now moved into dispatch()
+    /**
+     * UC-36: stores a notification in PENDING state.
+     *
+     * @param notification the notification to store; its status must be PENDING
+     * @throws IllegalArgumentException if the notification is not PENDING
+     * @deprecated the logic moved into {@link #dispatch}; call that instead
+     */
     @Deprecated
     public void storePending(Notification notification) {
         dispatch(notification);

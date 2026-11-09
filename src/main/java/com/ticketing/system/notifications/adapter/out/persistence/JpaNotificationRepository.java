@@ -31,6 +31,11 @@ public class JpaNotificationRepository implements NotificationRepository {
 
     private final SpringDataNotificationRepository data;
 
+    /**
+     * Wires the adapter to the Spring Data repository that backs it.
+     *
+     * @param data the Spring Data repository the port methods delegate to
+     */
     public JpaNotificationRepository(SpringDataNotificationRepository data) {
         this.data = data;
     }
