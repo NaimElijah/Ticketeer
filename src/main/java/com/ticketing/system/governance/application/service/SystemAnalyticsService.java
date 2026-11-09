@@ -58,6 +58,13 @@ public class SystemAnalyticsService {
     private final Clock clock;
     private final int windowMinutes;
 
+    /**
+     * Creates the service over the metrics and the read ports it aggregates.
+     *
+     * @param clock               ends the trailing windows of the snapshots
+     * @param analyticsProperties supplies the length, in minutes, of the window the per-minute rates
+     *                            are computed over
+     */
     public SystemAnalyticsService(
             ISystemMetrics metrics,
             OrderReceiptRepository orderReceiptRepository,
@@ -81,6 +88,9 @@ public class SystemAnalyticsService {
      * Builds the live analytics snapshot: rates over the trailing window, throughput over the hour.
      *
      * @param adminToken the caller's admin token
+     * @return the snapshot; its rates are per minute over the configured window, which it also
+     *         reports, and its throughput figures cover the last hour. Active visitors are never
+     *         negative
      * @throws UnauthorizedActionException if the token is missing
      * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
      * @throws SessionExpiredException     if the token's session has expired
@@ -141,6 +151,7 @@ public class SystemAnalyticsService {
      * 30 days.
      *
      * @param adminToken the caller's admin token
+     * @return the headline counters
      * @throws UnauthorizedActionException if the token is missing
      * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
      * @throws SessionExpiredException     if the token's session has expired

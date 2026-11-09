@@ -34,11 +34,21 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 
 import lombok.extern.slf4j.Slf4j;
-// Owns platform-bootstrap, market-lifecycle, and global admin queries.
-// UC-1 (Initialize), UC-31 (Global History), UC-32 (Open/Close Market).
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Owns the platform lifecycle and market state, and the admin's global purchase history: UC-1
+ * (initialize), UC-31 (global history) and UC-32 (open and close the market).
+ *
+ * <p>The lifecycle is an in-memory state machine, {@code UNINITIALIZED -> READY -> OPEN <-> CLOSED}. It
+ * is not persisted, so every start begins at {@code UNINITIALIZED}. Sales read it through
+ * {@link #isMarketOpen()}. {@link #openMarket}, {@link #closeMarket}, {@link #viewMarketState} and
+ * {@link #viewGlobalHistory} authorize the caller with an admin token on every call.
+ *
+ * <p>The transitions are synchronized and the state is volatile, so readers see the latest state
+ * without waiting. {@link #refreshServiceReachability()} is deliberately not synchronized.
+ */
 @Service
 @Slf4j
 public class SystemAdminService {
@@ -79,6 +89,17 @@ public class SystemAdminService {
     // Stamps the lifecycle transitions above: UTC wall time (ADR-008).
     private final Clock clock;
 
+    /**
+     * Creates the service in the {@code UNINITIALIZED} state; nothing is probed or stored until
+     * {@link #initializePlatform()} runs.
+     *
+     * @param paymentGateways the payment services probed for reachability; the platform needs at least
+     *                        one of them to answer
+     * @param ticketIssuers   the ticket-issuing services probed for reachability; at least one must
+     *                        answer
+     * @param platformAdmin   the credentials the default System Admin is created with
+     * @param clock           stamps the lifecycle transitions and probes
+     */
     public SystemAdminService(
             SessionManager sessionManager,
             AdminRepository adminRepository,
@@ -112,9 +133,26 @@ public class SystemAdminService {
         this.clock = clock;
     }
 
-    // UC-1 — I.1.1 invariants + I.1.2 payment-gateway check + I.1.3 issuer check + I.1.4 default-admin.
-    // Brings the platform to a healthy, market-openable state. Idempotent: a second call on an
-    // already-initialized platform is a graceful no-op.
+    /**
+     * UC-1: brings the platform from {@code UNINITIALIZED} to {@code READY}, a healthy,
+     * market-openable state. In order, it creates the default System Admin if none exists (I.1.4),
+     * re-asserts that an admin exists and runs {@link SystemIntegrityVerifier} (I.1.1), then requires at
+     * least one reachable payment service and one reachable ticket issuer (I.1.2, I.1.3).
+     *
+     * <p>The fatal checks run before the WSEP check on purpose: a WSEP outage is the only failure
+     * expected to self-heal (ADR-003), so checking it first would hide a missing admin or corrupt data
+     * behind every retry. The probe result is recorded either way; a success also records the
+     * initialization time.
+     *
+     * <p>Idempotent: in any state other than {@code UNINITIALIZED} the call logs and returns without
+     * checking anything. A failed call leaves the state {@code UNINITIALIZED}, so it can be repeated.
+     *
+     * @throws MissingDefaultAdminException if the default admin cannot be created
+     * @throws InitializationIntegrityException if no System Admin exists after that step
+     * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException if the persisted
+     *         state breaks a structural correctness constraint
+     * @throws ExternalServiceUnavailableException if no payment service, or no ticket issuer, answers
+     */
     public synchronized void initializePlatform() {
         log.info("Platform initialization requested.");
 
@@ -193,11 +231,28 @@ public class SystemAdminService {
         }
     }
 
-    // UC-32 (#9, I.2.1) — open the trading market so transactions can begin.
-    // Admin-only. Re-verifies both external services (I.2.2) and the structural
-    // invariants before flipping to OPEN. Idempotent on an already-open market;
-    // opens from READY or re-opens from CLOSED, never from UNINITIALIZED. Sales
-    // are gated on this state (see isMarketOpen()).
+    /**
+     * UC-32 (#9, I.2.1): opens the trading market so reservations and checkouts are accepted.
+     * Admin-only.
+     *
+     * <p>Re-verifies both external services (I.2.2), then that a System Admin exists, then the
+     * structural integrity ({@link SystemIntegrityVerifier}), before moving to {@code OPEN} and
+     * recording the time. Opens from {@code READY} and re-opens from {@code CLOSED}. Idempotent on an
+     * open market: it returns the current state without checking anything.
+     *
+     * @param request carries the admin token; only its {@code token} is read. A {@code null} request is
+     *                treated as a missing token
+     * @return the market state after the call
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws MarketNotOpenException if the platform is still {@code UNINITIALIZED}
+     * @throws ExternalServiceUnavailableException if no payment service, or no ticket issuer, answers
+     * @throws InitializationIntegrityException if no System Admin exists
+     * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException if the persisted
+     *         state breaks a structural correctness constraint
+     */
     public synchronized MarketStateDTO openMarket(MarketControlRequestDTO request) {
         requireSystemAdmin(tokenOf(request));
         return doOpenMarket();
@@ -279,9 +334,22 @@ public class SystemAdminService {
         probeServices();
     }
 
-    // UC-32 — close the trading market (admin/ops incident control; no dedicated
-    // UC). Admin-only. Idempotent on an already-closed market; rejects a close
-    // when the market was never opened.
+    /**
+     * UC-32: closes the trading market, an admin and operations incident control with no dedicated
+     * use case. Admin-only. While the market is {@code CLOSED}, reservations and checkouts are
+     * refused, and {@link #ensureMarketOpen()} never reopens it; only {@link #openMarket} does.
+     * Idempotent on a closed market: it returns the current state.
+     *
+     * @param request carries the admin token and an optional reason. The reason is only logged, and a
+     *                missing or blank one is logged as {@code unspecified}. A {@code null} request is
+     *                treated as a missing token
+     * @return the market state after the call
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws InvalidStateTransitionException if the market was never opened
+     */
     public synchronized MarketStateDTO closeMarket(MarketControlRequestDTO request) {
         requireSystemAdmin(tokenOf(request));
 
@@ -318,9 +386,13 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
-    // Read boundary for the private status enum: the sales gate
-    // (ReservationService / CheckoutService) blocks transactions while the market
-    // is not OPEN. (I.2.1 / UC-32)
+    /**
+     * Whether the market is {@code OPEN}, the read boundary for the private status that the sales
+     * gate (reservations and checkout) uses to refuse work while the market is not open
+     * (I.2.1 / UC-32). Reads the volatile state, so it never waits for a running probe.
+     *
+     * @return {@code true} only in the {@code OPEN} state
+     */
     public boolean isMarketOpen() {
         return status == PlatformStatus.OPEN;
     }
@@ -418,8 +490,28 @@ public class SystemAdminService {
 
 
 
-    // UC-31 — global purchase history with filters (admin-only RBAC enforced inside).
-    // this function filters by buyer, production company, or specific event, and by date range. All filters are optional and can be combined.
+    /**
+     * UC-31: the purchase history across all buyers, companies and events, narrowed by optional
+     * filters. Admin-only; the check happens inside, before anything is read.
+     *
+     * <p>The filters combine: buyer, company, specific events and a date range. A company filter
+     * stands for that company's events; given together with event ids, it keeps only the ids that
+     * belong to the company and drops the rest without an error. A filter that ends up naming no event
+     * at all, such as a company with no events, matches nothing. A {@code null} {@code filters}, or one
+     * with every field {@code null}, matches every receipt. When an event filter applies, each record
+     * carries only the lines of those events. A record with no tickets is left out.
+     *
+     * @param token   the caller's admin session token
+     * @param filters the filters; may be {@code null}
+     * @return a list holding exactly one {@link PurchaseHistoryDTO}, whose records are the matches,
+     *         none when nothing matches
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws IllegalArgumentException if both dates are given and {@code fromDate} is after
+     *         {@code toDate}
+     */
     @Transactional(readOnly = true)
     public List<PurchaseHistoryDTO> viewGlobalHistory(String token, GlobalHistoryFiltersDTO filters) {
         requireSystemAdmin(token);

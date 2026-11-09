@@ -70,6 +70,11 @@ public class CompanyAnalyticsService {
     // The 30-day window ends now on this clock; purchase times are UTC wall time (ADR-008).
     private final Clock clock;
 
+    /**
+     * Creates the service over the read ports it aggregates and the organization's membership checks.
+     *
+     * @param clock the clock that ends the dashboard's 30-day window; purchase times are UTC wall time
+     */
     public CompanyAnalyticsService(
             EventRepository eventRepository,
             CatalogEventDisplayPort eventDisplayPort,

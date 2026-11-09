@@ -93,6 +93,7 @@ public class SystemIntegrityVerifier {
     private final EventRepository eventRepository;
     private final ActiveOrderRepository activeOrderRepository;
 
+    /** Creates the verifier over the repositories whose persisted state it scans. */
     public SystemIntegrityVerifier(UserRepository userRepository,
                                    ProductionCompanyRepository companyRepository,
                                    EventRepository eventRepository,
@@ -103,9 +104,24 @@ public class SystemIntegrityVerifier {
         this.activeOrderRepository = activeOrderRepository;
     }
 
-    // Read-only: the scans never write. The one transaction also keeps the loaded aggregates attached
-    // while the scans traverse them, which matters only for an association mapped LAZY; every
-    // association is EAGER today (#372).
+    /**
+     * Scans the persisted state for a break of the structural correctness constraints listed on the
+     * class, and returns normally when it finds none.
+     *
+     * <p>The scans run in this order and stop at the first violation: every active company has an
+     * owner; every owner and manager of an active company is a registered user; every loaded user,
+     * company, event and active order passes its own invariant check; usernames are unique; no member
+     * holds two active orders for one event; no zone has more sold and reserved tickets than its
+     * capacity.
+     *
+     * <p>Read-only: the scans never write. The one transaction also keeps the loaded aggregates
+     * attached while the scans traverse them, which matters only for an association mapped LAZY; every
+     * association is EAGER today (#372).
+     *
+     * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException at the first
+     *         violation. The message names the offending records by id; for a broken aggregate
+     *         invariant the cause is the aggregate's own exception
+     */
     @Transactional(readOnly = true)
     public void verify() {
         verifyActiveCompaniesHaveOwner();      // constraint #6
