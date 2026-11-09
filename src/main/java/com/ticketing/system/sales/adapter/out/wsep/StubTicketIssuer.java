@@ -15,8 +15,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-// In-process ticket issuer for TESTS ONLY (@Profile("test")). Every real run
-// (default/prod + the dev profile) uses WsepTicketIssuer instead.
+/**
+ * In-process {@link TicketIssuer} for tests only ({@code @Profile("test")}). Every real run, the
+ * {@code dev} profile included, uses {@link WsepTicketIssuer} instead.
+ *
+ * <p>It issues one random {@code QR-} barcode per requested item. A request must name exactly one
+ * buyer, a member id or a guest email, and at least one item.
+ */
 @Component
 @Profile("test")
 public class StubTicketIssuer implements TicketIssuer {
@@ -24,6 +29,11 @@ public class StubTicketIssuer implements TicketIssuer {
 
     private final Clock clock;
 
+    /**
+     * Creates the stub.
+     *
+     * @param clock the source of the time stamped on issuances (ADR-008)
+     */
     public StubTicketIssuer(Clock clock) {
         this.clock = clock;
     }
@@ -37,6 +47,11 @@ public class StubTicketIssuer implements TicketIssuer {
     // initialize / open-market failure paths can be exercised. Default: reachable.
     private volatile boolean reachable = true;
 
+    /**
+     * Sets what {@link #verifyConnection()} reports from now on.
+     *
+     * @param reachable {@code false} simulates an unreachable provider
+     */
     public void setReachable(boolean reachable) {
         this.reachable = reachable;
     }

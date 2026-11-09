@@ -66,6 +66,16 @@ public class RefundService {
     // the money is back, and a retry would refund again (ADR-018).
     private final TransactionTemplate ticketFlipTransaction;
 
+    /**
+     * Creates the service.
+     *
+     * @param authenticationService  validates the member token and names its user
+     * @param orderReceiptRepository the receipts
+     * @param ticketRepository       the tickets of a refunded order
+     * @param paymentGateway         reverses the original charge
+     * @param inventoryPort          catalog port that returns refunded places to stock
+     * @param transactionManager     drives the refund and ticket-flip transactions, each a new one
+     */
     public RefundService(
             AuthenticationService authenticationService,
             OrderReceiptRepository orderReceiptRepository,

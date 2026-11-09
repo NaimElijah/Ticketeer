@@ -37,6 +37,18 @@ import com.ticketing.system.shared.exception.SessionExpiredException;
 import com.ticketing.system.shared.exception.UserFacingErrors;
 
 
+/**
+ * Cart use cases for buyers, member and guest: holding tickets (UC-5, UC-9), removing them, and restoring,
+ * renewing and abandoning the cart.
+ *
+ * <p>A cart is found by user id for a member and by guest session id for a guest. Every change takes the
+ * cart's order lock before the inventory port takes the event lock, so locks are always acquired in the
+ * same order. A hold lasts the configured reservation window and is stamped with the cart's order key.
+ * Inventory changes go through catalog's {@code InventoryCommandPort}.
+ *
+ * <p>The write methods are transactional. A member gets a notice after each reserve or remove; no notice
+ * is published for a guest, who has no user to notify.
+ */
 @Service
 @Slf4j
 public class ReservationService {
@@ -54,6 +66,18 @@ public class ReservationService {
     private final ISystemMetrics systemMetrics;
     private final Clock clock;
 
+    /**
+     * Creates the service.
+     *
+     * @param inventoryPort         catalog port that holds, releases and restores inventory
+     * @param activeOrderRepository the carts
+     * @param iSessionManager       authenticates member tokens and guest session ids
+     * @param eventPublisher        publishes the reservation and removal notices
+     * @param userRepository        the source of a member's age for purchase-policy checks
+     * @param marketGate            tells whether the market is open for reservations
+     * @param systemMetrics         records reservation counts
+     * @param clock                 the source of "now" for holds (UTC wall time, ADR-008)
+     */
     public ReservationService(
             InventoryCommandPort inventoryPort,
             ActiveOrderRepository activeOrderRepository,
@@ -87,24 +111,96 @@ public class ReservationService {
     // Public API - use these methods from new code/controllers/tests
     // ---------------------------------------------------------------------
 
+    /**
+     * Holds tickets for a member by adding the selection to the member's cart, creating the cart if the
+     * member has none. The hold starts now and lasts the configured reservation window.
+     *
+     * <p>If the cart cannot take the selection after inventory was held, the hold is released again and
+     * the original failure is rethrown. A member gets a success or failure notice.
+     *
+     * @param token        the member's session token
+     * @param eventId      the event to hold tickets in
+     * @param zoneId       the zone of the event
+     * @param selectionDto the standing quantity or the seats to hold
+     * @return the reservation, with the time its hold runs out
+     * @throws IllegalArgumentException if the token is blank, the selection is missing, an id is not
+     *     positive, the quantity is not positive, or a seat label is blank
+     * @throws InvalidTokenException    if the token is not a live member token
+     * @throws SessionExpiredException  if the token has expired
+     * @throws MarketNotOpenException   if the market is closed
+     * @throws IllegalStateException    if the member's cart is in checkout
+     * @throws RuntimeException         the inventory port's refusal, for example an unavailable seat or a
+     *     purchase-policy violation, propagated unchanged
+     */
     @Transactional
     public ReservationResultDTO reserveForMember(String token, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
         return reserve(authenticateMember(token), eventId, zoneId, requireSelection(selectionDto));
     }
 
+    /**
+     * Holds tickets for a guest by adding the selection to the cart of the guest session, creating the
+     * cart if the session has none. Behaves as {@link #reserveForMember}, except that no notice is
+     * published.
+     *
+     * @param sessionId    the raw id of the guest's live session
+     * @param eventId      the event to hold tickets in
+     * @param zoneId       the zone of the event
+     * @param selectionDto the standing quantity or the seats to hold
+     * @return the reservation, with the time its hold runs out
+     * @throws IllegalArgumentException if the session id is blank, or for any argument that
+     *     {@link #reserveForMember} refuses
+     * @throws SessionExpiredException  if {@code sessionId} is not a live guest session's id
+     * @throws MarketNotOpenException   if the market is closed
+     * @throws IllegalStateException    if the guest's cart is in checkout
+     * @throws RuntimeException         the inventory port's refusal, propagated unchanged
+     */
     @Transactional
     public ReservationResultDTO reserveForGuest(String sessionId, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
         return reserve(authenticateGuest(sessionId), eventId, zoneId, requireSelection(selectionDto));
     }
 
+    /**
+     * Removes held tickets from a member's cart and releases them back to inventory. Removing is allowed
+     * while the market is closed, and also for lines whose hold has run out.
+     *
+     * <p>If the cart cannot be updated after inventory was released, the hold is restored and the
+     * original failure is rethrown. A member gets a success or failure notice.
+     *
+     * @param token        the member's session token
+     * @param eventId      the event of the held tickets
+     * @param zoneId       the zone of the event
+     * @param selectionDto the standing quantity or the seats to remove
+     * @return the removed selection; its expiry does not belong to a hold that still exists
+     * @throws IllegalArgumentException if the token is blank, an argument is invalid as for
+     *     {@link #reserveForMember}, the member has no cart, or the cart does not hold the selection
+     * @throws InvalidTokenException    if the token is not a live member token
+     * @throws SessionExpiredException  if the token has expired
+     * @throws IllegalStateException    if the member's cart is in checkout
+     * @throws RuntimeException         the inventory port's refusal, propagated unchanged
+     */
     @Transactional
     public ReservationResultDTO removeForMember(String token, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
         return remove(authenticateMember(token), eventId, zoneId, requireSelection(selectionDto));
     }
 
+    /**
+     * Removes held tickets from a guest's cart and releases them back to inventory. Behaves as
+     * {@link #removeForMember}, except that no notice is published.
+     *
+     * @param sessionId    the raw id of the guest's live session
+     * @param eventId      the event of the held tickets
+     * @param zoneId       the zone of the event
+     * @param selectionDto the standing quantity or the seats to remove
+     * @return the removed selection; its expiry does not belong to a hold that still exists
+     * @throws IllegalArgumentException if the session id is blank, or for any argument or cart state
+     *     that {@link #removeForMember} refuses
+     * @throws SessionExpiredException  if {@code sessionId} is not a live guest session's id
+     * @throws IllegalStateException    if the guest's cart is in checkout
+     * @throws RuntimeException         the inventory port's refusal, propagated unchanged
+     */
     @Transactional
     public ReservationResultDTO removeForGuest(String sessionId, int eventId, int zoneId,
             InventorySelectionDTO selectionDto) {
@@ -716,7 +812,7 @@ public class ReservationService {
      * <p>The timers are renewed only while the cart is fully valid. A missing or empty cart, one in
      * checkout, or one with a line whose hold has run out is left untouched, so the expiry sweeper's
      * path still rejects a stale cart. The renewal runs under the cart's order lock, the one the expiry
-     * sweeper takes first; that lock is real only on the in-memory repository adapters.
+     * sweeper takes first. No production code calls it yet.
      *
      * @param userId the member's user id
      * @return the cart, or {@code null} when the member has none
@@ -741,8 +837,11 @@ public class ReservationService {
     }
 
     /**
-     * The guest counterpart of {@link #renewReservationsForMemberCheckout}.
+     * The guest counterpart of {@link #renewReservationsForMemberCheckout}, for the cart of a guest
+     * session. No production code calls it yet.
      *
+     * @param sessionId the raw id of the guest's live session
+     * @return the cart, or {@code null} when the session has none
      * @throws SessionExpiredException if {@code sessionId} is not a live guest session's id; no hold
      *     is renewed then
      */
@@ -848,6 +947,15 @@ public class ReservationService {
     /**
     * Removes a line from the cart, automatically determining whether the user is a Member or Guest.
     * The UI just calls this method, no need to handle InventorySelectionDTO or user type.
+    *
+    * @param userTokenOrSessionId a member token or a guest's raw session id; a credential shaped like a
+    *     JWT must validate as a member token
+    * @param eventId              the event of the held tickets
+    * @param zoneId               the zone of the event
+    * @param selection            the standing quantity or the seats to remove
+    * @return the removed selection, as {@link #removeForMember} returns it
+    * @throws IllegalArgumentException if the credential is blank, or as {@link #removeForMember}
+    *     refuses
     */
     @Transactional
     public ReservationResultDTO removeLine(String userTokenOrSessionId, int eventId, int zoneId,

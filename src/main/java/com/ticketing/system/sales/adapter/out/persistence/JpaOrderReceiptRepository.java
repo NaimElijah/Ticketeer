@@ -39,10 +39,19 @@ public class JpaOrderReceiptRepository implements OrderReceiptRepository {
     private final AtomicInteger idSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
+    /**
+     * Creates the adapter.
+     *
+     * @param data the Spring Data repository it adapts
+     */
     public JpaOrderReceiptRepository(SpringDataOrderReceiptRepository data) {
         this.data = data;
     }
 
+    /**
+     * Takes a real pessimistic row lock on the receipt, held until the surrounding transaction commits;
+     * it must be called inside a transaction.
+     */
     @Override
     public void lockForUpdate(Integer id) {
         // Real pessimistic row-lock (SELECT … FOR UPDATE) on the receipt — serialises the refund

@@ -37,6 +37,11 @@ public class JpaTicketRepository implements TicketRepository {
     private final AtomicInteger idSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
+    /**
+     * Creates the adapter.
+     *
+     * @param data the Spring Data repository it adapts
+     */
     public JpaTicketRepository(SpringDataTicketRepository data) {
         this.data = data;
     }

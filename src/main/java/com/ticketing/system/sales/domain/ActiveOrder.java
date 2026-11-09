@@ -101,7 +101,13 @@ public class ActiveOrder implements InvariantChecked {
     }
 
     /**
+     * Creates an empty cart in {@code PRE_CHECKOUT}, with a new order key.
+     *
+     * @param userId    the member's user id, or {@code null} for a guest cart
+     * @param sessionId the session id the cart is bound to, or {@code null} for a member cart without one
      * @param createdAt when the cart was opened, as UTC wall time from the injected clock (ADR-008)
+     * @throws IllegalStateException if both ids are {@code null}, {@code userId} is not positive, or
+     *     {@code sessionId} is blank
      */
     public ActiveOrder(Integer userId, String sessionId, LocalDateTime createdAt) {
         this.userId = userId;
@@ -128,7 +134,15 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
-    /** Member cart attached to an active session. */
+    /**
+     * Creates an empty member cart bound to a session.
+     *
+     * @param userId    the member's user id
+     * @param sessionId the session the cart is bound to
+     * @param createdAt when the cart was opened (UTC wall time, ADR-008)
+     * @throws IllegalArgumentException if {@code sessionId} is {@code null}
+     * @throws IllegalStateException    if {@code userId} is not positive or {@code sessionId} is blank
+     */
     public static ActiveOrder forMember(int userId, String sessionId, LocalDateTime createdAt) {
         if (sessionId == null) {
             throw new IllegalArgumentException("forMember requires a non-null sessionId");
@@ -137,7 +151,14 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
-    /** Guest cart bound to a session (no userId yet). */
+    /**
+     * Creates an empty guest cart bound to a session, with no user id yet.
+     *
+     * @param sessionId the guest session the cart is bound to
+     * @param createdAt when the cart was opened (UTC wall time, ADR-008)
+     * @throws IllegalArgumentException if {@code sessionId} is {@code null}
+     * @throws IllegalStateException    if {@code sessionId} is blank
+     */
     public static ActiveOrder forGuest(String sessionId, LocalDateTime createdAt) {
         if (sessionId == null) {
             throw new IllegalArgumentException("forGuest requires a non-null sessionId");
@@ -154,6 +175,17 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
+    /**
+     * Adds {@code quantity} standing lines for the zone, one per place, each at {@code price}.
+     *
+     * @param eventId  the event of the places
+     * @param zoneId   the zone of the places
+     * @param quantity how many places to add
+     * @param price    the unit price recorded on each line
+     * @param addedAt  when the holds start (UTC wall time, ADR-008)
+     * @throws IllegalStateException    if the cart is in checkout
+     * @throws IllegalArgumentException if {@code quantity} is not positive
+     */
     public void addStandingReservation(int eventId, int zoneId, int quantity, double price, LocalDateTime addedAt) {
         synchronized (itemsLock) {
             ensureModifiable();
@@ -169,6 +201,19 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
+    /**
+     * Adds one seated line per seat label, each at {@code price}.
+     *
+     * @param eventId     the event of the seats
+     * @param zoneId      the zone of the seats
+     * @param seatNumbers the seat labels to add
+     * @param price       the unit price recorded on each line
+     * @param addedAt     when the holds start (UTC wall time, ADR-008); a seat already in the cart
+     *                    counts as a duplicate only while its hold is live at this time
+     * @throws IllegalStateException    if the cart is in checkout
+     * @throws IllegalArgumentException if {@code seatNumbers} is {@code null} or empty, repeats a
+     *     label, or names a seat the cart already holds for the event and zone
+     */
     public void addSeatedReservation(int eventId, int zoneId, List<String> seatNumbers, double price,
             LocalDateTime addedAt) {
         synchronized (itemsLock) {
@@ -199,6 +244,17 @@ public class ActiveOrder implements InvariantChecked {
 
 
 
+    /**
+     * Removes {@code quantity} standing lines of the zone, including lines whose hold has run out. Nothing
+     * is removed unless the cart holds that many.
+     *
+     * @param eventId  the event of the places
+     * @param zoneId   the zone of the places
+     * @param quantity how many places to remove
+     * @throws IllegalStateException    if the cart is in checkout
+     * @throws IllegalArgumentException if {@code quantity} is not positive, the cart holds no line of
+     *     the event, or it holds fewer than {@code quantity} standing lines of the zone
+     */
     public void removeStandingSpots(int eventId, int zoneId, int quantity) {
         synchronized (itemsLock) {
             ensureModifiable();
@@ -234,6 +290,17 @@ public class ActiveOrder implements InvariantChecked {
     
 
 
+    /**
+     * Removes the lines of the given seats, including lines whose hold has run out. Nothing is removed
+     * unless the cart holds every seat.
+     *
+     * @param eventId     the event of the seats
+     * @param zoneId      the zone of the seats
+     * @param seatNumbers the seat labels to remove
+     * @throws IllegalArgumentException if {@code seatNumbers} repeats a label, the cart holds no line of
+     *     the event, or a seat is not in the cart
+     * @throws IllegalStateException    if the cart is in checkout
+     */
     public void removeSeats(int eventId, int zoneId, List<String> seatNumbers) {
         this.checkThatSeatNumbersListDoesNotContainDuplicates(seatNumbers);
 
@@ -341,6 +408,14 @@ public class ActiveOrder implements InvariantChecked {
 
     
 
+    /**
+     * Checks that the cart holds every given seat of the zone, including seats whose hold has run out.
+     *
+     * @param eventId     the event of the seats
+     * @param zoneId      the zone of the seats
+     * @param seatNumbers the seat labels the cart must hold
+     * @throws IllegalArgumentException if a seat is not in the cart
+     */
     public void validateContainsSeats(int eventId, int zoneId, List<String> seatNumbers) {
         synchronized (itemsLock) {
             for (String seatNumber : seatNumbers) {
@@ -381,6 +456,7 @@ public class ActiveOrder implements InvariantChecked {
     
 
 
+    /** Returns a copy of the cart's lines, in the order they were added. */
     public List<CartLineItem> getItems() {
         synchronized (itemsLock) {
             return new ArrayList<>(items);
@@ -388,6 +464,10 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
+    /**
+     * Empties the cart and returns the lines it held, so the caller can release their places. Does not
+     * check whether the cart is in checkout.
+     */
     public List<CartLineItem> ReturnToStock() {
         synchronized (itemsLock) {
             List<CartLineItem> returnToStock = new ArrayList<>(items);
@@ -429,6 +509,7 @@ public class ActiveOrder implements InvariantChecked {
         return userId;
     }
 
+    /** Returns the id of the session the cart is bound to, or {@code null} if it is bound to none. */
     public String getSessionId() {
         return sessionId;
     }
@@ -492,6 +573,7 @@ public class ActiveOrder implements InvariantChecked {
         }
     }
 
+    /** Returns when the cart was opened, as UTC wall time (ADR-008). */
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -506,7 +588,12 @@ public class ActiveOrder implements InvariantChecked {
         }
     }
 
-    // returns the minimum remaining time among the items in the active order, which represents the time until the next item expires. If there are no items, returns Duration.ZERO.
+    /**
+     * Returns how long the cart's soonest-expiring hold has left at {@code now}: the minimum over its
+     * lines, or {@link Duration#ZERO} for an empty cart or when a hold has already run out.
+     *
+     * @param now the current time (UTC wall time, ADR-008)
+     */
     public Duration getRemainingTime(LocalDateTime now) {
         synchronized (itemsLock) {
             if (items.isEmpty()) {
@@ -520,8 +607,10 @@ public class ActiveOrder implements InvariantChecked {
         }
     }
 
-    // The sum of the line prices recorded at reservation time, before any event discount policy: checkout
-    // prices the lines again with the policy.
+    /**
+     * Returns the sum of the line prices recorded at reservation time, before any event discount
+     * policy; checkout prices the lines again with the policy.
+     */
     public double getRegularTotalPrice() {
         synchronized (itemsLock) {
             return items.stream()
@@ -553,6 +642,9 @@ public class ActiveOrder implements InvariantChecked {
     /**
      * Re-bind a (persistent) Member cart to a fresh session — used by D9a
      * restoration on next login.
+     *
+     * @param newSessionId the id of the member's new session
+     * @throws IllegalArgumentException if {@code newSessionId} is {@code null} or blank
      */
     public void attachToSession(String newSessionId) {
         if (newSessionId == null || newSessionId.isBlank()) {
@@ -598,7 +690,13 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
- public List<CartLineItem> buy() {
+    /**
+     * Empties the cart and returns the lines it held, for the caller to turn into tickets. Does not check
+     * whether the cart is in checkout; the checkout sets it to {@code CHECKOUT_IN_PROGRESS} first.
+     *
+     * @throws IllegalStateException if the cart is empty
+     */
+    public List<CartLineItem> buy() {
         synchronized (itemsLock) {
             if (items.isEmpty()) {
                 throw new IllegalStateException("Cannot buy an empty order");
@@ -611,6 +709,11 @@ public class ActiveOrder implements InvariantChecked {
         }
     }
 
+    /**
+     * Removes every line without returning them.
+     *
+     * @throws IllegalStateException if the cart is in checkout
+     */
     public void clear() {
         synchronized (itemsLock) {
             ensureModifiable();
@@ -649,11 +752,13 @@ public class ActiveOrder implements InvariantChecked {
     }
 
 
+    /** Not implemented: always throws; expiry is carried out by the session-and-order sweeper. */
     public void expire() {
         throw new UnsupportedOperationException("UC-2: not implemented");
     }
 
- public boolean hasTicket(int eventId, int zoneId) {
+    /** Returns whether the cart holds any line for the event and zone, including lines whose hold has run out. */
+    public boolean hasTicket(int eventId, int zoneId) {
         synchronized (itemsLock) {
             for (CartLineItem item : items) {
                 if (item.geteventId() == eventId && item.getzoneId() == zoneId) {

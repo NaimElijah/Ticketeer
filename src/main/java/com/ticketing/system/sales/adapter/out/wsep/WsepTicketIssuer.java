@@ -51,6 +51,12 @@ public class WsepTicketIssuer implements TicketIssuer {
     private final WsepHttpClient http;
     private final Clock clock;   // stamps issuances (UTC wall time, ADR-008)
 
+    /**
+     * Creates the issuer.
+     *
+     * @param http  the WSEP client that sends each action
+     * @param clock the source of the time stamped on issuances (ADR-008)
+     */
     public WsepTicketIssuer(WsepHttpClient http, Clock clock) {
         this.http = http;
         this.clock = clock;

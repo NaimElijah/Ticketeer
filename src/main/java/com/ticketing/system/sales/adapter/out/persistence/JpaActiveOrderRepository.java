@@ -46,6 +46,11 @@ public class JpaActiveOrderRepository implements ActiveOrderRepository {
 
     private final SpringDataActiveOrderRepository data;
 
+    /**
+     * Creates the adapter.
+     *
+     * @param data the Spring Data repository it adapts
+     */
     public JpaActiveOrderRepository(SpringDataActiveOrderRepository data) {
         this.data = data;
     }

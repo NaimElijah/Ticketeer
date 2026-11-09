@@ -19,6 +19,8 @@ final class RefundResultValidator {
     }
 
     /**
+     * Checks a gateway's refund answer against the amount that was asked for.
+     *
      * @param receiptId      the receipt being refunded, for the error message
      * @param expectedAmount the amount the gateway was asked to refund
      * @param result         the gateway's answer

@@ -6,25 +6,55 @@ import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
 
-// Output of MemberAccountService.viewMyHistory() (UC-16).
-// Shape is reusable for UC-22 (company sales) and UC-31 (admin global) views.
-// Immutable per II.3.5.2 — fields reflect the data at time of purchase, not current.
+/**
+ * Read model of purchase history: the purchases of one member (UC-16, from
+ * {@code MemberAccountService.viewMyHistory()}), and the same shape for a company's sales (UC-22) and the
+ * admin's global history (UC-31). The record is immutable (II.3.5.2). Prices, times and transactions are
+ * those recorded at purchase; a ticket's status and refund state are current.
+ *
+ * @param records the purchases, one per receipt
+ */
 public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
 
-    // PurchaseRecordDTO is a read-model snapshot of an OrderReceipt.
-    // It is not the OrderReceipt domain object itself.
+    /**
+     * A read-model snapshot of an {@code OrderReceipt}, not the domain object itself.
+     *
+     * @param orderReceiptId the receipt id
+     * @param buyerUserId    the member's user id; null for guest purchases
+     * @param guestEmail     the guest's email; null for member purchases
+     * @param purchasedAt    when the purchase completed, as UTC wall time (ADR-008)
+     * @param totalPaid      the total of the lines the record covers: the whole order, or only the lines
+     *     of the selected events or of one company
+     * @param refundStatus   how much of this record's lines is refunded: over this record's lines only, so
+     *     a company's record ignores other companies' refunds
+     * @param transactions   the order's payment, issuance and refund records; empty in a company's sales
+     *     record, since a transaction covers the whole order
+     * @param tickets        one entry per line the record covers
+     * @param buyerName      the member's username, resolved when the record is built; null for guests
+     *     (use {@code guestEmail}) and when the member cannot be found
+     */
     public record PurchaseRecordDTO(
         int orderReceiptId,
-        Integer buyerUserId,       // null for guest purchases
-        String guestEmail,         // null for member purchases
+        Integer buyerUserId,
+        String guestEmail,
         LocalDateTime purchasedAt,
         double totalPaid,
-        RefundStatus refundStatus, // over this record's lines only: a company's record ignores other companies' refunds
+        RefundStatus refundStatus,
         List<TransactionRecordDTO> transactions,
         List<TicketRecordDTO> tickets,
-        String buyerName           // resolved member username; null for guests (use guestEmail)
+        String buyerName
     ) {}
-    
+
+    /**
+     * One external transaction of a receipt.
+     *
+     * @param type                  the name of the {@code TransactionRecord.TransactionType}
+     * @param providerName          the gateway or issuer that made the transaction
+     * @param externalTransactionId the provider's id for the transaction
+     * @param amount                the amount; zero for a ticket issuance
+     * @param currency              the currency; null for a ticket issuance
+     * @param timestamp             when the provider made the transaction
+     */
     public record TransactionRecordDTO(
         String type,
         String providerName,
@@ -34,22 +64,39 @@ public record PurchaseHistoryDTO(List<PurchaseRecordDTO> records) {
         LocalDateTime timestamp
     ) {}
 
+    /**
+     * One purchased place. The display fields are resolved when the record is built and are null when
+     * the event, company or port they come from is unavailable.
+     *
+     * @param seatNumber    the seat label; null for a standing zone
+     * @param pricePaid     the price of this line
+     * @param currentStatus the ticket's status now; a line with no stored ticket reads REFUNDED or PAID
+     *     from its refund state
+     * @param eventName     the event's name; null if unresolved
+     * @param zoneName      the zone's name; null if unresolved
+     * @param companyName   the producing company's name; null if unresolved
+     * @param category      the event category; null if unresolved
+     * @param eventStartsAt the first show date, at the venue in its zone; null if unresolved
+     * @param venue         the event location; null if unresolved
+     * @param barcode       the issued ticket's barcode; null if not issued
+     * @param refunded      whether this line's refund is recorded (#21)
+     */
     public record TicketRecordDTO(
         int ticketId,
         int zoneId,
         int eventId,
         int orderReceiptId,
-        String seatNumber,     // nullable for standing zones
+        String seatNumber,
         double pricePaid,
         TicketStatus currentStatus,
-        String eventName,      // resolved at mapping time; null if unresolved
-        String zoneName,       // resolved at mapping time; null if unresolved
-        String companyName,    // resolved at mapping time; null if unresolved
-        String category,       // event category; null if unresolved
-        ZonedDateTime eventStartsAt, // first show date, at the venue in its zone; null if unresolved
-        String venue,          // event location; null if unresolved
-        String barcode,        // issued-ticket barcode; null if not yet issued
-        boolean refunded       // this line's refund is recorded (#21)
+        String eventName,
+        String zoneName,
+        String companyName,
+        String category,
+        ZonedDateTime eventStartsAt,
+        String venue,
+        String barcode,
+        boolean refunded
     ) {}
 
     /** How much of a record's lines has been refunded (#21). */

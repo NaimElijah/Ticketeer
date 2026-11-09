@@ -63,6 +63,16 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 import com.ticketing.system.identity.application.port.out.UserRepository;
 import com.ticketing.system.identity.domain.User;
 
+/**
+ * Checkout use case (UC-10): turns a buyer's cart into a receipt and tickets, for a member
+ * ({@link #checkoutMember}) or a guest ({@link #checkoutGuest}).
+ *
+ * <p>The payment gateway and the ticket issuer are called outside any lock and database transaction,
+ * so a slow external service never pins a connection; only the final database unit of Phase 3 is a
+ * transaction, run by this service itself. The methods are therefore not {@code @Transactional}.
+ * Market state is read through {@link MarketGate}. Purchase and failure notices are published as
+ * {@code shared.event} events.
+ */
 @Service
 @Slf4j
 public class CheckoutService {
@@ -132,6 +142,23 @@ public class CheckoutService {
     // the user accidentally clicks the "Buy" button twice or if there are network
     // issues causing retries.
 
+    /**
+     * Creates the service.
+     *
+     * @param activeOrderRepository the carts
+     * @param eventRepository       catalog's event port, used only for the shared event lock Phase 3 holds
+     * @param inventoryPort         catalog port that prices, validates and confirms inventory
+     * @param ticketRepository      the tickets saved by a purchase
+     * @param orderReceiptRepository the receipts saved by a purchase
+     * @param ticketIssuer          issues the barcodes
+     * @param paymentGateway        charges the card and refunds a failed purchase
+     * @param eventPublisher        publishes the purchase and failure notices
+     * @param sessionManager        authenticates member tokens and guest session ids
+     * @param userRepository        the source of a member's age for purchase-policy checks
+     * @param marketGate            tells whether the market is open
+     * @param transactionManager    runs the Phase 3 database unit
+     * @param clock                 the source of "now" (UTC wall time, ADR-008)
+     */
     public CheckoutService(
             ActiveOrderRepository activeOrderRepository,
             EventRepository eventRepository,
@@ -183,8 +210,8 @@ public class CheckoutService {
 
     // UC-32 / I.2.1 — no money moves while the trading market is closed. This is a
     // platform-wide gate, orthogonal to the per-event ON_SALE check enforced later
-    // in Phase 3 (validateEventsStillOnSale). Called as a guard clause before the
-    // checkout try-block so it propagates cleanly instead of being wrapped as a
+    // in Phase 3 (validateEventsStillOnSale). Its exception is rethrown raw by the
+    // MarketNotOpenException catch of each checkout method, so it is not wrapped as a
     // generic checkout failure.
     private void requireMarketOpen() {
         if (!marketGate.isOpen()) {
@@ -192,23 +219,34 @@ public class CheckoutService {
         }
     }
 
-    // The checkoutMember and checkoutGuest methods follow a similar flow but have
-    // some differences in how they identify the buyer (user ID for members, guest
-    // session ID + email for guests) and how they retrieve the active order (by
-    // user ID vs. by guest session ID). They both implement the same core steps of
-    // validating input, checking the cache for idempotency, locking the order and
-    // events, pricing items, processing payment, issuing tickets, confirming
-    // inventory sale, saving receipts, and handling errors. The separation into two
-    // methods allows us to handle member-specific and guest-specific logic cleanly
-    // while still sharing common helper methods for the core checkout steps.
-    //
-    // 3-Phase checkout structure (reduces lock hold time during slow I/O):
-    // Phase 1 (short order lock): validate, snapshot items, mark
-    // CHECKOUT_IN_PROGRESS, release lock.
-    // Phase 2 (no domain locks): price items, charge payment, issue tickets.
-    // Phase 3 (short order + event locks): verify reservations still belong to this
-    // order,
-    // confirm inventory sale, persist, mark bought.
+    /**
+     * Buys a member's cart in the three phases that keep slow external calls out of any lock and
+     * transaction. Phase 1 validates the cart and freezes it, under the cart's order lock. Phase 2 prices
+     * the lines, then calls the payment gateway and the ticket issuer, holding no lock. Phase 3 takes the
+     * order lock and the shared event locks again, checks that the cart and the holds are as Phase 1 saw
+     * them, and in one database transaction saves the tickets and the receipt and confirms the inventory
+     * sale. The cart is then consumed.
+     *
+     * <p>A repeated call with an {@code idempotencyKey} that already completed for this member returns
+     * the first result without charging again, and does so even if the market has closed since. The
+     * completed results are kept in memory, so a restart forgets them.
+     *
+     * <p>If a phase fails, the cart is unfrozen, the held places are returned to stock, the cart is
+     * cleared, and, when the payment gateway was already charged and the sale did not commit, a refund of
+     * the charged amount is requested from it. The member gets a purchase notice on success and a
+     * failure notice on failure once the token has been accepted (delivered after commit, ADR-004).
+     *
+     * @param token          the member's session token
+     * @param idempotencyKey the client's key for this purchase attempt; a retry sends the same key
+     * @param currency       the currency the card is charged in; the gateway's answer must carry it
+     * @param card           the payment card to charge
+     * @return the receipt id, the total charged, the payment transaction id and the issued tickets
+     * @throws MarketNotOpenException if the market is closed and the key has no completed purchase
+     * @throws RuntimeException       for every other failure, wrapping it as the cause: an invalid
+     *     token or input, an empty or expired cart, a cart that changed during checkout, a key already
+     *     used by another buyer, a refusal by the payment gateway or the ticket issuer, or a lost
+     *     concurrency race (re-typed as {@code ConcurrentReservationException})
+     */
     public CheckoutResultDTO checkoutMember(String token, String idempotencyKey, String currency,
             CardDetailsDTO card) {
         int userId = -1;
@@ -369,17 +407,27 @@ public class CheckoutService {
         }
     }
 
-    // The checkoutMember and checkoutGuest methods follow a similar flow but have
-    // some differences in how they identify the buyer (user ID for members, guest
-    // session ID + email for guests) and how they retrieve the active order (by
-    // user ID vs. by guest session ID). They both implement the same core steps of
-    // validating input, checking the cache for idempotency, locking the order and
-    // events, pricing items, processing payment, issuing tickets, confirming
-    // inventory sale, saving receipts, and handling errors. The separation into two
-    // methods allows us to handle member-specific and guest-specific logic cleanly
-    // while still sharing common helper methods for the core checkout steps.
-    //
-    // See checkoutMember for the 3-phase description.
+    /**
+     * Buys a guest's cart: the guest counterpart of {@link #checkoutMember}, with the same three phases,
+     * idempotent replay and failure handling. The cart is found by the guest session id, and the
+     * idempotency key is bound to the session id and the email together.
+     *
+     * <p>The session must be live, which is checked after the replay lookup and the market gate, so a
+     * completed purchase can be replayed after its session ended. No purchase notice is published, since
+     * a guest has no user to notify. The guest's session id is never logged.
+     *
+     * @param guestSessionId the raw id of the guest's live session
+     * @param guestEmail     the email the receipt belongs to
+     * @param idempotencyKey the client's key for this purchase attempt; a retry sends the same key
+     * @param currency       the currency the card is charged in
+     * @param card           the payment card to charge
+     * @param buyerAge       the buyer's age in years, for the purchase-policy age check
+     * @return the receipt id, the total charged, the payment transaction id and the issued tickets
+     * @throws MarketNotOpenException if the market is closed and the key has no completed purchase
+     * @throws RuntimeException       for every other failure, wrapping it as the cause, as
+     *     {@link #checkoutMember} does; a blank session id or email, or a session that is not live,
+     *     is among them
+     */
     public CheckoutResultDTO checkoutGuest(String guestSessionId, String guestEmail, String idempotencyKey,
             String currency, CardDetailsDTO card, int buyerAge) {
         ActiveOrder order = null;

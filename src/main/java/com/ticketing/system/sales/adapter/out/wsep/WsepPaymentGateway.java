@@ -48,6 +48,12 @@ public class WsepPaymentGateway implements PaymentGateway {
     private final WsepHttpClient http;
     private final Clock clock;   // stamps charges and refunds (UTC wall time, ADR-008)
 
+    /**
+     * Creates the gateway.
+     *
+     * @param http  the WSEP client that sends each action
+     * @param clock the source of the time stamped on charges and refunds (ADR-008)
+     */
     public WsepPaymentGateway(WsepHttpClient http, Clock clock) {
         this.http = http;
         this.clock = clock;
