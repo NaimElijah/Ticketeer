@@ -1,6 +1,6 @@
 # ADR-006: Run the persistence and database-outage tests on PostgreSQL in Testcontainers
 
-- **Status:** Accepted; extended by [ADR-026](ADR-026-integration-tests-prove-they-run-on-postgres.md), under which every `*IT` checks its context really is on PostgreSQL
+- **Status:** Accepted; extended by [ADR-026](ADR-026-integration-tests-prove-they-run-on-postgres.md), under which every `*IT` checks its context really is on PostgreSQL; [ADR-009](ADR-009-direct-dependency-inventory.md) retired its Testcontainers version override, and 1.21.4 now comes from the Boot BOM
 - **Date:** 2026-10-19
 - **Issue:** #32 (run persistence and DB-outage tests against real Postgres in CI)
 

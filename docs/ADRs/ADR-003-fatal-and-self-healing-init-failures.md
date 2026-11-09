@@ -1,6 +1,6 @@
 # ADR-003: Platform initialization fails startup, except for an external-service outage
 
-- **Status:** Accepted. Extended by [ADR-016](ADR-016-bounds-on-secret-values-are-checked-outside-bind-validation.md) (bounds on secret values are checked outside bind validation) and by [ADR-021](ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md) (a scenario file the parser refuses is fatal).
+- **Status:** Accepted. Extended by [ADR-014](ADR-014-committed-default-secrets-are-fatal-outside-dev-and-test.md) (committed default secrets are fatal outside dev and test), by [ADR-016](ADR-016-bounds-on-secret-values-are-checked-outside-bind-validation.md) (bounds on secret values are checked outside bind validation), by [ADR-020](ADR-020-market-self-heal-scheduler-and-reported-reachability.md) (the self-heal's probe and scheduler) and by [ADR-021](ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md) (a scenario file the parser refuses is fatal).
 - **Date:** 2026-10-18
 - **Issue:** #27 (fail startup on invalid init config or initial-state file)
 
