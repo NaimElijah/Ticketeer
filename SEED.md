@@ -40,7 +40,7 @@ Because every line is a real service call, each is classified in the end-of-run 
 With `seed.fail-fast=true` the run aborts at the first unexpected failure (a partial report is still
 logged) and startup fails. That is the default outside `dev`; `dev` sets it to `false` so a broken demo
 line doesn't block local work. A missing or unreadable scenario file, or one the parser refuses (such as a
-bare `expect-error`), stops startup in every profile, before any step runs
+bare `expect-error`), stops startup in every profile except `test` when the mode reads it (`reseed` or an allowed `reset`, configured or chosen under `ask`), before any step runs
 ([ADR-003](docs/ADRs/ADR-003-fatal-and-self-healing-init-failures.md), [ADR-021](docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)). The same mechanism seeds a real Postgres/Supabase database too — it runs against whatever database
 the run is configured with, not just H2 — but stays gated behind `seed.mode` so it is opt-in there.
 
@@ -151,7 +151,7 @@ service call).
 
 | Operation | Application-service call |
 |---|---|
-| `register <alias> <password> <email> <age>` | `AuthenticationService.register`, which refuses an age outside 1 to 120 |
+| `register <alias> <password> <email> <age> [username=<name>]` | `AuthenticationService.register`, which refuses an age outside 1 to 120; `username=` defaults to the alias |
 | `login <alias>` | `AuthenticationService.login` |
 | `login-admin <alias>` | `AuthenticationService.signInAsAdmin` with the configured default admin's `platform.admin.username` and `platform.admin.password`, so the file holds no password |
 | `login-admin <alias> <username> <password>` | `AuthenticationService.signInAsAdmin` with the credentials the file names |
@@ -163,7 +163,7 @@ service call).
 | `confirm <alias> <company>` | `CompanyManagementService.respondToAppointment` |
 | `add-event <by> <company> <eventAlias> <zone>… [name= category= city= days= rating= publish=]` | `EventManagementService.addEvent` + `configureVenueMap` (+ `publishEvent`) |
 | `publish <by> <company> <event>` | `EventManagementService.publishEvent` |
-| `reserve <buyer> <event> <zoneRef> qty=<n> \| seats=A1,A2` | `ReservationService.reserveForMember` / `reserveForGuest` |
+| `reserve <buyer> <event> <zoneRef> qty=<n> \| seats=A1,A2` | `ReservationService.reserveForMember` / `reserveForGuest`; `<zoneRef>` is a zone id, or `standing` / `seated` for the first zone of that type with places left |
 | `checkout <buyer> [email= age=]` | `CheckoutService.checkoutMember` / `checkoutGuest` |
 | `cancel-event <by> <event>` | `EventManagementService.cancelEventAndRefund` |
 | `contact-company <from> <company> subject= body=` | `MessagingService.startConversation` |
@@ -204,9 +204,10 @@ startup fails with it.
 
 ## Date relativity
 
-`DemoClock` captures `clock.instant()` once at run start; every event/reservation/notification timestamp
-is computed as an offset from that anchor (`anchor.plusDays(N)`, `anchor.minusHours(N)`, …). Boot on a
-different day and all dates shift accordingly — there are no hard-coded calendar dates.
+`DemoClock` captures `clock.instant()` once at run start. The one date a scenario sets, an event's show
+date (`add-event … days=N`), is the anchor plus N days. Reservations, receipts and notifications are
+stamped by the services' own clock when the line runs. Boot on a different day and the show dates shift
+accordingly; there are no hard-coded calendar dates.
 
 A seeded event's time zone is `platform.time-zone` (`Asia/Jerusalem` by default), and its show starts
 at the anchor plus `days=` read as wall-clock time in that zone (ADR-008).

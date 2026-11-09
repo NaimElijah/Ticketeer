@@ -14,7 +14,7 @@
 # Run ONE app instance against this database at a time. @Version and the refund's FOR UPDATE would
 # coordinate several, since Postgres enforces them, but receipt, ticket, user, company, appointment and
 # event ids come from counters each instance seeds once from max(id), so two instances mint the same
-# ids, and in-flight checkouts are tracked per instance (#108).
+# ids, and in-flight checkouts are tracked per instance (#35).
 spring:
   datasource:
     # logServerErrorDetail=false: as in application.yml, no row values in logged exception messages.

@@ -25,14 +25,14 @@ flowchart TB
     browser["Browser"]
     subgraph jvm["Ticketeer: one Spring Boot process"]
         ui["Vaadin UI<br/>40 server-side views"]
-        app["Application services<br/>8 backend modules"]
+        app["Application services<br/>8 bounded contexts"]
         repos["Repository adapters<br/>JPA; in-memory only in tests"]
     end
     db[("PostgreSQL<br/>or H2 in dev")]
     wsep["WSEP<br/>payment + ticket issuing"]
 
     browser -->|"HTTP, long-polling push"| ui
-    ui -->|"inbound ports"| app
+    ui -->|"application services"| app
     app -->|"outbound ports"| repos
     repos --> db
     app -->|"HTTPS, outside the DB transaction"| wsep
@@ -201,10 +201,10 @@ set these:
 | Variable | Purpose | Default | Required |
 |---|---|---|---|
 | `SPRING_PROFILES_ACTIVE` | `supabase` for Supabase over SSL; plain PostgreSQL needs no profile | none: PostgreSQL through `DB_*` | No |
-| `DB_HOST` · `DB_PORT` · `DB_NAME` | PostgreSQL location | `localhost` · `5432` · `ticketing` | Yes |
+| `DB_HOST` · `DB_PORT` · `DB_NAME` | PostgreSQL location | `localhost` · `5432` · `ticketing` (`supabase`: no host default, `5432`, `postgres`) | `DB_HOST` yes; `DB_PORT` and `DB_NAME` no |
 | `DB_USER` · `DB_PASSWORD` | PostgreSQL credentials | `postgres` · `postgres` | Yes |
 | `JWT_SECRET` | Token signing key, 256 bits or more (32 characters or more) | a dev-only value | Yes, outside `dev` and `test`: the boot stops on the committed default |
-| `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | Yes; outside `dev` and `test` the boot stops on the committed default password |
+| `PLATFORM_ADMIN_USERNAME` · `PLATFORM_ADMIN_PASSWORD` | The System Admin created at boot when none exists | `admin` · `admin` | `PLATFORM_ADMIN_USERNAME` no; `PLATFORM_ADMIN_PASSWORD` yes: outside `dev` and `test` the boot stops on the committed default password |
 | `WSEP_BASE_URL` | The external payment and ticket-issuing service; must be an `https://` URL, or the boot stops | the course's WSEP host | No |
 
 **Startup validates the initialization settings.** The `constants`, `session`, `auth.lockout`,
@@ -235,8 +235,8 @@ java -jar target/event-ticket-system-0.0.1-SNAPSHOT.jar --spring.config.import=f
 `additional-location` reads `application.yml` (and `application-<profile>.yml`) from that folder;
 `import` reads one named file. A key set in the file replaces the bundled entry, `${VAR:default}`
 placeholder included. An environment variable still wins only when its name is the property's own
-name in environment form, as with `WSEP_BASE_URL`, `SESSION_*`, `PLATFORM_ADMIN_*`, `JWT_SECRET` and
-`SEED_*`. `TICKET_RESERVATION_DURATION`, `ORDER_EXPIRATION_DURATION`, `PLATFORM_TIME_ZONE`, `DB_*`
+name in environment form, as with `WSEP_BASE_URL`, `SESSION_*`, `PLATFORM_ADMIN_*`, `PLATFORM_TIME_ZONE`, `JWT_SECRET` and
+`SEED_*`. `TICKET_RESERVATION_DURATION`, `ORDER_EXPIRATION_DURATION`, `CATALOG_VENUE_MAX_*`, `DB_*`
 and `DB_POOL_SIZE` are read only through the bundled placeholder, so a file that sets their key
 overrides them. Set each value in one place.
 
@@ -276,7 +276,7 @@ overrides them. Set each value in one place.
 |---|---|
 | *(none)* | JPA repositories on PostgreSQL through `DB_*`, real WSEP, market opened at boot; needs `JWT_SECRET` and `PLATFORM_ADMIN_PASSWORD` set to non-default values |
 | `dev` | JPA repositories on in-memory H2, empty every boot and built by the Flyway migrations; replays `demo.scenario`, adds the dev panel |
-| `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default; one app instance at a time, since ids come from per-instance counters (#108) |
+| `supabase` | JPA repositories on Supabase PostgreSQL over SSL; `DB_HOST`, `DB_USER` and `DB_PASSWORD` have no default; one app instance at a time, since ids come from per-instance counters (#35) |
 | `test` | The test suite's profile: JPA repositories on H2, stub WSEP, no boot runners or schedulers |
 | `memory` | Tests only, together with `test`: swaps in the in-memory repositories. Does nothing on its own |
 | `production` · `no-vaadin` | Maven build profiles: bundle the frontend and leave the dev-only libraries (Vaadin's dev server, H2) out of the jar; Hilla is excluded in every build (ADR-013) · skip Vaadin's frontend step |
@@ -327,9 +327,9 @@ About 4,000 test methods, organised by what they boot. Each name reads `Given…
 
 | Layer | Covers | Boots |
 |---|---|---|
-| `unit/` · `ui/` | Domain rules, services and presenters with mocked ports, both adapters of every repository port | Nothing, or `@DataJpaTest` on H2 for the JPA contract tests |
+| `unit/` · `ui/` · `identity/` · `sales/` · `shared/` | Domain rules, services and presenters with mocked ports, both adapters of every repository port | No Spring context; `@DataJpaTest` on H2 for the JPA tests under `unit/infrastructure/persistence/`; a small `ApplicationContextRunner` context for configuration, startup, scheduling and transaction-wiring tests |
 | `acceptance/` | Use cases end to end through the services | Spring under `test` + `memory`: in-memory repositories and stub WSEP |
-| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats, checkouts, cancellations, refunds and registrations | Spring under `test`: JPA repositories on H2; each `concurrency/` suite, and the checkout, checkout-freeze, cancellation, first-reservation and registration races, also run on PostgreSQL as `Postgres…IT` |
+| `integration/` · `concurrency/` | JPA persistence, and concurrent races for seats, checkouts, cancellations, refunds and registrations | Spring under `test`: JPA repositories on H2, except the `*MigrationTest` classes, which run Flyway on bare H2 with no Spring context, and `CheckoutPresenterExpiryTransactionTest`, an `ApplicationContextRunner` on embedded H2; each `concurrency/` suite, and the checkout, checkout-freeze, cancellation, first-reservation and registration races, also run on PostgreSQL as `Postgres…IT` |
 | `architecture/` | `HexagonalRulesTest` (ArchUnit), `ModularityTests` (Spring Modulith), `RepositoryAdapterProfileTest` (which adapter each profile set selects) and `TestConventionsTest` (test names, and the PostgreSQL check on every `*IT`); also the logging and optimistic-lock aspects' tests, in `architecture/application/service` so their pointcut matches them | Nothing, except a bare Spring context of the aspect and the transaction advice for `OptimisticLockTranslationOrderTest` |
 | `*IT` classes | Every JPA repository contract suite on the production database (`Postgres…IT`), the migrations on a clean database, with an index on every foreign key and listed queried column (`SchemaMigrationIT`), the concurrency suites and the checkout, checkout-freeze, cancellation, first-reservation and registration races (`Postgres…IT` in `concurrency/` and `integration/`), and recovery from a database outage (`DbOutageRecoveryIT`) | A PostgreSQL container per class (Testcontainers); run by failsafe in `verify`, never by `test` |
 
@@ -359,7 +359,7 @@ the jar carries H2 or Vaadin's dev tooling ([#79](https://github.com/NaimElijah/
 or Hilla ([ADR-013](docs/ADRs/ADR-013-hilla-excluded-from-the-vaadin-starter.md)),
 and boots the jar against PostgreSQL; it does not gate a merge yet either. "Dependency review"
 fails a pull request that adds or upgrades to a dependency with a known high or critical
-advisory, and Dependabot proposes updates weekly once its configuration is on `main`
+advisory, and Dependabot proposes updates weekly into `dev`
 ([ADR-010](docs/ADRs/ADR-010-dependency-review-as-the-vulnerability-gate.md)); the review does not
 gate a merge yet ([#200](https://github.com/NaimElijah/Ticketeer/issues/200)). Coverage is not
 measured yet, and CI calls `mvn`, not the wrapper
@@ -387,7 +387,7 @@ with the minified frontend, and without the dev-only libraries: Vaadin's dev ser
 src/main/java/com/ticketing/system/
   shared/              Kernel shared by every module
   identity/ … sales/   The bounded contexts from the module table, each one
-                       domain/ · application/{port/in, port/out, service} · adapter/out/
+                       domain/ · application/{port/out, service} · adapter/out/; port/in where inbound ports exist
   governance/          Platform lifecycle, market state, analytics
   reporting/           Read models for the dashboards and purchase history
   ui/                  Vaadin views, presenters, components, session state, route guard

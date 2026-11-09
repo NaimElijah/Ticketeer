@@ -6,13 +6,19 @@
 |_Services_
 
 * `c.t.s.c.application.service.CatalogService`
+* `c.t.s.c.application.port.in.CatalogEventDisplayPort` (via `c.t.s.c.application.service.EventDisplayQueryService`)
 * `c.t.s.c.application.service.EventManagementService`
+* `c.t.s.c.application.port.in.InventoryCommandPort` (via `c.t.s.c.application.service.InventoryService`)
 
 _Repositories_
 
 * `c.t.s.c.application.port.out.EventRepository` (via `c.t.s.c.adapter.out.persistence.JpaEventRepository`)
 * `c.t.s.c.application.port.out.EventRepository` (via `c.t.s.c.adapter.out.persistence.MemoryEventRepository`)
 * `c.t.s.c.adapter.out.persistence.SpringDataEventRepository`
+
+_Configuration properties_
+
+* `c.t.s.c.config.VenueLimitsProperties`
 
 _Others_
 

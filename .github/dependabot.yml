@@ -1,5 +1,5 @@
 # Weekly update pull requests into dev, the integration branch (#47, ADR-010). Dependabot reads this
-# file from the default branch, so it takes effect once it reaches main.
+# file from the default branch, so a change here takes effect once it reaches main.
 version: 2
 updates:
   - package-ecosystem: maven

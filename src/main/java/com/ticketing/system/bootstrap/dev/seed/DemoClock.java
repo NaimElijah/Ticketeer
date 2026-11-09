@@ -6,9 +6,10 @@ import java.time.temporal.ChronoUnit;
 
 /**
  * Date anchor for {@code ScenarioRunner}. Captures
- * {@link Clock#instant()} once at construction so every timestamp
- * produced in a single seed pass is computed relative to the same
- * "now". Each scenario run ({@code seed.mode=reseed} or {@code reset}) creates a
+ * {@link Clock#instant()} once at construction so the show dates of
+ * one seed pass are all offsets from the same "now"; every other timestamp
+ * comes from the services' own clock. Each scenario run
+ * ({@code seed.mode=reseed} or {@code reset}) creates a
  * fresh {@code DemoClock}, so a reset re-anchors against the
  * current moment without dragging stale offsets along.
  *
