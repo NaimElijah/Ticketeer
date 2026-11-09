@@ -2,10 +2,11 @@
 
 Spring Modulith–generated documentation of the platform's bounded-context modules.
 
-The files here are a **hand-copied snapshot, last refreshed on 2026-07-09**, so they can lag the
+The files here are a **hand-copied snapshot, last refreshed on 2026-11-09**, so they can lag the
 code. `ModularityTests.GivenTheApplicationModules_WhenWriteModuleDocumentation_ThenTheComponentDiagramNamesEveryModule()` writes fresh output on every test run, but into
 `target/spring-modulith-docs/`, not into this folder. To refresh the snapshot, copy the files over
-from `target/`. Making the generator write here directly is tracked in #43.
+from `target/`. The generator orders a `.puml` file's lines differently from run to run, so copy
+only a file whose sorted lines changed. Making the generator write here directly is tracked in #43.
 
 ## Files
 

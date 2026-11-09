@@ -139,8 +139,8 @@ ui formats no date or number, and changes no case, in the JVM's locale (no `Date
 `Locale.ROOT` for machine text, #189, [ADR-027](../docs/ADRs/ADR-027-pages-format-in-a-fixed-locale.md));
 every rule has self-tests that prove it fails on a fixture), `TestConventionsTest` (every test name reads `Given…_When…_Then…`, [ADR-023](../docs/ADRs/ADR-023-test-names-are-enforced-by-an-archunit-rule.md); every `*IT` carries `@RunsOnPostgres`) and `ModularityTests`
 (`verify()` + Documenter output to `target/spring-modulith-docs/`). The committed
-`docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, stale since 2026-07-09. Refresh it by
-copying from `target/`; git has CRLF and the generator writes LF, so a naive diff shows every line.
+`docs/architecture/*.puml|*.adoc` is a hand-copied snapshot, last refreshed 2026-11-09, which can lag the code until #43. Refresh it by
+copying from `target/`. The index holds LF, a Windows checkout CRLF and the generator LF, so compare with `git diff`, not a plain `diff`. Documenter orders a `.puml` file's lines differently on each run, so copy only a file whose sorted lines changed.
 
 ### Repository ports with dual adapters (the central pattern)
 

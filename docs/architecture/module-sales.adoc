@@ -6,6 +6,7 @@
 |_Services_
 
 * `c.t.s.s.application.service.CheckoutService`
+* `c.t.s.s.application.service.EventCancellationRefundService`
 * `c.t.s.s.application.service.RefundService`
 * `c.t.s.s.application.service.ReservationService`
 
@@ -25,6 +26,10 @@ _Event listeners_
 
 * `c.t.s.s.adapter.in.event.EventCancellationRefundListener`
 
+_Configuration properties_
+
+* `c.t.s.s.config.ReservationHoldProperties`
+
 _Others_
 
 * `c.t.s.s.adapter.out.catalog.EventSalesHistoryAdapter`
@@ -37,9 +42,9 @@ _Others_
 |Bean references
 |* `c.t.s.s.external.WsepHttpClient` (in Shared Kernel)
 * `c.t.s.c.application.port.out.EventRepository` (in Catalog & Events)
+* `c.t.s.c.application.port.in.InventoryCommandPort` (in Catalog & Events)
 * `c.t.s.i.application.port.out.SessionManager` (in Identity & Access)
 * `c.t.s.i.application.port.out.UserRepository` (in Identity & Access)
-* `c.t.s.o.application.port.out.ProductionCompanyRepository` (in Organization)
 * `c.t.s.i.application.service.AuthenticationService` (in Identity & Access)
 * `c.t.s.s.metrics.ISystemMetrics` (in Shared Kernel)
 |Aggregate roots

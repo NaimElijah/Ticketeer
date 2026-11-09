@@ -3,9 +3,18 @@
 |Base package
 |`com.ticketing.system.shared`
 |Spring components
-|* `c.t.s.s.config.SecurityConfig`
+|_Configuration properties_
+
+* `c.t.s.s.config.DatabaseProperties`
+* `c.t.s.s.config.PlatformTimeProperties`
+* `c.t.s.s.config.WsepProperties`
+
+_Others_
+
+* `c.t.s.s.config.SecurityConfig`
 * `c.t.s.s.external.WsepHttpClient`
 * `c.t.s.s.logging.LoggingAspect`
 * `c.t.s.s.metrics.ISystemMetrics` (via `c.t.s.s.metrics.InMemorySystemMetrics`)
 * `c.t.s.s.persistence.OptimisticLockTranslationAspect`
+* `c.t.s.s.persistence.PostgresDriverSettings`
 |===
