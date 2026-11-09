@@ -111,10 +111,12 @@ public class MyCompaniesPresenter {
      * picked.
      *
      * @param inviteeIdentifier the invitee as typed; the service resolves it
-     * @return {@link AppointOutcome.NoCompany} when the member belongs to no company;
+     * @return {@link AppointOutcome.NoCompany} when the member belongs to no company or the stored
+     *     token is no longer live;
      *     {@link AppointOutcome.ChooseCompany} when no single company can be picked;
      *     {@link AppointOutcome.UserNotFound} when the service cannot resolve the invitee;
-     *     {@link AppointOutcome.NotAuthenticated} when no token is stored or the service rejects it;
+     *     {@link AppointOutcome.NotAuthenticated} when no token is stored, or the service rejects it
+     *     after the live check;
      *     {@link AppointOutcome.Failure} with {@code ServiceErrors}' text for any other failure
      */
     public AppointOutcome appoint(String inviteeIdentifier) {
@@ -143,10 +145,10 @@ public class MyCompaniesPresenter {
         /** The co-owner invitation is sent. */
         record Success() implements AppointOutcome {}
 
-        /** No token is stored, or the service rejected it as invalid. */
+        /** No token is stored, or the service rejected it after the live check. */
         record NotAuthenticated() implements AppointOutcome {}
 
-        /** The member belongs to no company. */
+        /** The member belongs to no company, or the stored token is no longer live. */
         record NoCompany() implements AppointOutcome {}
 
         /**

@@ -168,6 +168,7 @@ public class PurchasePolicyEditorPresenter {
         private final List<Node> children = new ArrayList<>();
         private Group(Op op) { this.op = op; }
         public String id() { return id; }
+        /** How the group combines its children. */
         public Op op() { return op; }
         /** The group's children in order, as a read-only view; the presenter's methods change them. */
         public List<Node> children() { return Collections.unmodifiableList(children); }
@@ -180,7 +181,9 @@ public class PurchasePolicyEditorPresenter {
         private String value;
         private Rule(RuleType type, String value) { this.type = type; this.value = value; }
         public String id() { return id; }
+        /** What the rule tests. */
         public RuleType type() { return type; }
+        /** The value the rule compares with, as the editor holds it. */
         public String value() { return value; }
     }
 

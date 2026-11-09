@@ -30,7 +30,8 @@ import com.ticketing.system.ui.support.ServiceErrors;
 /**
  * Presenter for {@code CheckoutView}: resolves the visitor, loads and prices the active order, runs
  * the checkout for a member or a guest, and tells open checkout pages when their order expires. Holds
- * no Vaadin imports; a failure of the order read or the checkout comes back as a typed outcome.
+ * no Vaadin imports; a failure of the service call that reads the order or runs the checkout comes
+ * back as a typed outcome.
  *
  * <p>The presenter keeps one piece of state, the set of registered {@link ExpiryListener}s, and is
  * safe to share between sessions.
@@ -342,8 +343,8 @@ public class CheckoutPresenter {
         record PolicyRejected(String reason)         implements PayOutcome { }
 
         /**
-         * The payment gateway raised a {@code PaymentGatewayException} other than an unreachable
-         * gateway.
+         * A {@code PaymentGatewayException} other than an unreachable gateway: the gateway declined the
+         * card, or the service refused the answer to a charge and tried to refund the sum it reported.
          *
          * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
          *     not reach the user
@@ -372,12 +373,16 @@ public class CheckoutPresenter {
         record DuplicateSubmission()                 implements PayOutcome { }
 
         /**
-         * The payment gateway could not be reached ({@code PaymentGatewayUnreachableException}). It
-         * carries no reason.
+         * The payment gateway gave no usable answer: no reply, or one that could not be read
+         * ({@code PaymentGatewayUnreachableException}). The card may have been charged. It carries no
+         * reason.
          */
         record GatewayUnavailable()                  implements PayOutcome { }
 
-        /** Tickets could not be issued after the charge; the charge is being refunded. */
+        /**
+         * Tickets could not be issued after the charge. A refund was attempted; one that failed is
+         * logged at ERROR.
+         */
         record OrderNotCompleted()                   implements PayOutcome { }
 
         /**

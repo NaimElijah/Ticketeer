@@ -39,6 +39,7 @@ public class LkCard extends Section {
         add(body);
     }
 
+    /** A card headed by {@code titleText}; see {@link #title(String)}. */
     public LkCard(String titleText) {
         this();
         title(titleText);

@@ -28,8 +28,10 @@ public class LkMenu extends Div {
     /** Appends an item with an icon; see {@link #item(String)}. */
     public LkMenu item(String iconName, String label) { add(new Item(iconName, label)); return this; }
 
+    /** Appends a {@link Label} showing {@code text}. */
     public LkMenu label(String text) { add(new Label(text)); return this; }
 
+    /** Appends a {@link Divider}. */
     public LkMenu divider() { add(new Divider()); return this; }
 
     // ---------------- nested ----------------
@@ -122,6 +124,7 @@ public class LkMenu extends Div {
 
     /** Tiny uppercase section label. */
     public static class Label extends Div {
+        /** A label showing {@code text}, with no action link until {@link #action} adds one. */
         public Label(String text) {
             addClassName("lk-menu-label");
             Span lbl = new Span(text);
@@ -140,6 +143,7 @@ public class LkMenu extends Div {
 
     /** 1px horizontal rule. */
     public static class Divider extends Div {
+        /** A rule with the menu's divider style. */
         public Divider() {
             addClassName("lk-menu-div");
         }

@@ -114,7 +114,7 @@ public class VenueMapPresenter {
      * @param standingCapacity the capacity of a standing zone, or {@code null}; ignored for a seated zone
      * @param placement       where the zone sits on the map grid
      * @return {@link ZoneOutcome.InvalidName} when the name is {@code null} or blank;
-     *     {@link ZoneOutcome.InvalidPrice} when the price is not a number; otherwise
+     *     {@link ZoneOutcome.InvalidPrice} when the price does not parse as a double; otherwise
      *     {@link ZoneOutcome.Valid}
      */
     public ZoneOutcome validateZone(String name, String priceText, boolean seated,
@@ -149,7 +149,7 @@ public class VenueMapPresenter {
         /** The name is {@code null} or blank. */
         record InvalidName()  implements ZoneOutcome {}
 
-        /** The price text is not a number. */
+        /** The price text does not parse as a double. */
         record InvalidPrice() implements ZoneOutcome {}
     }
 
