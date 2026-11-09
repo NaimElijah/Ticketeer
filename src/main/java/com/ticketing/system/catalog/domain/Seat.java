@@ -72,6 +72,14 @@ public class Seat implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Seat() { }
 
+    /**
+     * Creates an AVAILABLE seat.
+     *
+     * @param label the seat's label, unique within its zone; non-blank
+     * @param x     the seat's horizontal position on the venue canvas
+     * @param y     the seat's vertical position on the venue canvas
+     * @throws IllegalStateException if {@code label} is {@code null} or blank
+     */
     public Seat(String label, double x, double y) {
         this.label = label;
         this.x = x;
@@ -101,6 +109,11 @@ public class Seat implements InvariantChecked {
         return reservedByOrderKey;
     }
 
+    /**
+     * Returns when the hold on this seat runs out, as UTC wall time (ADR-008), or {@code null} if the seat
+     * is not reserved or the hold recorded no end. Informational: the sweep job enforces expiry on the
+     * cart line.
+     */
     public LocalDateTime getReservedUntil() {
         return reservedUntil;
     }

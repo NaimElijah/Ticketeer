@@ -32,15 +32,15 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
      * @param eventRepository the Event aggregate-root port
      */
     public EventDisplayQueryService(EventRepository eventRepository) {
-        this.eventRepository = eventRepository;   // store the event port
+        this.eventRepository = eventRepository;
     }
 
     /** {@inheritDoc} Null-safe for a missing event, which yields {@code null}; any other load failure propagates. */
     @Override
     public EventDisplayInfoDTO describeEvent(int eventId) {
-        Event event = findEvent(eventId);          // best-effort load
+        Event event = findEvent(eventId);
         if (event == null) {
-            return null;                           // unknown event — let the caller render a fallback
+            return null;
         }
         // Flatten each display field, guarding every nested reference so a partially-configured event
         // (e.g. no venue map yet) still projects cleanly with null fields rather than throwing.
@@ -92,7 +92,7 @@ public class EventDisplayQueryService implements CatalogEventDisplayPort {
         }
         List<EventDisplayInfoDTO.ZoneNameDTO> zones = new java.util.ArrayList<>();
         for (InventoryZone zone : event.getVenueMap().getInventoryZones()) {
-            zones.add(new EventDisplayInfoDTO.ZoneNameDTO(zone.getId(), zone.getName())); // id + display name
+            zones.add(new EventDisplayInfoDTO.ZoneNameDTO(zone.getId(), zone.getName()));
         }
         return zones;
     }

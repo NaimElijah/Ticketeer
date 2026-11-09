@@ -8,8 +8,6 @@ import java.util.Locale;
 import java.util.Map;
 
 import lombok.extern.slf4j.Slf4j;
-// Owner / Manager-side write service for the Event aggregate and its lifecycle.
-// UC-19 (Manage Event Catalog), UC-20 (Configure Venue Map & Inventory), UC-21 (Configure Policies).
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +55,31 @@ import com.ticketing.system.catalog.domain.SeatedZone;
 import com.ticketing.system.catalog.domain.ShowDate;
 import com.ticketing.system.shared.domain.policy.PurchasePolicy;
 
+/**
+ * The owner and manager side of the event catalog: it creates, edits, publishes, cancels and deletes
+ * {@link Event}s and edits their venue maps and policies. UC-19 (Manage Event Catalog), UC-20
+ * (Configure Venue Map &amp; Inventory), UC-21 (Configure Policies). The buyer side is
+ * {@link CatalogService}.
+ *
+ * <p>Every method takes the caller's session token. It must be a live member token, or the method throws
+ * {@link InvalidTokenException}; a token whose member no longer exists throws
+ * {@link UserNotFoundException}. The method then checks that the member holds the permission it needs
+ * in the event's company (a missing one throws {@link UnauthorizedActionException}). The permission is
+ * {@code MANAGE_INVENTORY} for event details and lifecycle, {@code CONFIGURE_VENUE} for the venue map
+ * and its zones, and {@code EDIT_POLICIES} for purchase policies. The exceptions are
+ * {@link #listEventsForCompany} and {@link #getEventDetail}, which need only active membership of the
+ * company.
+ *
+ * <p>A write to an existing event locks it with {@code EventRepository.lockForUpdate} for its duration.
+ * On the Jpa adapter that lock is a no-op. Writers changing the same event, zone or seat row are
+ * separated by that row's {@code @Version}, and the loser gets {@code ConcurrentReservationException}.
+ * {@code venue_maps} has no {@code @Version}, so a write that changes only that row is last-write-wins.
+ * {@link #cancelEventAndRefund} is deliberately not {@code @Transactional}; see there.
+ *
+ * <p>Event creation and venue-map configuration are separate steps: creation needs only the venue's
+ * location, and the zones are configured, and reconfigured, in later calls before the event goes on
+ * sale.
+ */
 @Service
 @Slf4j
 public class EventManagementService {
@@ -81,6 +104,19 @@ public class EventManagementService {
     private final VenueLimitsProperties venueLimits;
     private int currentVenueMapIdCounter;
 
+    /**
+     * Creates the service.
+     *
+     * @param eventRepository          the event store
+     * @param companyRepository        the company store, for company lookups
+     * @param sessionManager           validates session tokens
+     * @param eventSalesHistoryPort    answers whether an event has sales history, for {@link #deleteEvent}
+     * @param userRepository           the member store
+     * @param companyMembershipService checks a member's permissions in a company
+     * @param eventPublisher           publishes {@link EventCancelledEvent}
+     * @param clock                    the application clock; a schedule must start after its instant
+     * @param venueLimits              the venue size caps
+     */
     public EventManagementService(
             EventRepository eventRepository,
             ProductionCompanyRepository companyRepository,
@@ -91,45 +127,38 @@ public class EventManagementService {
             ApplicationEventPublisher eventPublisher,
             Clock clock,
             VenueLimitsProperties venueLimits) {
-        this.eventRepository = eventRepository;                 // catalog event persistence/locking
-        this.companyRepository = companyRepository;             // company lookups for auth/ownership
-        this.sessionManager = sessionManager;                   // token validation/user-id extraction
-        this.eventSalesHistoryPort = eventSalesHistoryPort;     // sales-history guard for deleteEvent
-        this.userRepository = userRepository;                   // caller existence checks
-        this.companyMembershipService = companyMembershipService; // company-membership permission checks
-        this.eventPublisher = eventPublisher;                   // cross-context event publishing
-        this.clock = clock;                                     // "now" for the schedule precondition
-        this.venueLimits = venueLimits;                         // venue size caps (OQ-27)
-        this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
-                                           // here for now.
+        this.eventRepository = eventRepository;
+        this.companyRepository = companyRepository;
+        this.sessionManager = sessionManager;
+        this.eventSalesHistoryPort = eventSalesHistoryPort;
+        this.userRepository = userRepository;
+        this.companyMembershipService = companyMembershipService;
+        this.eventPublisher = eventPublisher;
+        this.clock = clock;
+        this.venueLimits = venueLimits;
+        // Not read anywhere: venue map ids come from EventRepository.nextVenueMapId().
+        this.currentVenueMapIdCounter = 0;
     }
 
-    // Flow:
-
-    // addEvent adds an event in DRAFT state; venue map and inventory configuration
-    // come later in UC-20.
-
-    // Note: we could combine addEvent and configureVenueMap into a single UC-19
-    // method that takes a more complex DTO, but separating them allows for a
-    // cleaner separation of concerns and
-    // more focused validation (e.g. addEvent doesn't need to worry about venue map
-    // details at all).
-
-    // configureVenueMap is a separate method that can be called multiple times to
-    // update the venue map and inventory zones *before* the event goes live.
-    // It also allows for a more iterative setup process where the owner/manager can
-    // first create the event with basic details and then configure the venue map in
-    // a second step.
-
     /**
-     * UC-19: a company member with {@code MANAGE_INVENTORY} adds an event in DRAFT state.
+     * UC-19: a company member with {@code MANAGE_INVENTORY} adds an event in DRAFT state. The event gets
+     * an empty venue map at the request's location, a 0% discount, and the purchase policy the request
+     * describes.
      *
      * @param token   the member's session token
      * @param request the event's details; its location is required
      * @return the new event
-     * @throws InvalidTokenException     if {@code token} is not a live member token
-     * @throws IllegalArgumentException  if the request has no venue location, checked before the company lookup
-     * @throws CompanyNotFoundException  if the company does not exist
+     * @throws InvalidTokenException          if {@code token} is not a live member token
+     * @throws IllegalArgumentException       if the request has no venue location, checked before the
+     *                                        company lookup; if an artist's name is null or blank; if a
+     *                                        show starts at or before the clock's instant at the venue; or
+     *                                        if the purchase policy DTO is malformed
+     * @throws CompanyNotFoundException       if the company does not exist
+     * @throws UnauthorizedActionException    if the member lacks {@code MANAGE_INVENTORY} in the company
+     * @throws BusinessRuleViolationException if the name, description or an artist's name is too long;
+     *                                        its message is shown to the user
+     * @throws IllegalStateException          if the details break an {@link Event} invariant, such as an
+     *                                        empty lineup or schedule
      */
     @Transactional
     public EventDetailDTO addEvent(String token, EventCreationDTO request) {
@@ -151,10 +180,7 @@ public class EventManagementService {
 
         int newEventId = eventRepository.nextId();
         VenueMap venueMap = new VenueMap(eventRepository.nextVenueMapId(), request.location(), List.of());
-        // ! Note: Discount policy is currently not in the implementation plan so just
-        // put as 0 discount for every event here
-        // not doing discount automatically without the ability to change this from the
-        // outside right now.
+        // No path sets an event's discount yet (OQ-36, NaimElijah/Ticketeer#259), so addEvent passes a 0% policy.
         DiscountPolicy discountPolicy = new DiscountPolicy(0);
 
         
@@ -181,14 +207,35 @@ public class EventManagementService {
         return new EventMapper().toEventDetailDTO(newEvent, company.getName());
     }
 
-    // II.4.1.1 — Owner lists all events under their company.
+    /**
+     * II.4.1.1: lists every event of a company, in any status, for the company's workspace. Any active
+     * member of the company may list them.
+     *
+     * @param token     the member's session token
+     * @param companyId the company
+     * @return the company's events; empty if it has none
+     * @throws InvalidTokenException       if {@code token} is not a live member token
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UnauthorizedActionException if the member is not an active member of the company
+     */
     @Transactional(readOnly = true)
     public List<EventDetailDTO> listEventsForCompany(String token, int companyId) {
         return listEventsForCompany(token, companyId, CatalogSearchFiltersDTO.empty());
     }
 
-    // II.4.1.1 — Owner lists their company's events narrowed by the catalogue filters (company-rating
-    // filters don't apply to a single company, so they're stripped).
+    /**
+     * II.4.1.1: lists a company's events, in any status, narrowed by the catalogue filters. The
+     * company-rating filters are ignored, since the events all belong to one company. Any active member of
+     * the company may list them.
+     *
+     * @param token     the member's session token
+     * @param companyId the company
+     * @param filters   the filters to narrow by, with an absent filter meaning no restriction; not null
+     * @return the matching events; empty if there are none
+     * @throws InvalidTokenException       if {@code token} is not a live member token
+     * @throws CompanyNotFoundException    if the company does not exist
+     * @throws UnauthorizedActionException if the member is not an active member of the company
+     */
     @Transactional(readOnly = true)
     public List<EventDetailDTO> listEventsForCompany(String token, int companyId, CatalogSearchFiltersDTO filters) {
         int userId = validateTokenAndGetUserId(token);
@@ -211,6 +258,18 @@ public class EventManagementService {
             .toList();
     }
 
+    /**
+     * Returns an event's summary for a member who manages the company's inventory. The returned DTO's
+     * description is {@code null}; {@link #getEventDetail} returns it filled.
+     *
+     * @param token   the member's session token
+     * @param eventId the event
+     * @return the event's detail, without its description
+     * @throws InvalidTokenException       if {@code token} is not a live member token
+     * @throws EventNotFoundException      if there is no such event
+     * @throws UnauthorizedActionException if the member lacks {@code MANAGE_INVENTORY} in the event's
+     *                                     company
+     */
     @Transactional(readOnly = true)
     public EventDetailDTO getEvent(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
@@ -243,8 +302,20 @@ public class EventManagementService {
 
 
 
-    // II.4.2.3 — Read back the current zone states from the domain so the
-    // editor reflects real-time inventory (capacity consumed by sales, etc.).
+    /**
+     * II.4.2.3: reads back an event's current venue layout, so the editor shows the layout as stored.
+     * A standing zone is reported with its capacity. A seated zone is reported as a number of rows and the
+     * largest number of seats in any row, where a seat's row is the leading run of non-digit characters
+     * in its label, so a label such as {@code AA12} belongs to row {@code AA}.
+     *
+     * @param token   the member's session token
+     * @param eventId the event
+     * @return the layout; an event with no venue map yields the default grid with no zones
+     * @throws InvalidTokenException       if {@code token} is not a live member token
+     * @throws EventNotFoundException      if there is no such event
+     * @throws UnauthorizedActionException if the member lacks {@code CONFIGURE_VENUE} in the event's
+     *                                     company
+     */
     @Transactional(readOnly = true)
     public VenueLayoutDTO getEventZones(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
@@ -295,11 +366,31 @@ public class EventManagementService {
         return new VenueLayoutDTO(map.getGridRows(), map.getGridCols(), result);
     }
 
-    // configureVenueMap is a separate method that can be called multiple times to
-    // update the venue map and inventory zones *before* the event goes live.
-    // It also allows for a more iterative setup process where the owner/manager can
-    // first create the event with basic details and then configure the venue map in
-    // a second step.
+    /**
+     * UC-20: replaces an event's venue map with the zones in {@code config}, and can be called any number
+     * of times before the event goes on sale. The zones take ids 1 to N in the order given. The new map
+     * keeps the stored venue location. A grid size of zero or less in {@code config} means the default
+     * grid. Binding a map with at least one zone to a DRAFT event makes it SCHEDULED. The map is checked
+     * against the {@code catalog.venue-limits} caps before any domain object is built.
+     *
+     * @param token     the member's session token
+     * @param companyId the company that owns the event
+     * @param config    the event id (as text), the grid size and the zones, with their placements
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if {@code config.eventId()} is not an integer, the venue is over
+     *                                      a limit, a standing zone's capacity is not positive, a seated
+     *                                      zone has no seats or repeats a seat label, two zones share a
+     *                                      name (ignoring case), or a placement runs past the grid; the
+     *                                      message is shown to the user
+     * @throws BusinessRuleViolationException if a zone name is too long
+     * @throws IllegalStateException        if the event has no stored venue location, a zone name or a
+     *                                      seat label is blank or a price is out of range, a placement
+     *                                      overlaps another zone, or {@link Event} refuses the map (see
+     *                                      {@link Event#configureVenueMap})
+     */
     @Transactional
     public void configureVenueMap(String token, int companyId, VenueMapConfigDTO config) {
         int eventId = Integer.parseInt(config.eventId());
@@ -385,8 +476,24 @@ public class EventManagementService {
         }
     }
 
-    // UC-19 — partial update; immutability rules enforced inside
-    // Event.editDetails().
+    /**
+     * UC-19: updates an event's details; an absent field leaves the stored one alone, and
+     * {@link Event#editDetails} enforces when an edit is allowed. The category is matched by name,
+     * ignoring case.
+     *
+     * @param token  the member's session token
+     * @param update the event id (as text) and the new details
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws IllegalArgumentException     if the event id is not an integer or the category is unknown
+     *                                      (the message is shown to the user), or {@link Event#editDetails}
+     *                                      refuses a schedule
+     * @throws EventNotFoundException       if there is no such event
+     * @throws UnauthorizedActionException  if the member lacks {@code MANAGE_INVENTORY} in the event's
+     *                                      company
+     * @throws IllegalStateException        if the event is past SCHEDULED, or the edit breaks an invariant
+     * @throws BusinessRuleViolationException if the name or description is too long; its message is
+     *                                      shown to the user
+     */
     @Transactional
     public void editEventDetails(String token, EventUpdateDTO update) {
         int userId = validateTokenAndGetUserId(token);
@@ -434,6 +541,30 @@ public class EventManagementService {
         }
     }
 
+    /**
+     * UC-20: adds one zone to an event's venue map, with an optional grid placement. The map must stay
+     * within the {@code catalog.venue-limits} caps and hold no more zones than the grid has cells.
+     *
+     * @param token      the member's session token
+     * @param companyId  the company that owns the event
+     * @param eventId    the event
+     * @param zoneConfig the zone: name, price, and either a capacity or seats; may carry a placement
+     * @return the new zone's id
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if {@code zoneConfig} is {@code null}, a limit or the grid is
+     *                                      exceeded, a standing zone's capacity is not positive, the seats
+     *                                      are missing or repeat a label, another zone has the name
+     *                                      (ignoring case), or a placement runs past the grid; the
+     *                                      message is written for the user
+     * @throws IllegalStateException        if the event is past SCHEDULED, the zone name or a seat label
+     *                                      is blank or the price is out of range, or a placement
+     *                                      overlaps another zone
+     * @throws BusinessRuleViolationException if the event has no venue map, or the zone name is too long
+     */
     @Transactional
     public int addInventoryZone(String token, int companyId, int eventId, VenueMapConfigDTO.ZoneConfigDTO zoneConfig) {
 
@@ -488,6 +619,22 @@ public class EventManagementService {
         }
     }
 
+    /**
+     * UC-20: removes one zone from an event's venue map.
+     *
+     * @param token     the member's session token
+     * @param companyId the company that owns the event
+     * @param eventId   the event
+     * @param zoneId    the zone to remove
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if the map has no such zone
+     * @throws IllegalStateException        see {@link Event#removeInventoryZone}
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void removeInventoryZone(String token, int companyId, int eventId, int zoneId) {
 
@@ -506,10 +653,26 @@ public class EventManagementService {
         }
     }
 
-    // UC-20 — Owner/Manager configures venue map and inventory zones.
-
-    // addPlacesToStandingZone is a helper function that allows the owner/manager to
-    // add more places to a standing zone.
+    /**
+     * UC-20: adds places to a standing zone of an event. The zone's capacity must stay within the
+     * {@code catalog.venue-limits} cap.
+     *
+     * @param token       the member's session token
+     * @param companyId   the company that owns the event
+     * @param eventId     the event
+     * @param zoneId      the standing zone
+     * @param placesToAdd the number of places to add; positive
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if the map has no such zone, {@code placesToAdd} is not
+     *                                      positive, or the capacity would pass the cap (the message is
+     *                                      written for the user)
+     * @throws IllegalStateException        if the event is past SCHEDULED, or the zone is not standing
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void addPlacesToStandingZone(String token, int companyId, int eventId, int zoneId, int placesToAdd) {
         eventRepository.lockForUpdate(eventId);
@@ -526,8 +689,25 @@ public class EventManagementService {
         }
     }
 
-    // removePlacesFromStandingZone is a helper function that allows the
-    // owner/manager to remove a specified number of places from a standing zone.
+    /**
+     * UC-20: removes places from a standing zone of an event; only available places can go.
+     *
+     * @param token          the member's session token
+     * @param companyId      the company that owns the event
+     * @param eventId        the event
+     * @param zoneId         the standing zone
+     * @param placesToRemove the number of places to remove; positive and at most the zone's available
+     *                       places
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if the map has no such zone, or {@code placesToRemove} is not
+     *                                      positive or exceeds the available places
+     * @throws IllegalStateException        if the event is past SCHEDULED, or the zone is not standing
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void removePlacesFromStandingZone(String token, int companyId, int eventId, int zoneId, int placesToRemove) {
         eventRepository.lockForUpdate(eventId);
@@ -543,8 +723,27 @@ public class EventManagementService {
         }
     }
 
-    // addSeatsToSeatedZone is a helper function that allows the owner/manager to
-    // add specific seats to a seated zone.
+    /**
+     * UC-20: adds seats to a seated zone of an event. The zone and the map must stay within the
+     * {@code catalog.venue-limits} seat caps.
+     *
+     * @param token      the member's session token
+     * @param companyId  the company that owns the event
+     * @param eventId    the event
+     * @param zoneId     the seated zone
+     * @param seatsToAdd the new seats, by label and position; see {@link Event#addSeatsToSeatedZone}
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if the map has no such zone, the zone is not a seated zone, a
+     *                                      seat cap would be passed (the message is written for the user),
+     *                                      the list is empty, or a label repeats one in the list or the
+     *                                      zone
+     * @throws IllegalStateException        if the event is past SCHEDULED, or a label is blank
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void addSeatsToSeatedZone(
             String token,
@@ -567,8 +766,23 @@ public class EventManagementService {
         }
     }
 
-    // removeSeatsFromSeatedZone is a helper function that allows the owner/manager
-    // to remove specific seats from a seated zone.
+    /**
+     * UC-20: removes seats from a seated zone of an event; all go or none do.
+     *
+     * @param token               the member's session token
+     * @param companyId           the company that owns the event
+     * @param eventId             the event
+     * @param zoneId              the seated zone
+     * @param seatLabelsToRemove  the labels to remove
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     see {@link Event#removeSeatsFromSeatedZone}
+     * @throws IllegalStateException        if the event is past SCHEDULED, or a named seat is not AVAILABLE
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void removeSeatsFromSeatedZone(
             String token,
@@ -590,8 +804,33 @@ public class EventManagementService {
         }
     }
 
-    // addSeatRowToSeatedZone is a helper function that allows the owner/manager to
-    // add an entire row of seats to a seated zone.
+    /**
+     * UC-20: adds a row of seats to a seated zone of an event. Seat {@code i} (from 0) is labelled
+     * {@code rowLabel} plus {@code firstSeatNumber + i}, and sits at {@code x = startX + i * seatSpacing},
+     * {@code y}. The zone and the map must stay within the {@code catalog.venue-limits} seat caps.
+     *
+     * @param token           the member's session token
+     * @param companyId       the company that owns the event
+     * @param eventId         the event
+     * @param zoneId          the seated zone
+     * @param rowLabel        the row's label, such as {@code A}; non-blank; surrounding spaces are trimmed
+     * @param firstSeatNumber the number of the first seat; positive
+     * @param numberOfSeats   how many seats; positive
+     * @param startX          the horizontal position of the first seat
+     * @param y               the vertical position of every seat in the row
+     * @param seatSpacing     the horizontal distance between neighbouring seats; positive
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     if the map has no such zone, the zone is not a seated zone, a
+     *                                      seat cap would be passed (the message is written for the user),
+     *                                      an argument above is out of range, or a label repeats one the
+     *                                      zone has
+     * @throws IllegalStateException        if the event is past SCHEDULED
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void addSeatRowToSeatedZone(
             String token,
@@ -628,13 +867,24 @@ public class EventManagementService {
         }
     }
 
-    // *
-    // * removeSeatRowFromSeatedZone is a helper function that allows the
-    // owner/manager to remove an entire row of seats from a seated zone.
-    // * It takes the row label and constructs the list of seat labels to remove
-    // based on the existing seat layout in the zone.
-    // * This ensures that all seats in the specified row are removed consistently.
-    // */
+    /**
+     * UC-20: removes a row of seats from a seated zone of an event. The caller names the row's seat
+     * labels; this method does not look them up. All the labels go or none do.
+     *
+     * @param token                 the member's session token
+     * @param companyId             the company that owns the event
+     * @param eventId               the event
+     * @param zoneId                the seated zone
+     * @param rowSeatLabelsToRemove the labels of the row's seats
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     * @throws IllegalArgumentException     see {@link Event#removeSeatsFromSeatedZone}
+     * @throws IllegalStateException        if the event is past SCHEDULED, or a named seat is not AVAILABLE
+     * @throws BusinessRuleViolationException if the event has no venue map
+     */
     @Transactional
     public void removeSeatRowFromSeatedZone(
             String token,
@@ -657,10 +907,6 @@ public class EventManagementService {
         }
     }
 
-    // getAuthorizedEventForVenueEdit is a helper function that validates the token,
-    // checks user permissions,
-    // and retrieves the event for venue editing. It throws exceptions if any
-    // validation fails.
     private Event getAuthorizedEventForVenueEdit(String token, int companyId, int eventId) {
         int userId = validateTokenAndGetUserId(token);
         User user = userRepository.getUserById(userId);
@@ -689,8 +935,6 @@ public class EventManagementService {
         return event;
     }
 
-    // to-DomainSeats is a helper function to convert a list of SeatConfigDTO
-    // objects to a list of Seat domain objects.
     private List<Seat> toDomainSeats(List<VenueMapConfigDTO.SeatConfigDTO> seatConfigs) {
         if (seatConfigs == null || seatConfigs.isEmpty()) {
             throw new IllegalArgumentException("Seats list must be non-empty");
@@ -812,10 +1056,6 @@ public class EventManagementService {
         return zoneConfig.seats() == null ? 0 : zoneConfig.seats().size();
     }
 
-    // buildSeatRow is a helper function to create a list of Seat objects for a row
-    // in a seated zone.
-    // It validates the input parameters and constructs the seats based on the
-    // provided starting position and spacing.
     private List<Seat> buildSeatRow(
             String rowLabel,
             int firstSeatNumber,
@@ -850,7 +1090,17 @@ public class EventManagementService {
         return rowSeats;
     }
 
-    // Detail view for owner-side editing pages.
+    /**
+     * Returns an event's full detail for the owner-side editing pages. Any active member of the event's
+     * company may load it; the pages that call it gate themselves by capability.
+     *
+     * @param token   the member's session token
+     * @param eventId the event
+     * @return the event's detail, with its description
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws EventNotFoundException       if there is no such event
+     * @throws UnauthorizedActionException  if the member is not an active member of the event's company
+     */
     @Transactional(readOnly = true)
     public EventDetailDTO getEventDetail(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
@@ -868,10 +1118,21 @@ public class EventManagementService {
         return new EventMapper().toEventDetailDTO(event, company.getName());
     }
 
-    // UC-19 — owner opens an event's sales: SCHEDULED -> ON_SALE.
-    // The actual transition (and its venue-map/show-date/invariant guards) lives in
-    // Event.transitionToOnSale(); this method enforces auth, ownership, and
-    // locking.
+    /**
+     * UC-19: opens an event's sales, moving it from SCHEDULED to ON_SALE; publishing an event that is
+     * already ON_SALE changes nothing. The transition and its venue-map, show-date and invariant guards
+     * live in {@link Event#transitionToOnSale}; this method adds authentication, ownership and locking.
+     *
+     * @param token     the member's session token
+     * @param companyId the company that owns the event
+     * @param eventId   the event
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws EventNotFoundException       if there is no such event
+     * @throws UnauthorizedActionException  if the event belongs to another company, or the member lacks
+     *                                      {@code MANAGE_INVENTORY} in the company
+     * @throws InvalidStateTransitionException if the event cannot go on sale; see
+     *                                      {@link Event#transitionToOnSale}
+     */
     @Transactional
     public void publishEvent(String token, int companyId, int eventId) {
         int userId = validateTokenAndGetUserId(token);
@@ -896,7 +1157,20 @@ public class EventManagementService {
         }
     }
 
-    // Permanently removes a CANCELED event. Only callable by a user with MANAGE_INVENTORY.
+    /**
+     * Permanently removes a CANCELED event that has no sales history. A cancelled event is otherwise kept
+     * for history and reporting.
+     *
+     * @param token   the member's session token
+     * @param eventId the event
+     * @throws InvalidTokenException           if {@code token} is not a live member token
+     * @throws EventNotFoundException          if there is no such event
+     * @throws UnauthorizedActionException     if the member lacks {@code MANAGE_INVENTORY} in the event's
+     *                                         company
+     * @throws InvalidStateTransitionException if the event is not CANCELED
+     * @throws BusinessRuleViolationException  if the event has sales history, since deleting it would
+     *                                         orphan its receipts and tickets
+     */
     @Transactional
     public void deleteEvent(String token, int eventId) {
         int userId = validateTokenAndGetUserId(token);
@@ -922,8 +1196,20 @@ public class EventManagementService {
         }
     }
 
-    // Owner/Manager changes an event's status to a target state (non-cancel transitions only).
-    // Cancel with refund pipeline uses cancelEventAndRefund.
+    /**
+     * Moves an event to SCHEDULED or ON_SALE by hand. Cancelling goes through
+     * {@link #cancelEventAndRefund}, and the other states are reached by the system.
+     *
+     * @param token        the member's session token
+     * @param eventId      the event
+     * @param targetStatus {@link EventStatus#SCHEDULED} or {@link EventStatus#ON_SALE}
+     * @throws InvalidTokenException           if {@code token} is not a live member token
+     * @throws EventNotFoundException          if there is no such event
+     * @throws UnauthorizedActionException     if the member lacks {@code MANAGE_INVENTORY} in the event's
+     *                                         company
+     * @throws InvalidStateTransitionException if {@code targetStatus} is any other status, or the event
+     *                                         cannot make that transition
+     */
     @Transactional
     public void changeEventStatus(String token, int eventId, EventStatus targetStatus) {
         int userId = validateTokenAndGetUserId(token);
@@ -944,16 +1230,31 @@ public class EventManagementService {
         }
     }
 
-    // UC-19 — soft cancel. Catalog owns ONLY the lifecycle transition here: it cancels the event and
-    // publishes an EventCancelledEvent. The sales context's EventCancellationRefundListener consumes
-    // that event and performs the refund / ticket-void / holder-notification flow, so catalog touches
-    // no sales type.
-    // Intentionally NOT @Transactional at this layer: the CANCELED state must commit even when a refund
-    // fails, and the sales side refunds each receipt in its own short transactions with the gateway
-    // call outside them (V3-TX-02, ADR-001). Calling this again on a CANCELED event republishes the
-    // event, which resumes the refunds a failure interrupted (#20).
+    /**
+     * UC-19: cancels an event softly, keeping it for history and reporting while it blocks future
+     * purchases. Catalog owns only the lifecycle transition here: it cancels the event and publishes an
+     * {@link EventCancelledEvent}. The sales context's {@code EventCancellationRefundListener} consumes
+     * it, synchronously, and runs the refund, ticket-void and holder-notification flow, so catalog
+     * touches no sales type.
+     *
+     * <p>Deliberately not {@code @Transactional}: the CANCELED status must commit even when a refund
+     * fails, and the sales side refunds each receipt in its own short transactions with the gateway call
+     * outside them (V3-TX-02, ADR-001). A failure the listener raises propagates from this method, after
+     * the status is committed. Calling it again on a CANCELED event publishes the event again, which
+     * resumes the refunds a failure interrupted (#20).
+     *
+     * @param token   the member's session token
+     * @param eventId the event
+     * @throws InvalidTokenException       if {@code token} is not a live member token
+     * @throws EventNotFoundException      if there is no such event
+     * @throws UnauthorizedActionException if the member lacks {@code MANAGE_INVENTORY} in the event's
+     *                                     company
+     * @throws IllegalStateException       if the event is COMPLETED
+     * @throws com.ticketing.system.shared.exception.RefundFailedException if a refund fails; the event
+     *     stays CANCELED and calling again resumes
+     */
     public void cancelEventAndRefund(String token, int eventId) {
-        int ownerId = validateTokenAndGetUserId(token);                        // authenticate + resolve caller
+        int ownerId = validateTokenAndGetUserId(token);
         // We lock the event for update to prevent concurrent modifications during the
         // cancellation process. This ensures that we have a consistent view of the event's state.
         eventRepository.lockForUpdate(eventId);
@@ -963,13 +1264,13 @@ public class EventManagementService {
         // service logs its own refund failures. The presenter shows a DomainException's message unlogged.
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
-            User user = userRepository.getUserById(ownerId);                   // load caller for permission check
+            User user = userRepository.getUserById(ownerId);
             companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
             if (event.getStatus() != EventStatus.CANCELED) {
                 // Soft cancel: keep the event for history/reporting while blocking future purchases.
                 event.transitionToCanceled("Event canceled by owner");
-                eventRepository.save(event);                                   // persist the CANCELED state
+                eventRepository.save(event);
             }
 
             // Hand the sales-side work (refunds, ticket voiding, holder notifications) to the sales
@@ -984,19 +1285,29 @@ public class EventManagementService {
             log.warn("Event {} not found for cancellation", eventId);
             throw e;
         } finally {
-            eventRepository.unlock(eventId);                                   // always release the lock
+            eventRepository.unlock(eventId);
         }
     }
 
-    // UC-21 — set / replace the event-level purchase policy. No discount is set here: an event's discount
-    // stays the 0% addEvent gives it, and whether it should be settable is NaimElijah/Ticketeer#259.
-    // It replaces the event's own purchase policy with one built from the DTO and stores only that: the
-    // company's policy is combined with it each time a purchase is checked (Event.validateEffectivePolicy).
-
-    // in this function, lock the event as well to prevent concurrent modifications
-    // to the event's purchase policy while we're updating it. This ensures that we
-    // have a consistent view of the event's state and that we don't accidentally
-    // overwrite changes made by another user at the same time.
+    /**
+     * UC-21: sets or replaces the event-level purchase policy. It replaces the event's own policy with
+     * one built from the DTO and stores only that: the company's policy is combined with it each time a
+     * purchase is checked ({@link Event#validateEffectivePolicy}). No discount is set here: an event's
+     * discount stays the 0% {@link #addEvent} gives it, and whether it should be settable is
+     * NaimElijah/Ticketeer#259.
+     *
+     * <p>As for any write to an existing event, the event is locked for the update.
+     *
+     * @param token  the member's session token
+     * @param config the event, its company and the new policy
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws IllegalArgumentException     if {@code config} is {@code null}, or its purchase policy DTO is
+     *                                      malformed
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code EDIT_POLICIES} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     */
     @Transactional
     public void setEventPolicies(String token, EventPolicyConfigDTO config) {
         if (!sessionManager.validateToken(token)) {
@@ -1046,6 +1357,19 @@ public class EventManagementService {
         return sessionManager.extractUserId(token);
     }
 
+    /**
+     * UC-21: returns an event's own purchase policy, not combined with the company's.
+     *
+     * @param token     the member's session token
+     * @param companyId the company that owns the event
+     * @param eventId   the event
+     * @return the policy as a DTO
+     * @throws InvalidTokenException        if {@code token} is not a live member token
+     * @throws CompanyNotFoundException     if the company does not exist
+     * @throws UnauthorizedActionException  if the member lacks {@code EDIT_POLICIES} in the company, or
+     *                                      the event belongs to another company
+     * @throws EventNotFoundException       if there is no such event
+     */
     @Transactional(readOnly = true)
     public PurchasePolicyDTO getEventPurchasePolicy(String token, int companyId, int eventId) {
         if (!sessionManager.validateToken(token))

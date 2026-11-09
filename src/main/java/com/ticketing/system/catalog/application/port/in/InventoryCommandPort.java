@@ -18,8 +18,8 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * buyers may hold at once and that blocks only structural/lifecycle edits. On the Jpa adapters
  * these locks are no-ops and correctness comes from JPA {@code @Version} optimistic locking, except for
  * the event row lock that {@link #validateEventsOnSale} takes for a sale (ADR-015); on the
- * in-memory adapters (test suite only) they are real reentrant read/write locks. Methods here fall into two
- * groups, and each method's Javadoc states which it is:
+ * in-memory adapters (test suite only) they are real reentrant read/write locks. Methods here fall into
+ * three groups, and each method's Javadoc states which it is:
  * <ul>
  *   <li><b>Self-locking</b> ({@link #reserve}, {@link #release}, {@link #restore},
  *       {@link #returnSoldToStock}) — the port acquires and releases the event buyer-lock internally.
@@ -59,11 +59,18 @@ public interface InventoryCommandPort {
      * @param selection              the standing quantity / seated seats to reserve
      * @param orderKey               the owning order's stable key (stamped onto the hold for ownership)
      * @param holdUntil              when the buyer's hold runs out (UTC wall time, ADR-008); recorded on
-     *                               each reserved seat
+     *                               each reserved seat; not {@code null}
      * @param buyerId                the buyer's user id, or {@code -1} for a guest (policy context)
      * @param buyerAge               the buyer's age, or {@code null} if unknown (policy context)
      * @param totalQuantityForPolicy the buyer's total quantity for this event after this add (MAX cap)
      * @return the zone's unit price, for the caller to record on its cart line
+     * @throws NullPointerException if {@code holdUntil} is {@code null}
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     * @throws com.ticketing.system.shared.exception.PolicyViolationException if the company's or the
+     *     event's purchase policy refuses the purchase; its message is shown to the user
+     * @throws IllegalArgumentException if the zone does not exist or the selection is invalid for it
+     * @throws IllegalStateException    if the event has no venue map or is not ON_SALE, or the zone has too
+     *                                  few places or a requested seat is not available
      */
     double reserve(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey, LocalDateTime holdUntil,
             int buyerId, Integer buyerAge, int totalQuantityForPolicy);
@@ -77,6 +84,10 @@ public interface InventoryCommandPort {
      * @param selection the standing quantity / seated seats to release
      * @param orderKey  the owning order's key (ownership is verified during release)
      * @return the zone's unit price at release time (used by the caller to rebuild a cart line on rollback)
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     * @throws IllegalArgumentException if the zone does not exist or the selection is invalid for it
+     * @throws IllegalStateException    if the event has no venue map, or the order holds fewer places than
+     *                                  the selection, or a seat is not RESERVED or is held by another order
      */
     double release(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey);
 
@@ -89,7 +100,12 @@ public interface InventoryCommandPort {
      * @param zoneId    the zone
      * @param selection the standing quantity / seated seats to re-reserve
      * @param orderKey  the owning order's key
-     * @param holdUntil when the restored hold runs out (UTC wall time, ADR-008)
+     * @param holdUntil when the restored hold runs out (UTC wall time, ADR-008); not {@code null}
+     * @throws NullPointerException if {@code holdUntil} is {@code null}
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     * @throws IllegalArgumentException if the zone does not exist or the selection is invalid for it
+     * @throws IllegalStateException    if the event has no venue map or is not ON_SALE, or the places or
+     *                                  seats are no longer available
      */
     void restore(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey, LocalDateTime holdUntil);
 
@@ -110,10 +126,12 @@ public interface InventoryCommandPort {
      * Computes the final unit price for one ticket of an event via its discount policy. Pure read.
      *
      * @param eventId             the event
-     * @param eventQuantity       the total quantity being bought for this event (drives quantity discounts)
+     * @param eventQuantity       the total quantity being bought for this event
      * @param priceAtReservation  the price captured when the ticket was reserved
      * @param now                 the pricing timestamp
      * @return the final per-ticket price
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     * @throws IllegalArgumentException if {@code eventQuantity} is not positive or the price is negative
      */
     double priceTicket(int eventId, int eventQuantity, double priceAtReservation, LocalDateTime now);
 
@@ -122,6 +140,7 @@ public interface InventoryCommandPort {
      *
      * @param eventId the event
      * @return the event's name
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
      */
     String eventName(int eventId);
 
@@ -132,6 +151,9 @@ public interface InventoryCommandPort {
      * @param buyerId  the buyer's user id, or {@code -1} for a guest
      * @param buyerAge the buyer's age, or {@code null} if unknown
      * @param quantity the quantity being purchased for this event
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if there is no such event
+     * @throws com.ticketing.system.shared.exception.PolicyViolationException if the company's or the
+     *     event's purchase policy refuses the purchase; its message is shown to the user
      */
     void validatePurchasePolicy(int eventId, int buyerId, Integer buyerAge, int quantity);
 
@@ -144,6 +166,9 @@ public interface InventoryCommandPort {
      * @param eventIds the events to check
      * @throws org.springframework.transaction.IllegalTransactionStateException on the Jpa adapters, if
      *     the caller has no transaction
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if an event does not exist
+     * @throws com.ticketing.system.shared.exception.EventNotOnSaleException if an event is in any status
+     *     but ON_SALE or SOLD_OUT
      */
     void validateEventsOnSale(List<Integer> eventIds);
 
@@ -154,7 +179,15 @@ public interface InventoryCommandPort {
      * check and the subsequent {@link #confirmSale}.
      *
      * @param lines    the held lines to confirm
-     * @param orderKey the owning order's key
+     * @param orderKey the key of the order that holds these lines
+     * @throws com.ticketing.system.shared.exception.EventNotFoundException if an event does not exist
+     * @throws com.ticketing.system.shared.exception.InsufficientInventoryException if no line for a seated
+     *     zone has a seat label, a line for a standing zone names a seat, or a standing zone holds fewer
+     *     reserved places than lines
+     * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if a seat is no
+     *     longer RESERVED or is held by a different order
+     * @throws IllegalArgumentException if a line names a zone that the event's venue map does not have,
+     *     or a seat label that the zone does not know
      */
     void validateCanConfirmSale(List<InventoryLineDTO> lines, String orderKey);
 
@@ -165,7 +198,10 @@ public interface InventoryCommandPort {
      * is left behind. CALLER-LOCKED: the caller must hold the event buyer-lock for every affected event.
      *
      * @param lines    the held lines to confirm
-     * @param orderKey the owning order's key
+     * @param orderKey the key of the order that holds these lines
+     * @throws RuntimeException the failure of the first line that cannot be confirmed, such as
+     *     {@code EventNotFoundException} or {@code IllegalStateException} for a place or seat that is not
+     *     RESERVED or is held by another order, rethrown after the earlier units are compensated
      */
     void confirmSale(List<InventoryLineDTO> lines, String orderKey);
 

@@ -4,9 +4,16 @@ import com.ticketing.system.shared.InvariantChecked;
 
 import jakarta.persistence.Embeddable;
 
-// V3: an @Embeddable value object embedded in VenueMap (columns country, city). Hibernate 6
-// instantiates the record via its canonical constructor; an all-null embedded location loads back
-// as a null reference, so the validating compact constructor only runs for non-null values.
+/**
+ * A venue's place, as country and city: an {@code @Embeddable} value object embedded in
+ * {@link VenueMap} (columns {@code country} and {@code city}). Constructing one with a null or blank
+ * country or city throws {@code IllegalStateException}. Hibernate 6 instantiates the record through
+ * its canonical constructor; an all-null embedded location loads back as a {@code null} reference, so
+ * the validating compact constructor only runs for non-null values.
+ *
+ * @param country the country; non-blank
+ * @param city    the city; non-blank
+ */
 @Embeddable
 public record Location(
                 String country,
@@ -33,6 +40,7 @@ public record Location(
                 }
         }
 
+        /** @return the location as {@code "city, country"} */
         @Override
         public String toString() {
                 return city + ", " + country;
