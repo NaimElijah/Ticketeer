@@ -59,7 +59,8 @@ public class EventManagementPresenter {
     /**
      * Loads one event for editing.
      *
-     * @param token   the caller's member token; {@code null} gives {@link LoadOutcome.NotAuthenticated}
+     * @param token   the caller's member token; {@code null} or a rejected token gives
+     *     {@link LoadOutcome.NotAuthenticated}
      * @param eventId the event to load
      * @return {@link LoadOutcome.NotFound} when no such event exists; {@link LoadOutcome.Failure} with
      *     {@code ServiceErrors}' text for any other failure, including a caller who is not a member of
@@ -110,7 +111,7 @@ public class EventManagementPresenter {
      * free of domain construction. {@code starts} and {@code ends} are wall-clock times at the venue,
      * read in {@code timeZone} (ADR-008).
      *
-     * @param token              the caller's member token; {@code null} gives
+     * @param token              the caller's member token; {@code null} or a rejected token gives
      *     {@link CreateOutcome.NotAuthenticated}
      * @param preferredCompanyId the company the workspace has selected, or {@code null} for none
      * @param name               the event title
@@ -268,7 +269,8 @@ public class EventManagementPresenter {
         record ChooseCompany() implements CreateOutcome {}
 
         /**
-         * A required input is missing or out of range, or the service refused the event.
+         * A required input is missing or out of range, or the service refused the event with an
+         * {@code IllegalArgumentException} or {@code IllegalStateException}.
          *
          * @param reason the text the user may read
          */
@@ -308,7 +310,8 @@ public class EventManagementPresenter {
         record RefundFailed(String reason, boolean cancelAgainRetries) implements CancelOutcome {}
 
         /**
-         * The cancel failed for a reason other than a refund failure.
+         * The call threw something other than a refund failure. The event may already be cancelled,
+         * since the cancel commits before its refunds run.
          *
          * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
          */

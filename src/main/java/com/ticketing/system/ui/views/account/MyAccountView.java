@@ -46,8 +46,8 @@ import java.util.Map;
 /**
  * Member's account page, served at {@code /my-account}. It shows a welcome banner with the order and
  * ticket counts, a "My Orders" grid whose rows open the {@link ReceiptView} receipt and offer
- * Request Refund while the order still qualifies, and a "My Tickets" grid of the tickets still in
- * use. A refund rebuilds the page in place. When the history cannot be loaded, an error banner
+ * Request Refund while the order still qualifies, and a "My Tickets" grid of every ticket not
+ * refunded or voided. A refund rebuilds the page in place. When the history cannot be loaded, an error banner
  * replaces the counts and grids.
  */
 @Route(value = "my-account", layout = MainLayout.class)
@@ -78,6 +78,8 @@ public class MyAccountView extends LkPage {
 
     /**
      * Creates the page and renders the member's order and ticket history.
+     *
+     * @param sessionIdentity supplies the member's token for the refund request
      */
     public MyAccountView(MyAccountPresenter presenter, RefundPresenter refundPresenter,
                          SessionIdentity sessionIdentity, DisplayTime displayTime) {

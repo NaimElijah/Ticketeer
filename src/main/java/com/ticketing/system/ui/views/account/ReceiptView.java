@@ -45,8 +45,8 @@ import java.util.Optional;
 /**
  * Full-page receipt for one member-owned order (#276). Reached by clicking "View" on the
  * {@code MyAccountView} orders grid ({@code receipt/:receiptId}, the order receipt's id). Loads the
- * receipt through {@link ReceiptPresenter}; the view never calls the service directly nor uses
- * {@code try/catch} — it switches on the presenter's sealed {@code Outcome}. A receipt that isn't
+ * receipt through {@link ReceiptPresenter}; the view never calls the service directly and handles
+ * load failures only through the presenter's sealed {@code Outcome}. A receipt that isn't
  * the signed-in member's renders the same not-found banner as a missing one. An order that still
  * qualifies offers "Request Refund" here (#284), handled through {@link RefundPresenter}.
  */
@@ -69,6 +69,9 @@ public class ReceiptView extends LkPage implements BeforeEnterObserver {
 
     /**
      * Creates the page; the receipt is loaded when the route is entered.
+     *
+     * @param sessionIdentity supplies the member's token, which the receipt load and the refund
+     *     request send
      */
     public ReceiptView(ReceiptPresenter presenter, RefundPresenter refundPresenter,
             SessionIdentity sessionIdentity, DisplayTime displayTime) {

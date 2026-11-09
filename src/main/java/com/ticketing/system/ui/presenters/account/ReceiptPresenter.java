@@ -19,7 +19,7 @@ import com.ticketing.system.ui.support.ServiceErrors;
 /**
  * Read-only presenter for {@code ReceiptView} (#276). Loads one member-owned order receipt and
  * returns a sealed {@link Outcome} the view switches on — the view never calls the service
- * directly nor uses {@code try/catch}.
+ * directly.
  *
  * <p>Takes the member's token (the view passes {@code SessionIdentity.memberToken()}, which is
  * {@code null} for guests → an auth {@link Outcome.Failure}). A receipt that belongs to another

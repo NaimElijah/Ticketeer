@@ -46,9 +46,10 @@ import jakarta.annotation.security.PermitAll;
 
 /**
  * Purchase-policy editor, served at {@code /owner/policies/:companyId?/:eventId?}. The member picks a
- * company and a scope, the company's default policy or one event's, and builds the rules as nested
- * AND/OR groups and rules on a canvas, with a plain-English summary of the result. Save stores the
- * policy. The optional route parameters preselect the company and the event.
+ * company and a scope: the company's own policy, enforced on all its events together with any
+ * event's, or one event's. The member builds the rules as nested AND/OR groups and rules on a
+ * canvas, with a plain-English summary of the result. Save stores the policy. The optional route
+ * parameters preselect the company and the event.
  */
 @Route(value = "owner/policies/:companyId?/:eventId?", layout = WorkspaceLayout.class)
 @PageTitle("Purchase policies · TicketHub")
@@ -64,7 +65,7 @@ public class PurchasePolicyEditorView extends LkPage implements BeforeEnterObser
     private String  memberToken;
     private int     companyId    = -1;
     private int     eventId      = -1;
-    private boolean isEventLevel = false;          // default: company-level
+    private boolean isEventLevel = false;
 
     private Integer routeCompanyId;                // optional deep-link from the URL
     private Integer routeEventId;

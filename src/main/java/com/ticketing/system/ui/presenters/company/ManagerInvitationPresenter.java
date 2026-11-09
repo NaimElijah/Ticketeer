@@ -33,7 +33,7 @@ public class ManagerInvitationPresenter {
      * Appoints {@code inviteeUsername} as a pending manager of the selected company.
      *
      * @param token           the caller's member token; {@code null} gives {@link Outcome.NotAuthenticated}
-     * @param inviteeUsername the invitee, as a username or an email address, as typed
+     * @param inviteeUsername the invitee as typed; the service resolves it
      * @param permissions     the permissions the manager would hold once the invitation is accepted
      * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
      *     when they own several and have selected none of them, or the selection is a company they do
@@ -78,7 +78,7 @@ public class ManagerInvitationPresenter {
         record ChooseCompany() implements Outcome {}
 
         /**
-         * No member matches the invitee.
+         * The service could not resolve the invitee.
          *
          * @param username the invitee as the caller typed it
          */

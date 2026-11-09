@@ -110,10 +110,10 @@ public class MyCompaniesPresenter {
      * {@link SelectedCompany}'s rule from the member's companies, and nothing is appointed when none is
      * picked.
      *
-     * @param inviteeIdentifier the invitee, as a username or an email address, as typed
+     * @param inviteeIdentifier the invitee as typed; the service resolves it
      * @return {@link AppointOutcome.NoCompany} when the member belongs to no company;
      *     {@link AppointOutcome.ChooseCompany} when no single company can be picked;
-     *     {@link AppointOutcome.UserNotFound} when no member matches the invitee;
+     *     {@link AppointOutcome.UserNotFound} when the service cannot resolve the invitee;
      *     {@link AppointOutcome.NotAuthenticated} when no token is stored or the service rejects it;
      *     {@link AppointOutcome.Failure} with {@code ServiceErrors}' text for any other failure
      */
@@ -156,7 +156,7 @@ public class MyCompaniesPresenter {
         record ChooseCompany() implements AppointOutcome {}
 
         /**
-         * No member matches the invitee.
+         * The service could not resolve the invitee.
          *
          * @param username the invitee as the member typed it
          */

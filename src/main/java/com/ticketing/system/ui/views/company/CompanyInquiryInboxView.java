@@ -46,7 +46,7 @@ import java.util.Set;
  *
  * <p>The company is resolved like {@code OwnerDashboardView}: the view asks the presenter for the id
  * seeded from {@link CurrentCompanies}, which falls back to the member's first company when that id
- * is absent or not the member's, and a topbar selector lets multi-company owners switch. A
+ * is absent or not the member's, and a topbar selector lets a member of several companies switch. A
  * client-side Status chip filters the loaded threads.
  *
  * <p>Second wired master/detail messaging inbox after {@code SupportInboxView} (#277);

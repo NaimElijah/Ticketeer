@@ -47,7 +47,8 @@ public class CompanyEventListPresenter {
     /**
      * Loads the company's events, narrowed by the filters.
      *
-     * @param token     the caller's member token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param token     the caller's member token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
      * @param companyId the company the workspace has selected, or {@code null}; used when it is one of
      *     the caller's companies, else the first of them is used
      * @param filters   the view's filter set, or {@code null} for no filtering
@@ -266,7 +267,8 @@ public class CompanyEventListPresenter {
         record RefundFailed(String reason, boolean cancelAgainRetries) implements CancelOutcome {}
 
         /**
-         * The cancel failed for a reason other than a refund failure.
+         * The call threw something other than a refund failure. The event may already be cancelled,
+         * since the cancel commits before its refunds run.
          *
          * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
          */

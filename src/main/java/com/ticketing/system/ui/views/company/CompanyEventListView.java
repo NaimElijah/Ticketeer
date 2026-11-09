@@ -55,7 +55,7 @@ import java.util.function.Consumer;
 
 /**
  * Company workspace list of the selected company's events, served at {@code /owner/events}. It
- * filters as the browse page does, without the company rating and with an owner-only Status filter
+ * filters as the browse page does, without the company rating and with a workspace-only Status filter
  * applied to the loaded list. The row actions (edit, venue map, policies, sales, change status,
  * cancel or remove) each depend on the member's capabilities. "New Event" opens
  * {@link EventManagementView} in create mode, for a member who may edit events.
@@ -83,7 +83,7 @@ public class CompanyEventListView extends LkPage {
     /** How many events the filters leave, said to a screen reader after each reload (#188, WCAG 4.1.3). */
     private final Span resultCount = Lk.asStatus(new Span());
 
-    // ---- filter state (mirrors /browse, minus company-rating; status is owner-only & client-side) ----
+    // ---- filter state (mirrors /browse, minus company-rating; status is workspace-only & client-side) ----
     private String filterCategory  = CatalogFilterSupport.CAT_ALL;
     private String filterCountry   = CatalogFilterSupport.COUNTRY_ALL;
     private String filterCity      = CatalogFilterSupport.CITY_ALL;
@@ -180,7 +180,7 @@ public class CompanyEventListView extends LkPage {
         }
     }
 
-    // ---- filter bar (same controls as /browse minus company-rating, plus an owner-only Status) ----
+    // ---- filter bar (same controls as /browse minus company-rating, plus a workspace-only Status) ----
 
     private Component buildFilters() {
         categorySelect = new LkSelect(CatalogFilterSupport.CAT_ALL, CatalogFilterSupport.CATEGORIES).label("Category");

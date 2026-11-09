@@ -85,7 +85,7 @@ public class CompanyRegistrationPresenter {
         /**
          * Another company already has the name.
          *
-         * @param reason the service's message, which reaches the user
+         * @param reason the service's message
          */
         record NameTaken(String reason) implements Outcome { }
 

@@ -137,7 +137,7 @@ public class OrderConfirmationView extends LkPage implements BeforeEnterObserver
 
         if (ticketId > 0) {
             row.put("ticketId", String.valueOf(ticketId));
-            // The barcode is the one the ticket issuer returned; "Not yet issued" stands in when there is none.
+            // The barcode is the one the ticket issuer returned.
             String value = (barcodeValue != null && !barcodeValue.isBlank()) ? barcodeValue : "Not yet issued";
             Span barcode = Lk.mono(value);
             barcode.addClassName("bz-barcode");

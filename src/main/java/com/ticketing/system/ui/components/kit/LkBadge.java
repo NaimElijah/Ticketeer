@@ -7,7 +7,7 @@ import com.vaadin.flow.component.html.Span;
  */
 public class LkBadge extends Span {
 
-    /** The badge's colour. {@code warn} and {@code warning} are separate theme classes. */
+    /** The badge's colour. {@code warn} and {@code warning} are two class names for the same amber. */
     public enum Tone {
         muted, success, warn, warning, error, primary, contrast;
 

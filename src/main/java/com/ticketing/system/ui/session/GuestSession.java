@@ -15,9 +15,8 @@ import com.vaadin.flow.server.VaadinSession;
  *
  * <p>After a successful login the same sessionId is promoted in place to
  * a Member session — the value stays valid, so no clearing is needed at
- * login time. {@link FreshGuestSession} replaces the id after a sign-out, a dead stored
- * token or an expired guest id, and calls {@link #clear()} only when it cannot start a new
- * guest session.
+ * login time. {@link FreshGuestSession} replaces an ended or expired id, and calls
+ * {@link #clear()} only when it cannot start a new guest session.
  */
 public final class GuestSession {
 

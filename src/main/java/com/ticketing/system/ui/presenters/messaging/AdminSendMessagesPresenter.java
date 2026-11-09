@@ -65,8 +65,6 @@ public class AdminSendMessagesPresenter {
      * Sends outreach to the resolved recipients; returns the recipient count on success.
      *
      * @param token              the admin's token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
-     * @param subject            the message subject
-     * @param body               the message text
      * @param recipientMemberIds the members to write to; used only when neither {@code allMembers} nor
      *     {@code allProducers} is set
      * @param allMembers         {@code true} to write to every member

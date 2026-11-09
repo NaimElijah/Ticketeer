@@ -17,6 +17,7 @@ public class LkRadio extends NativeLabel {
     private final Div group = new Div();
     private boolean hasLabel;
 
+    /** An empty group; give it a label with {@link #label} and its options with {@link #options}. */
     public LkRadio() {
         addClassName("lk-field");
         labelSpan.addClassName("lk-label");

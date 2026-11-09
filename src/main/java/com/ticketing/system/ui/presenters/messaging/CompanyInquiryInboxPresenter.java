@@ -52,7 +52,8 @@ public class CompanyInquiryInboxPresenter {
      * Loads the member's companies plus the selected company's member inquiries. When
      * {@code companyId} is null (first load) or unknown, the first company is selected.
      *
-     * @param token     the member's token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param token     the member's token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
      * @param companyId the company to show, or {@code null} for the first
      * @return {@link Outcome.NoCompany} when the member belongs to no company; {@link Outcome.Failure}
      *     with {@code ServiceErrors}' text for any other failure, including a company whose inbox the
@@ -136,9 +137,9 @@ public class CompanyInquiryInboxPresenter {
     }
 
     /**
-     * Closes {@code conversationId} (no further messages allowed). The inbox's "mark resolved"
-     * maps here: only an admin's reply to a complaint resolves a conversation, so a company's
-     * "resolve" reuses the close transition and the thread ends as CLOSED.
+     * Closes {@code conversationId} (no further messages allowed). Backs the respond page's "Close
+     * Inquiry". A company cannot resolve a thread (only an admin's reply to a complaint does), so it
+     * ends as CLOSED.
      */
     public ActionOutcome close(String token, String conversationId) {
         if (token == null) {

@@ -30,7 +30,7 @@ import com.ticketing.system.ui.support.ServiceErrors;
 /**
  * Presenter for {@code CheckoutView}: resolves the visitor, loads and prices the active order, runs
  * the checkout for a member or a guest, and tells open checkout pages when their order expires. Holds
- * no Vaadin imports; every service failure comes back as a typed outcome.
+ * no Vaadin imports; a failure of the order read or the checkout comes back as a typed outcome.
  *
  * <p>The presenter keeps one piece of state, the set of registered {@link ExpiryListener}s, and is
  * safe to share between sessions.
@@ -250,7 +250,8 @@ public class CheckoutPresenter {
          * Whether an expired order is this listener's visitor's.
          *
          * @param userId    the member's user id, or 0 when the order is a guest's
-         * @param sessionId the guest's session id, or {@code null} when the order is a member's
+         * @param sessionId the session id the order was bound to; a member's order may have one, or
+         *     {@code null}
          * @return {@code true} to have {@link #onExpired()} called
          */
         boolean matches(int userId, String sessionId);
@@ -332,9 +333,11 @@ public class CheckoutPresenter {
         record Success(CheckoutResultDTO result)     implements PayOutcome { }
 
         /**
-         * The event's purchase policy refused the order ({@code PolicyViolationException}).
+         * The effective purchase policy (the company's and the event's) refused the order
+         * ({@code PolicyViolationException}).
          *
-         * @param reason the exception's message, which reaches the user
+         * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
+         *     not reach the user
          */
         record PolicyRejected(String reason)         implements PayOutcome { }
 
@@ -342,25 +345,30 @@ public class CheckoutPresenter {
          * The payment gateway raised a {@code PaymentGatewayException} other than an unreachable
          * gateway.
          *
-         * @param reason the exception's message, which reaches the user
+         * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
+         *     not reach the user
          */
         record PaymentDeclined(String reason)        implements PayOutcome { }
 
         /**
          * The seats or places are no longer available ({@code InsufficientInventoryException}).
          *
-         * @param reason the exception's message, which reaches the user
+         * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
+         *     not reach the user
          */
         record SoldOut(String reason)                implements PayOutcome { }
 
         /**
          * The order's hold ran out before or during the checkout.
          *
-         * @param reason fixed text for the user
+         * @param reason fixed text; {@code CheckoutView} shows its own wording
          */
         record OrderExpired(String reason)           implements PayOutcome { }
 
-        /** The service recognised the submission's idempotency key as one it has already handled. */
+        /**
+         * The idempotency key is already cached for a different buyer. A replay by the same buyer is a
+         * {@link Success} carrying the first result.
+         */
         record DuplicateSubmission()                 implements PayOutcome { }
 
         /**

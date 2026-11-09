@@ -12,8 +12,8 @@ import com.vaadin.flow.component.html.UnorderedList;
 import java.util.stream.Collectors;
 
 /**
- * An organizational tree as nested lists of cards, one card per member: initial, username and role. A
- * founder's card says "Company Founder", a manager's lists their permissions, and a member who appointed
+ * An organizational tree as nested lists of cards, one card per member: initial, username, role and
+ * a Composite or Leaf tag. A founder's card says "Company Founder", a manager's lists their permissions, and a member who appointed
  * others carries their cards nested below. {@code OrgTreeLegend} explains the colours.
  */
 public class OrgTreeRenderer extends Composite<Div> {

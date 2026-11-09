@@ -95,7 +95,6 @@ public class VkSeatedZonePicker extends Div {
         return InventorySelectionDTO.seated(new ArrayList<>(selected));
     }
 
-    /** Whether any seat is selected. */
     public boolean hasSelection() {
         return !selected.isEmpty();
     }

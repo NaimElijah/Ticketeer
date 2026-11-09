@@ -130,7 +130,7 @@ public class ManagerListPresenter {
          *
          * @param companyName        the selected company's name
          * @param activeManagers     the company's active managers
-         * @param pendingInvitations the manager invitations still awaiting an answer
+         * @param pendingInvitations the company's appointments, of any role, still awaiting an answer
          */
         record Success(String companyName,
                        List<AppointmentInfoDTO> activeManagers,
@@ -141,6 +141,7 @@ public class ManagerListPresenter {
 
         /** The caller owns no company. */
         record NoCompany() implements Outcome { }
+
         /**
          * The caller owns several companies and has selected none of them, or the selection is a company
          * they do not own.

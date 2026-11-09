@@ -52,7 +52,7 @@ public class LandingPresenter {
          * Both rows loaded.
          *
          * @param featured the best-rated on-sale events, at most the row's poster count
-         * @param upcoming the scheduled events that open for sale soonest, at most the row's poster count
+         * @param upcoming the scheduled events with the soonest show date, at most the row's poster count
          */
         record Success(List<EventSummaryDTO> featured, List<EventSummaryDTO> upcoming) implements Outcome { }
 

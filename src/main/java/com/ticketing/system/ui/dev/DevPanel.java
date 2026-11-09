@@ -64,7 +64,7 @@ public final class DevPanel {
 
     private DevPanel() { }
 
-    /** @param rs the service that abandons a member's cart when a persona switch signs the member out */
+    /** @param rs the service that abandons a member's cart when the Guest or Member switch signs the member out */
     public static void init(ReservationService rs) {
         reservationService = rs;
     }

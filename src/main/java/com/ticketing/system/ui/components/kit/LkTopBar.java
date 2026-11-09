@@ -347,7 +347,6 @@ public class LkTopBar extends Header {
         return this;
     }
 
-    /** The shell variant this bar was built for. */
     public Variant getVariant() { return variant; }
 
     private void ensureRightSlot() {

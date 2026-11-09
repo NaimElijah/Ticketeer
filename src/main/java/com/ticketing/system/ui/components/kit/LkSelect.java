@@ -58,7 +58,10 @@ public class LkSelect extends Div {
         add(popover);
     }
 
-    /** Programmatically set the value (e.g. when an external control syncs). Fires onChange. */
+    /**
+     * Programmatically set the value (e.g. when an external control syncs). Fires onChange, unless
+     * {@code value} is {@code null} or already shown, which does nothing.
+     */
     public LkSelect setValue(String value) {
         if (value == null || value.equals(currentValue)) return this;
         show(value);
@@ -116,7 +119,6 @@ public class LkSelect extends Div {
         trigger.focus();
     }
 
-    /** The option text shown. */
     public String getValue() {
         return currentValue;
     }

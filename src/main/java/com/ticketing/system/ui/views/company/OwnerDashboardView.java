@@ -32,7 +32,7 @@ import java.util.Map;
 
 /**
  * Company workspace home, served at {@code /owner}. For the company in focus it shows the rating and
- * live events and, where the member's permissions allow, tickets sold, 30-day revenue and open
+ * live events and, where the member's permissions allow, 30-day tickets sold and revenue, and open
  * inquiries, with tiles that open the workspace pages the member may use. A company selector appears
  * for a member of several companies.
  */

@@ -74,7 +74,8 @@ public class PurchasePolicyEditorPresenter {
     /**
      * Finds the companies whose policy the caller can open in the editor.
      *
-     * @param token the caller's member token; {@code null} gives {@link ContextOutcome.NotAuthenticated}
+     * @param token the caller's member token; {@code null} or a rejected token gives
+     *     {@link ContextOutcome.NotAuthenticated}
      * @return {@link ContextOutcome.Ready} with the caller's companies, managers' included, since the
      *     service decides per call whether a manager may edit policies; {@link ContextOutcome.NoCompany}
      *     when the caller belongs to none; {@link ContextOutcome.Failure} with {@code ServiceErrors}'
@@ -211,7 +212,6 @@ public class PurchasePolicyEditorPresenter {
      * Adds a rule, "age at least 18" to start with, as the last child of a group. Does nothing when
      * {@code parentId} names no group of the tree.
      *
-     * @param root     the tree
      * @param parentId the id of the group to add to
      */
     public void addRule(Group root, String parentId) {
@@ -224,7 +224,6 @@ public class PurchasePolicyEditorPresenter {
      * Adds an empty {@code AND} group as the last child of a group. Does nothing when {@code parentId}
      * names no group of the tree.
      *
-     * @param root     the tree
      * @param parentId the id of the group to add to
      */
     public void addGroup(Group root, String parentId) {
@@ -236,7 +235,6 @@ public class PurchasePolicyEditorPresenter {
     /**
      * Changes a rule's type and value. Does nothing when {@code nodeId} names no rule of the tree.
      *
-     * @param root   the tree
      * @param nodeId the id of the rule to change
      * @param type   the new type; {@code null} keeps the current one
      * @param value  the new value as typed, kept trimmed; {@code null} becomes an empty string
@@ -252,7 +250,6 @@ public class PurchasePolicyEditorPresenter {
      * Changes how a group combines its children. Does nothing when {@code nodeId} names no group of
      * the tree.
      *
-     * @param root   the tree
      * @param nodeId the id of the group to change
      * @param op     the new operator; {@code null} keeps the current one
      */
@@ -266,7 +263,6 @@ public class PurchasePolicyEditorPresenter {
      * Removes a node, with its descendants, from its parent. Does nothing for the root and for an id
      * the tree does not hold.
      *
-     * @param root   the tree
      * @param nodeId the id of the node to remove
      */
     public void deleteNode(Group root, String nodeId) {
@@ -285,7 +281,6 @@ public class PurchasePolicyEditorPresenter {
     /**
      * Finds a node by id.
      *
-     * @param root   the tree
      * @param nodeId the id to look for
      * @return the node, the root included, or {@code null} when the tree holds no such id
      */
@@ -348,7 +343,6 @@ public class PurchasePolicyEditorPresenter {
      * Describes the policy in a sentence for the page. The result is HTML: the user's text in it is
      * escaped, and the markup is only {@code b}, {@code i} and {@code span} tags.
      *
-     * @param root the tree
      * @return the sentence; a hint to add a rule when the root has no children
      */
     public String toPlainEnglishHtml(Group root) {
@@ -383,9 +377,8 @@ public class PurchasePolicyEditorPresenter {
 
     /**
      * Checks that the tree can be saved. An empty root is valid and means no restrictions. Otherwise
-     * every rule needs a whole-number value and every group at least one child.
+     * every editable rule needs a whole-number value and every group at least one child.
      *
-     * @param root the tree
      * @return a valid {@link Validity}, or the first problem found, in a message the user may read
      */
     public Validity validate(Group root) {

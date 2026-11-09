@@ -122,9 +122,9 @@ public final class Capabilities {
      * <ul>
      *   <li>A signed-out visitor holds the guest capabilities.</li>
      *   <li>An admin holds those and the admin capabilities, and no company capability.</li>
-     *   <li>A member holds those and the member capabilities, plus the workspace and role
-     *       capabilities of the current company, or of the first company when none is current; a
-     *       member with no company, or whose token is dead, gets no company capability.</li>
+     *   <li>A member holds the guest and member capabilities, plus the workspace and role
+     *       capabilities of the current company, or of their first company otherwise; a member with
+     *       no company, or whose token is dead, gets no company capability.</li>
      * </ul>
      *
      * <p>Side effect: for a member it reads the member's companies from the organization service, once

@@ -85,7 +85,7 @@ public class AdminLoginPresenter {
         record InvalidCredentials() implements Outcome { }
 
         /**
-         * Too many failed attempts on this username; the password was not checked.
+         * Sign-in is refused for now after repeated failed attempts; the password was not checked.
          *
          * @param reason the lockout's own text, which says when to try again
          */

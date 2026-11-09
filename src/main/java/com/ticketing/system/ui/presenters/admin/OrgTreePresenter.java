@@ -31,7 +31,8 @@ public class OrgTreePresenter {
      * Admins see all companies; owners see only their own. When {@code companyId}
      * is null (first load) or not in the list, the first company is used.
      *
-     * @param token     the signed-in caller's token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param token     the signed-in caller's token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
      * @param companyId the company to show, or {@code null} for the first
      * @param isAdmin   {@code true} to list and read as an admin, {@code false} as an owner
      * @return {@link Outcome.NoCompany} when the caller has no company to list; {@link Outcome.Failure}

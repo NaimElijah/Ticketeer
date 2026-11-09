@@ -25,7 +25,7 @@ public final class CurrentCompanies {
         return id == null ? null : String.valueOf(id);
     }
 
-    /** Puts the company in focus; does nothing without a Vaadin session. It checks no membership. */
+    /** Puts the company in focus; does nothing without a Vaadin session. Whether the member may act on it stays the services' check. */
     public static void setCurrentCompany(int companyId) {
         VaadinSession session = VaadinSession.getCurrent();
         if (session != null) session.setAttribute(CURRENT_ID_KEY, companyId);

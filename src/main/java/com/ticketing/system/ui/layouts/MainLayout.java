@@ -76,7 +76,7 @@ public class MainLayout extends AppLayout implements AfterNavigationObserver {
     /**
      * @param cartBadgePresenter reads the cart for the top bar's badge whenever the cached badge is stale
      * @param signOutFlow        runs when the member picks "Sign Out" in the account menu
-     * @param bellPresenter      stores the read of a notification the bell shows read, and renders its age
+     * @param bellPresenter      stores a notification's read mark, and renders its age
      * @param clock              the application clock (ADR-008), for the cart badge's cache age and the
      *                           seconds its countdown has left
      */

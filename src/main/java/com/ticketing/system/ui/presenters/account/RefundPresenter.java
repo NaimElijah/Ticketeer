@@ -44,8 +44,8 @@ public class RefundPresenter {
      * @param reason  the member's stated reason, passed to the service as given
      * @return {@link Outcome.NotEligible} when the service refuses the order as ineligible;
      *     {@link Outcome.NotFound} when no such order exists for this member; {@link Outcome.Failure}
-     *     with fixed text when the refund fails, and with {@code ServiceErrors}' text for any other
-     *     failure
+     *     with fixed text when the token is rejected or the refund fails, and with
+     *     {@code ServiceErrors}' text for any other failure
      */
     public Outcome requestRefund(String token, int orderId, String reason) {
         try {

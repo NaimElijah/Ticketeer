@@ -14,10 +14,9 @@ import com.ticketing.system.ui.session.CurrentCompanies;
  * one on screen. With nothing selected, a caller with exactly one company gets that company, since
  * there is nothing to choose.
  *
- * <p>The capability gate reads the same selection but falls back differently: with nothing selected,
- * or a selection the caller does not belong to, it takes the role from the caller's first membership.
- * So the gate checks the company picked here only when the selection is one of the caller's companies,
- * or the caller has exactly one.
+ * <p>The capability gate has its own fallback for an empty selection
+ * ({@code Capabilities.forCurrentUser}). It only steers navigation; the services decide what the
+ * caller may do.
  */
 final class SelectedCompany {
 

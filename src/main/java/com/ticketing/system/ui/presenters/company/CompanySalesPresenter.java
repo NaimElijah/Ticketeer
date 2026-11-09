@@ -54,7 +54,8 @@ public class CompanySalesPresenter {
     /**
      * Loads the sales history of one of the caller's companies.
      *
-     * @param token     the caller's member token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param token     the caller's member token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
      * @param companyId the company the workspace has selected, or {@code null}; used when it is one of
      *     the caller's companies, else the first of them is used
      * @return {@link Outcome.NoCompany} when the caller belongs to no company; {@link Outcome.Failure}

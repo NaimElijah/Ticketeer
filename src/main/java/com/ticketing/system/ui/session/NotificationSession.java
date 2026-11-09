@@ -28,9 +28,10 @@ public final class NotificationSession {
 
     /**
      * Store the pending notifications delivered on login. Replaces any previous list.
-     * TODO(I.5 / #225): a notification generated mid-session (PURCHASE_CONFIRMED, CART_EXPIRING,
-     *  etc.) reaches the bell only when the polling scheduler's next tick merges it in (every
-     *  60 seconds by default), not at once. Real-time delivery is deferred to Grade ג'.
+     *
+     * <p>Limitation (I.5 / #225): a notification generated mid-session (PURCHASE_CONFIRMED,
+     * CART_EXPIRING, etc.) reaches the bell only when the polling scheduler's next tick merges it in
+     * (every 60 seconds by default), not at once. Real-time delivery is deferred to Grade ג'.
      */
     public static void store(List<NotificationDTO> notifications) {
         VaadinSession s = VaadinSession.getCurrent();

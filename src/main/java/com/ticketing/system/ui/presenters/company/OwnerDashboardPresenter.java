@@ -46,7 +46,8 @@ public class OwnerDashboardPresenter {
      * Loads the member's companies plus the selected company's stats. When {@code companyId} is
      * null (first load) or unknown, the first company is selected.
      *
-     * @param token     the member's token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param token     the member's token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
      * @param companyId the company to show, or {@code null} for the first
      * @return {@link Outcome.NoCompany} when the member belongs to no company; {@link Outcome.Failure}
      *     with {@code ServiceErrors}' text for any other failure

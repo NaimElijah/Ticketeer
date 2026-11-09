@@ -13,7 +13,7 @@ import com.vaadin.flow.theme.Theme;
  * supplies the {@code .lk-*}, {@code .bz-*}, {@code .vk-*}, {@code .pe-*},
  * {@code .md-*}, {@code .ow-*}, {@code .acct-*}, {@code .auth-*},
  * {@code .org-*} class names that the Java component kit (in
- * {@code ui/components/kit/}) and the other {@code ui/components} attach to
+ * {@code ui/components/kit/}), the other {@code ui/components} and the views attach to
  * their rendered DOM.
  *
  * <p>Long-polling transport per [#212 V2-F-07] — Tier C exempts real-time

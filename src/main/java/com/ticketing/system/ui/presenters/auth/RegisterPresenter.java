@@ -100,12 +100,12 @@ public class RegisterPresenter {
         /**
          * The guest session id is missing, unknown, expired or not a guest's.
          *
-         * @param reason the exception's message, which reaches the user
+         * @param reason the exception's message
          */
         record GuestSessionMissing(String reason) implements Outcome { }
 
         /**
-         * The service refused the username's characters or the age's range with an
+         * The service refused a blank username, the username's characters or the age's range with an
          * {@code IllegalArgumentException}.
          *
          * @param reason the exception's message, which reaches the user

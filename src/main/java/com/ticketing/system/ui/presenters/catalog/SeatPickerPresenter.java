@@ -246,6 +246,6 @@ public class SeatPickerPresenter {
          * @param message the text the user may read: the refusal's own message for a
          *     {@code DomainException}, else from {@code ServiceErrors}
          */
-        record Failure(String message)  implements ReserveOutcome { }
+        record Failure(String message) implements ReserveOutcome { }
     }
 }

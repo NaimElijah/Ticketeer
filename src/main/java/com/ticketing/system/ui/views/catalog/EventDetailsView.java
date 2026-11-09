@@ -42,9 +42,9 @@ import java.util.List;
 
 /**
  * Event page, served at {@code /events/:eventId}. It shows the event's header, line-up, schedule,
- * status and ratings, a venue map and zone list for picking a zone, and a Choose Tickets button that
- * opens {@link SeatPickerView} for the picked zone. A signed-in member also gets an "Ask the
- * Organizer" button that opens a new inquiry. An id that names no event shows a banner. Open to
+ * status and ratings, a venue map for picking a zone, a zone list with prices, and a Choose Tickets
+ * button that opens {@link SeatPickerView} for the picked zone. A signed-in member also gets an "Ask
+ * the Organizer" button that opens a new inquiry. An id that names no event shows a banner. Open to
  * guests.
  */
 @Route(value = "events/:eventId", layout = MainLayout.class)

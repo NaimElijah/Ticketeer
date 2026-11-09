@@ -37,8 +37,8 @@ public class LoginPresenter {
      *
      * @param username       the username as typed
      * @param rawPassword    the password as typed
-     * @param guestSessionId the visitor's current guest session id; the service promotes that session
-     *     to the member's, and refuses a login without a live one
+     * @param guestSessionId the visitor's current guest session id; the service refuses a login
+     *     without a live one
      * @return the {@link Outcome} for the service's answer; see its variants
      */
     public Outcome attemptLogin(String username, String rawPassword, String guestSessionId) {
@@ -81,10 +81,11 @@ public class LoginPresenter {
          * @param reason the lockout's own text, which says when to try again
          */
         record Locked(String reason) implements Outcome { }
+
         /**
          * The guest session id is missing, unknown, expired or not a guest's.
          *
-         * @param reason the exception's message, which reaches the user
+         * @param reason the exception's message
          */
         record GuestSessionMissing(String reason) implements Outcome { }
 
