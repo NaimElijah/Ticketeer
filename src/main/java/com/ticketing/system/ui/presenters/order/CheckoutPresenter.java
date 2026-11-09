@@ -344,7 +344,7 @@ public class CheckoutPresenter {
 
         /**
          * A {@code PaymentGatewayException} other than an unreachable gateway: the gateway declined the
-         * card, or the service refused the answer to a charge and tried to refund the sum it reported.
+         * card, or the service refused the gateway's answer.
          *
          * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
          *     not reach the user
@@ -374,15 +374,11 @@ public class CheckoutPresenter {
 
         /**
          * The payment gateway gave no usable answer: no reply, or one that could not be read
-         * ({@code PaymentGatewayUnreachableException}). The card may have been charged. It carries no
-         * reason.
+         * ({@code PaymentGatewayUnreachableException}). It carries no reason.
          */
         record GatewayUnavailable()                  implements PayOutcome { }
 
-        /**
-         * Tickets could not be issued after the charge. A refund was attempted; one that failed is
-         * logged at ERROR.
-         */
+        /** Tickets could not be issued after the charge, and a refund was attempted. */
         record OrderNotCompleted()                   implements PayOutcome { }
 
         /**
