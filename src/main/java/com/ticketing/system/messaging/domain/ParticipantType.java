@@ -10,6 +10,6 @@ public enum ParticipantType {
     ADMIN,
     /** Any system admin; the complaint queue. */
     ADMIN_GROUP,
-    /** The platform itself, for system-generated messages. */
+    /** Reserved for system-generated messages; nothing creates one yet. */
     SYSTEM
 }

@@ -9,7 +9,8 @@
  *
  * <p>{@code MessagingService} uses identity and organization types directly: the session manager and
  * the user and admin repositories, the company repository and {@code CompanyMembershipService}, and
- * the {@code User} and {@code ProductionCompany} entities (#54 replaces these with ports). It reaches
+ * the {@code User} and {@code ProductionCompany} entities and organization's {@code Permission} (#54
+ * replaces these with ports). It reaches
  * notifications only through the {@code NewMessageNotice} and {@code OutreachSentNotice} events in
  * {@code shared.event}. The module is declared {@code Type.OPEN}; the module map in
  * {@code HexagonalRulesTest} is the boundary gate (ADR-011).

@@ -6,7 +6,10 @@ public enum ConversationStatus {
     OPEN,
     /** The counterparty has responded; the next move is the initiator's. */
     RESPONDED,
-    /** An admin has answered a complaint. The conversation takes no more messages, but can still be closed. */
+    /**
+     * An admin has answered a complaint. The conversation takes no more messages, but can still be
+     * closed (OQ-34).
+     */
     RESOLVED,
     /** Closed by a participant. The conversation takes no more messages. */
     CLOSED

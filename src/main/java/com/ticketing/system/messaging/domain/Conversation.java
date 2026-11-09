@@ -35,7 +35,7 @@ import jakarta.persistence.Version;
  * Other aggregates are referred to by id and type, never held.
  *
  * <p>The domain enforces the thread's rules: a closed or resolved thread takes no messages, a sender
- * must be a participant, and a {@link ConversationType#COMPLAINT} takes exactly one admin response.
+ * must be a participant, and a {@link ConversationType#COMPLAINT} takes at most one admin response.
  *
  * <p>Persistence: {@code conversationId} is an assigned UUID. The type, the status and the two
  * participant types are stored by name. The participants are plain (id, type) column pairs, never

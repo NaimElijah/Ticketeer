@@ -1,6 +1,6 @@
 package com.ticketing.system.messaging.domain;
 
-/** What a {@link Conversation} is for; each type has its own rules for who may write and how often. */
+/** What a {@link Conversation} is for. Only a {@code COMPLAINT} limits who may write and how often. */
 public enum ConversationType {
     /** A member contacts a company; a two-way chat (II.3.10, II.4.4). */
     INQUIRY,

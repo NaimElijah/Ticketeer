@@ -13,7 +13,7 @@ import com.ticketing.system.shared.IRepository;
  * Driven port for the {@link Conversation} aggregate, with its messages. The one repository of the
  * messaging subsystem: inquiries, complaints and admin outreach are all conversations.
  *
- * <p>Every finder returns an empty list when nothing matches, in no defined order.
+ * <p>Every list finder returns an empty list when nothing matches, in no defined order.
  */
 public interface ConversationRepository extends IRepository<Conversation, String> {
 
@@ -36,8 +36,9 @@ public interface ConversationRepository extends IRepository<Conversation, String
 
     /**
      * Returns the member's Support Inbox: the INQUIRY and COMPLAINT conversations the member initiated,
-     * plus the DIRECT admin outreach where the member is the counterparty. It leaves out inquiries to a
-     * company the member owns; those are company-counterparty threads and belong in the company inbox.
+     * plus the DIRECT admin outreach where the member is the counterparty. It leaves out inquiries other
+     * members sent to a company the member owns; those are company-counterparty threads and belong in
+     * the company inbox.
      */
     List<Conversation> findMemberInbox(int memberId);
 
