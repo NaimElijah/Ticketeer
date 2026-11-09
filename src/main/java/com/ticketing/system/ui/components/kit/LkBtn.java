@@ -7,9 +7,9 @@ import com.vaadin.flow.component.html.NativeButton;
 import com.vaadin.flow.component.html.Span;
 
 /**
- * Native {@code <button>} styled with the kit's {@code .lk-btn} classes.
- * Ports the React {@code Btn} component — variants and sizes match
- * {@code lumo-kit.jsx} verbatim.
+ * Native {@code <button>} styled with the kit's {@code .lk-btn} classes: a
+ * {@link Variant} for its colour and a {@link Size}, {@link Variant#secondary} and
+ * {@link Size#m} until set.
  */
 public class LkBtn extends NativeButton {
 

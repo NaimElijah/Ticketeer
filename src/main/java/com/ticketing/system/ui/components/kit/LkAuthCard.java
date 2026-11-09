@@ -8,9 +8,9 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.RouterLink;
 
 /**
- * Centered card shell used by sign-in and register screens. Ports the
- * React {@code AuthShell + auth-card + auth-brand + auth-title +
- * auth-sub} structure (see {@code docs/tickethub-ui/screens-auth.jsx}).
+ * Centered card shell used by sign-in and register screens: brand line,
+ * title and optional subtitle, in the {@code auth-card},
+ * {@code auth-brand}, {@code auth-title} and {@code auth-sub} classes.
  *
  * <p>Root element is the {@code .auth-wrap} centering container; the
  * inner {@code .auth-card} holds the brand line + title + subtitle and

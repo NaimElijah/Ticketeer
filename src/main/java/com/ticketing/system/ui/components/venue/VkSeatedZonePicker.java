@@ -15,8 +15,8 @@ import java.util.Set;
  * V2-RES-01 — interactive seat-by-seat picker for a SeatedZone.
  *
  * <p>Renders each seat absolutely at its (x, y) domain coordinate.
- * Colors follow the VkSeat convention: green = available, orange = selected,
- * grey = held/sold. Clicking an available seat toggles it in/out of the
+ * Colors follow the VkSeat convention: green = available, amber = selected,
+ * hatched grey = held, red = sold. Clicking an available seat toggles it in/out of the
  * current selection.
  *
  * <p>Read the live selection via {@link #getSelection()} and subscribe

@@ -21,9 +21,8 @@ import com.vaadin.flow.component.textfield.TextField;
  * from {@code VenueMapEditorView} (keep a state list, {@code removeAll()} then rebuild; an
  * {@link LkRemoveButton} per row, named by the row's position, since its text changes as the
  * user types). Each row's field is named by the label and its position, "Artists 1", renumbered
- * after a remove. The backend contract is
- * unchanged: {@link #getValues()} returns a trimmed, blank-free {@code List<String>} in row
- * order (the same shape the old comma-split parser produced).
+ * after a remove. {@link #getValues()} returns a trimmed, blank-free {@code List<String>} in row
+ * order.
  *
  * <p>A form refuses it as it refuses a Vaadin field ({@link LkFormErrors}): its invalid state and
  * error message are its first row's, and {@link #focus()} focuses that row (#188, WCAG 3.3.1).
@@ -104,7 +103,7 @@ public class LkTextRows extends Div implements HasValidationProperties {
         return this;
     }
 
-    /** Trimmed, blank-free values in row order (mirrors the old comma-split parser). */
+    /** Trimmed, blank-free values in row order. */
     public List<String> getValues() {
         List<String> out = new ArrayList<>();
         for (TextField f : rows) {

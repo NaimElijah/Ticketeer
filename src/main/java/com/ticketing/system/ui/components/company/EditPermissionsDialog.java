@@ -28,8 +28,8 @@ import java.util.function.Consumer;
  *
  * <p>The dialog is fully built in the constructor (no UI context required); only
  * {@link #open()} needs a live UI, so it can be constructed in smoke tests. Save
- * is blocked client-side when nothing is checked, mirroring the backend rule that
- * a Manager must keep at least one permission.
+ * is refused by the dialog itself, with a warning toast, when nothing is checked,
+ * mirroring the backend rule that a Manager must keep at least one permission.
  */
 public class EditPermissionsDialog {
 

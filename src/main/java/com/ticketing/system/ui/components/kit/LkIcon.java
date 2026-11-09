@@ -6,10 +6,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Inline SVG icon — ports the 43-glyph set from
- * {@code docs/tickethub-ui/lumo-kit.jsx} ({@code LK_ICONS}). All paths are
+ * Inline SVG icon from the kit's built-in glyph set, looked up by name. All paths are
  * stroke-only, {@code currentColor}, 24×24 viewBox, drawn with a 1.7px
- * round-cap stroke. The glyph names match the React kit verbatim.
+ * round-cap stroke by default. A name with no glyph renders an empty icon,
+ * without an error. The icon is hidden from screen readers.
  *
  * <p>Renders the SVG by setting {@code innerHTML} on a wrapping
  * {@code <span class="lk-icon">} — the browser's HTML5 parser handles

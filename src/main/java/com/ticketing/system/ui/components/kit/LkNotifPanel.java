@@ -14,10 +14,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Notification dropdown panel — header + scrollable list.
- * Ports the React {@code NotifPanel}. Static factory methods
- * {@link #buyer()} and {@link #admin()} produce the two reference
- * variants populated with the mock data from {@code lumo-kit.jsx}.
+ * Notification dropdown panel — header + scrollable list. The panel the application shows is
+ * built by {@link #fromDTOs}, from the user's notifications. The static factories {@link #buyer()}
+ * and {@link #admin()} build panels of fixed sample notifications that belong to no user.
  *
  * <p>The title is a heading, an unread row says "Unread" in visually hidden text as well as by
  * its tint and dot, and an empty inbox is a message rather than a row that does nothing
@@ -173,7 +172,7 @@ public class LkNotifPanel extends Div {
     );
 
     /**
-     * Build a real notification panel from the DTOs delivered on login (UC-37).
+     * Build a real notification panel from the notifications in the session's inbox (UC-37).
      *
      * @param age renders each notification's creation time as a short age ("5m", "Yesterday")
      */

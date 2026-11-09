@@ -47,8 +47,9 @@ import java.util.Map;
  *
  * <p>The drawer items are filtered against the current user's
  * {@link Capabilities capability set} on every navigation — a manager
- * with only "respond to inquiries" sees just the dashboard + inquiries
- * entries; a founder sees everything. Items that lack a {@code cap()}
+ * with only "respond to inquiries" sees the workspace home, "My Companies",
+ * "My Events" and "Inquiries" (every manager permission includes viewing the
+ * company's events); a founder sees everything. Items that lack a {@code cap()}
  * (the workspace home and "My Companies") are always shown.
  */
 public class WorkspaceLayout extends AppLayout implements AfterNavigationObserver {

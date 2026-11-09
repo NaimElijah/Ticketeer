@@ -12,14 +12,14 @@ import java.util.List;
 
 /**
  * Top app bar — slot-based fluent API. Compose by chaining
- * {@link #brand(String)}, {@link #nav}, {@link #searchDefault()},
- * {@link #bellDefault(boolean)}, {@link #account}, etc. Items render
+ * {@link #brand(String)}, {@link #nav}, {@link #cart}, {@link #bell(Component)},
+ * {@link #account}, etc. Items render
  * in call order (DOM order); the right slot is auto-margined to the
  * right edge by the kit's {@code .lk-topbar-right} CSS.
  *
- * <p>Three shell variants — {@link Variant#MAIN} (buyer, blue),
- * {@link Variant#ADMIN} (organizer crumb, blue), {@link Variant#PLATFORM}
- * (system admin, orange).
+ * <p>Three shell variants — {@link Variant#MAIN} (buyer and owner workspace, blue),
+ * {@link Variant#ADMIN}, and {@link Variant#PLATFORM} (system admin, orange). Only
+ * {@code PLATFORM} changes the bar's styling; {@code ADMIN} is styled as {@code MAIN} is.
  */
 public class LkTopBar extends Header {
 

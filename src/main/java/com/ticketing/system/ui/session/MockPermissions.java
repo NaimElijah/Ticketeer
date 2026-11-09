@@ -7,18 +7,21 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Per-company manager-permission grants stored on {@link VaadinSession}.
+ * Per-company manager-permission grants stored on {@link VaadinSession}, and
+ * the set of capabilities a manager can hold.
  *
- * <p>Founders and co-owners hold the full owner-capability set by
- * virtue of their role; only <b>managers</b> need explicit grants. The
- * {@link com.ticketing.system.ui.security.Capabilities}
- * resolver consults this store only when the current company's role
- * is "Manager".
+ * <p>{@link com.ticketing.system.ui.security.Capabilities} does not consult
+ * the grant store: it resolves a manager's capabilities from the permissions
+ * the organization service reports for the current company. Of this class,
+ * only {@link #GRANTABLE} is read by the application, by {@code DevPanel},
+ * which lists the capabilities a manager can hold.
  *
- * <p>{@link #GRANTABLE} pins the closed set of capabilities an owner
- * is allowed to hand to a manager — capabilities outside this set
+ * <p>{@link #GRANTABLE} is the closed set of capabilities this store accepts
+ * as grants — capabilities outside this set
  * (e.g. {@link Capability#APPOINT_CO_OWNER},
- * {@link Capability#DISSOLVE_COMPANY}) are owner-only by design.
+ * {@link Capability#DISSOLVE_COMPANY}) are owner-only by design. It leaves out
+ * {@link Capability#CANCEL_EVENT}, which a manager does hold, together with
+ * {@link Capability#EDIT_COMPANY_EVENTS}, through the {@code MANAGE_INVENTORY} permission.
  */
 public final class MockPermissions {
 

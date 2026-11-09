@@ -13,7 +13,7 @@ import java.util.List;
  * <ul>
  *   <li>{@code .} — free</li>
  *   <li>{@code m} — mine (in your order)</li>
- *   <li>{@code h} — held by other buyer</li>
+ *   <li>{@code h} — held (reserved, not yet paid for)</li>
  *   <li>{@code x} — sold</li>
  * </ul>
  * Ports the React {@code SeatBlock}.

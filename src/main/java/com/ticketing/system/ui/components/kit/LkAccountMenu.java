@@ -4,9 +4,9 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 
 /**
- * Account dropdown — avatar / name / email header + nav menu.
- * Ports {@code AccountMenu}, with {@link #buyer(String, String, String)}
- * and {@link #admin(String, String)} factories matching the reference.
+ * Account dropdown — avatar / name / subline header + nav menu. The shells build
+ * their own {@link LkMenu} and use the constructor; {@link #buyer(String, String, String)}
+ * and {@link #admin(String, String)} build menus of fixed items that do nothing when clicked.
  */
 public class LkAccountMenu extends Div {
 
