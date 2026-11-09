@@ -35,11 +35,23 @@ public class RegisterPresenter {
 
     private final AuthenticationService authenticationService;
 
+    /** Creates the presenter over the authentication service. */
     @Autowired
     public RegisterPresenter(AuthenticationService authenticationService) {
         this.authenticationService = authenticationService;
     }
 
+    /**
+     * Registers a member and translates the service's refusals into a typed outcome.
+     *
+     * @param username       the username as typed
+     * @param email          the email address as typed
+     * @param rawPassword    the password as typed
+     * @param age            the age as entered; the accepted range is {@link #MIN_AGE} to {@link #MAX_AGE}
+     * @param guestSessionId the visitor's current guest session id; registration needs a live one
+     * @return {@link Outcome.Success} when the member is registered, otherwise the variant for the
+     *     refusal; see {@link Outcome}
+     */
     public Outcome attemptRegister(String username, String email, String rawPassword,
                                    int age, String guestSessionId) {
         try {
@@ -64,14 +76,47 @@ public class RegisterPresenter {
         }
     }
 
+    /** Sealed outcome of a registration attempt, which the view switches on. */
     public sealed interface Outcome {
+        /** The member is registered; the visitor still has to log in. */
         record Success() implements Outcome { }
+
+        /** The username is already taken, or is one no member may register. */
         record UsernameTaken() implements Outcome { }
+
+        /** The email address is already registered. */
         record EmailTaken() implements Outcome { }
+
+        /**
+         * The service refused the password.
+         *
+         * @param reason the exception's message, which reaches the user
+         */
         record WeakPassword(String reason) implements Outcome { }
+
+        /** The service refused the email address's format or length. */
         record InvalidEmail() implements Outcome { }
+
+        /**
+         * The guest session id is missing, unknown, expired or not a guest's.
+         *
+         * @param reason the exception's message, which reaches the user
+         */
         record GuestSessionMissing(String reason) implements Outcome { }
+
+        /**
+         * The service refused the username's characters or the age's range with an
+         * {@code IllegalArgumentException}.
+         *
+         * @param reason the exception's message, which reaches the user
+         */
         record InvalidInput(String reason) implements Outcome { }
+
+        /**
+         * Any other failure.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

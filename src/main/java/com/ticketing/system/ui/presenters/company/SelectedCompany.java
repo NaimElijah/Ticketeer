@@ -24,8 +24,11 @@ final class SelectedCompany {
     private SelectedCompany() { }
 
     /**
+     * Picks the company the workspace has selected out of {@code companies}.
+     *
+     * @param <T>         the form in which the action reads a company
      * @param companies   the caller's companies, in whichever form the action reads them
-     * @param companyIdOf the id of one of {@code companies}
+     * @param companyIdOf reads the id of one of {@code companies}
      * @return the selected company if it is among {@code companies}; with nothing selected, the only
      *     company; otherwise empty
      */
@@ -36,7 +39,12 @@ final class SelectedCompany {
     /**
      * As {@link #among(List, ToIntFunction)}, for a caller that is handed the workspace's selection.
      *
-     * @param selectedId the workspace's selected company id, or {@code null} for none
+     * @param <T>         the form in which the action reads a company
+     * @param selectedId  the workspace's selected company id, or {@code null} for none
+     * @param companies   the caller's companies
+     * @param companyIdOf reads the id of one of {@code companies}
+     * @return the company with id {@code selectedId} if it is among {@code companies}; with no id
+     *     given, the only company; otherwise empty
      */
     static <T> Optional<T> among(Integer selectedId, List<T> companies, ToIntFunction<T> companyIdOf) {
         if (selectedId == null) {

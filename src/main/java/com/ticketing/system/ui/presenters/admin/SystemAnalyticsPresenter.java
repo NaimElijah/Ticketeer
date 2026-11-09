@@ -33,6 +33,11 @@ public class SystemAnalyticsPresenter {
     private final SystemAnalyticsService systemAnalyticsService;
     private final int refreshIntervalMs;
 
+    /**
+     * Creates the presenter and reads the poll cadence once.
+     *
+     * @param analyticsProperties source of {@link #refreshIntervalMs()}
+     */
     @Autowired
     public SystemAnalyticsPresenter(SystemAdminService systemAdminService,
                                     SystemAnalyticsService systemAnalyticsService,
@@ -64,10 +69,26 @@ public class SystemAnalyticsPresenter {
         }
     }
 
+    /**
+     * Opens the market.
+     *
+     * @param token  the admin's token; {@code null} or blank gives {@link MarketActionOutcome.NotAuthenticated}
+     * @param reason the admin's stated reason, passed to the service as given
+     * @return {@link MarketActionOutcome.Success} with the new market state, or the outcome for the
+     *     refusal or failure; see {@link MarketActionOutcome}
+     */
     public MarketActionOutcome openMarket(String token, String reason) {
         return marketAction(token, "OPEN", reason);
     }
 
+    /**
+     * Closes the market.
+     *
+     * @param token  the admin's token; {@code null} or blank gives {@link MarketActionOutcome.NotAuthenticated}
+     * @param reason the admin's stated reason, passed to the service as given
+     * @return {@link MarketActionOutcome.Success} with the new market state, or the outcome for the
+     *     refusal or failure; see {@link MarketActionOutcome}
+     */
     public MarketActionOutcome closeMarket(String token, String reason) {
         return marketAction(token, "CLOSE", reason);
     }
@@ -93,15 +114,50 @@ public class SystemAnalyticsPresenter {
 
     /** Sealed outcome for the dashboard load. */
     public sealed interface Outcome {
+        /**
+         * Both reads succeeded.
+         *
+         * @param market    the market's current state
+         * @param analytics the live platform metrics
+         */
         record Success(MarketStateDTO market, SystemAnalyticsDTO analytics) implements Outcome { }
+
+        /**
+         * Either read failed, including a token the service refused.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Sealed outcome for an Open/Close Market action. */
     public sealed interface MarketActionOutcome {
+        /**
+         * The service carried out the action.
+         *
+         * @param market the market's state after the action
+         */
         record Success(MarketStateDTO market) implements MarketActionOutcome { }
+
+        /**
+         * The token is missing or blank, or the service refused it as invalid or as not allowed to
+         * control the market.
+         */
         record NotAuthenticated() implements MarketActionOutcome { }
+
+        /**
+         * The market is not in a state the action applies to ({@code MarketNotOpenException} or
+         * {@code InvalidStateTransitionException}).
+         *
+         * @param reason the exception's message, which reaches the user
+         */
         record Rejected(String reason) implements MarketActionOutcome { }
+
+        /**
+         * Any other failure.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements MarketActionOutcome { }
     }
 }

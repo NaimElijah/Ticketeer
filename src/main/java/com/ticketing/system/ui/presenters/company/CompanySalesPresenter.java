@@ -15,6 +15,14 @@ import com.ticketing.system.organization.application.service.CompanyManagementSe
 import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+/**
+ * Presenter for {@code CompanySalesView}: loads the sales history of the caller's company and
+ * summarizes the records the view shows. Holds no Vaadin imports; it takes the member token the view
+ * reads from its session and returns a typed outcome.
+ *
+ * <p>The company is the one the workspace has selected when it is one of the caller's companies, else
+ * the first of them. Managers count, since a manager may hold {@code VIEW_SALES}.
+ */
 @Component
 public class CompanySalesPresenter {
 
@@ -22,6 +30,13 @@ public class CompanySalesPresenter {
     private final CompanyAnalyticsService companyAnalyticsService;
     private final SalesSummaryCalculator salesSummaryCalculator;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param companyManagementService resolves which companies the caller belongs to
+     * @param companyAnalyticsService  reads the company's sales history
+     * @param salesSummaryCalculator   computes the headline figures for {@link #summarize}
+     */
     @Autowired
     public CompanySalesPresenter(CompanyManagementService companyManagementService,
                                   CompanyAnalyticsService companyAnalyticsService,
@@ -36,6 +51,15 @@ public class CompanySalesPresenter {
         return salesSummaryCalculator.summarize(records);
     }
 
+    /**
+     * Loads the sales history of one of the caller's companies.
+     *
+     * @param token     the caller's member token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param companyId the company the workspace has selected, or {@code null}; used when it is one of
+     *     the caller's companies, else the first of them is used
+     * @return {@link Outcome.NoCompany} when the caller belongs to no company; {@link Outcome.Failure}
+     *     with {@code ServiceErrors}' text for any other failure
+     */
     public Outcome load(String token, Integer companyId) {
         if (token == null) return new Outcome.NotAuthenticated();
         try {
@@ -58,10 +82,27 @@ public class CompanySalesPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #load}, which the view switches on. */
     public sealed interface Outcome {
+        /**
+         * The sales history loaded.
+         *
+         * @param companyName the name of the company the history belongs to
+         * @param sales       the company's purchase records, possibly none
+         */
         record Success(String companyName, PurchaseHistoryDTO sales) implements Outcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome {}
+
+        /** The caller belongs to no company. */
         record NoCompany() implements Outcome {}
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome {}
     }
 }

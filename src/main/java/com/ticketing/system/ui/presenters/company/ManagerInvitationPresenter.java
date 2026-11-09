@@ -23,6 +23,7 @@ public class ManagerInvitationPresenter {
 
     private final CompanyManagementService companyService;
 
+    /** Creates the presenter over the company management service. */
     @Autowired
     public ManagerInvitationPresenter(CompanyManagementService companyService) {
         this.companyService = companyService;
@@ -31,6 +32,9 @@ public class ManagerInvitationPresenter {
     /**
      * Appoints {@code inviteeUsername} as a pending manager of the selected company.
      *
+     * @param token           the caller's member token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param inviteeUsername the invitee, as a username or an email address, as typed
+     * @param permissions     the permissions the manager would hold once the invitation is accepted
      * @return {@link Outcome.NoCompany} when the caller owns no company; {@link Outcome.ChooseCompany}
      *     when they own several and have selected none of them, or the selection is a company they do
      *     not own. The appointment is not attempted then
@@ -56,17 +60,35 @@ public class ManagerInvitationPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #invite}, which the view switches on. */
     public sealed interface Outcome {
+        /** The invitation is sent; the appointment stays pending until the invitee answers. */
         record Success() implements Outcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome {}
+
         /** The caller owns no company. */
         record NoCompany() implements Outcome {}
+
         /**
          * The caller owns several companies and has selected none of them, or the selection is a company
          * they do not own.
          */
         record ChooseCompany() implements Outcome {}
+
+        /**
+         * No member matches the invitee.
+         *
+         * @param username the invitee as the caller typed it
+         */
         record UserNotFound(String username) implements Outcome {}
+
+        /**
+         * The service refused the appointment or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome {}
     }
 }

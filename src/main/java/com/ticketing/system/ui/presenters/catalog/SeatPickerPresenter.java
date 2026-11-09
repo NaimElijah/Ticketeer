@@ -23,6 +23,14 @@ import com.ticketing.system.ui.components.venue.VkSeatedZonePicker;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+/**
+ * Presenter for the seat and standing-zone picker of an event. It loads one zone of an event's venue
+ * map, reserves seats or standing places for the visitor, and lays seats out as a grid; every service
+ * failure comes back as a typed outcome.
+ *
+ * <p>The visitor is resolved through {@link SessionIdentity}: a live member reserves with the member
+ * token, anyone else with the guest session id.
+ */
 @Component
 @Slf4j
 public class SeatPickerPresenter {
@@ -36,6 +44,13 @@ public class SeatPickerPresenter {
     private final ReservationService reservationService;
     private final SessionIdentity identity;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param catalogService     reads the event's venue map
+     * @param reservationService reserves the seats or places
+     * @param identity           resolves the visitor as a member or a guest
+     */
     @Autowired
     public SeatPickerPresenter(CatalogService catalogService,
                                ReservationService reservationService,
@@ -45,6 +60,14 @@ public class SeatPickerPresenter {
         this.identity = identity;
     }
 
+    /**
+     * Loads one zone of an event's venue map for the visitor.
+     *
+     * @param eventId the event whose venue map to read
+     * @param zoneId  the zone to pick out of the map
+     * @return {@link LoadOutcome.Loaded} with the zone and its type; {@link LoadOutcome.NotFound} when
+     *     the map has no such zone; {@link LoadOutcome.Failure} when the map cannot be read
+     */
     public LoadOutcome loadZone(int eventId, int zoneId) {
         try {
             VenueMapDTO map = catalogService.getEventVenueMap(identity.credential(), eventId);
@@ -66,6 +89,16 @@ public class SeatPickerPresenter {
         }
     }
 
+    /**
+     * Reserves the selected seats of a seated zone for the visitor.
+     *
+     * @param selection the seats to reserve, by seat number
+     * @param eventId   the event the zone belongs to
+     * @param zoneId    the seated zone
+     * @return {@link ReserveOutcome.Success} with the number of seats reserved, or
+     *     {@link ReserveOutcome.Failure} with the refusal's message when the service throws a
+     *     {@code DomainException}, and with {@code ServiceErrors}' text for any other failure
+     */
     public ReserveOutcome reserveSeated(InventorySelectionDTO selection, int eventId, int zoneId) {
         try {
             reserveForVisitor(eventId, zoneId, selection);
@@ -82,6 +115,16 @@ public class SeatPickerPresenter {
         }
     }
 
+    /**
+     * Reserves places in a standing zone for the visitor.
+     *
+     * @param quantity the number of places
+     * @param eventId  the event the zone belongs to
+     * @param zoneId   the standing zone
+     * @return {@link ReserveOutcome.Success} with {@code quantity}, or {@link ReserveOutcome.Failure}
+     *     with the refusal's message when the service throws a {@code DomainException}, and with
+     *     {@code ServiceErrors}' text for any other failure
+     */
     public ReserveOutcome reserveStanding(int quantity, int eventId, int zoneId) {
         try {
             reserveForVisitor(eventId, zoneId, InventorySelectionDTO.standing(quantity));
@@ -163,14 +206,46 @@ public class SeatPickerPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #loadZone}, which the view switches on. */
     public sealed interface LoadOutcome {
+        /**
+         * The zone was found.
+         *
+         * @param zone     the zone, with its seats' current status
+         * @param zoneType whether the zone is seated or standing
+         */
         record Loaded(InventoryZoneDTO zone, ZoneType zoneType) implements LoadOutcome { }
+
+        /**
+         * The venue map has no zone with that id.
+         *
+         * @param message fixed text for the user
+         */
         record NotFound(String message) implements LoadOutcome { }
+
+        /**
+         * The venue map could not be read.
+         *
+         * @param message the text the user may read
+         */
         record Failure(String message)  implements LoadOutcome { }
     }
 
+    /** Sealed outcome of a reservation, which the view switches on. */
     public sealed interface ReserveOutcome {
+        /**
+         * The service reserved the seats or places.
+         *
+         * @param quantity how many were reserved
+         */
         record Success(int quantity)   implements ReserveOutcome { }
-        record Failure(String message) implements ReserveOutcome { }
+
+        /**
+         * The service refused the reservation or failed.
+         *
+         * @param message the text the user may read: the refusal's own message for a
+         *     {@code DomainException}, else from {@code ServiceErrors}
+         */
+        record Failure(String message)  implements ReserveOutcome { }
     }
 }

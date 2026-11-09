@@ -31,6 +31,7 @@ public class ManagerListPresenter {
 
     private final CompanyManagementService companyManagementService;
 
+    /** Creates the presenter over the company management service. */
     @Autowired
     public ManagerListPresenter(CompanyManagementService companyManagementService) {
         this.companyManagementService = companyManagementService;
@@ -74,6 +75,12 @@ public class ManagerListPresenter {
      * {@link Permission} enum constants the dialog collected; the backend rejects an
      * empty set and restricts the edit to the manager's original appointer — both
      * surface here as {@link ActionOutcome.Failure}.
+     *
+     * @param token           the caller's member token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param companyId       the company the manager belongs to
+     * @param targetUserId    the manager whose permissions change
+     * @param permissionNames the new set, as {@link Permission} constant names; a name that is not a
+     *     constant gives {@link ActionOutcome.Failure}
      */
     public ActionOutcome editPermissions(String token, int companyId, int targetUserId,
                                          List<String> permissionNames) {
@@ -96,6 +103,10 @@ public class ManagerListPresenter {
      * Revokes a manager appointment (V2-CADMIN-03). The backend forbids revoking the
      * founder and restricts the action to the original appointer — surfaced here as
      * {@link ActionOutcome.Failure}.
+     *
+     * @param token        the caller's member token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param companyId    the company the manager belongs to
+     * @param targetUserId the manager whose appointment is revoked
      */
     public ActionOutcome revoke(String token, int companyId, int targetUserId) {
         if (token == null) {
@@ -114,10 +125,20 @@ public class ManagerListPresenter {
 
     /** Sealed outcome the view switches on to render the grids or an empty state. */
     public sealed interface Outcome {
+        /**
+         * The rosters loaded.
+         *
+         * @param companyName        the selected company's name
+         * @param activeManagers     the company's active managers
+         * @param pendingInvitations the manager invitations still awaiting an answer
+         */
         record Success(String companyName,
                        List<AppointmentInfoDTO> activeManagers,
                        List<AppointmentInfoDTO> pendingInvitations) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
         /** The caller owns no company. */
         record NoCompany() implements Outcome { }
         /**
@@ -125,13 +146,28 @@ public class ManagerListPresenter {
          * they do not own.
          */
         record ChooseCompany() implements Outcome { }
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Result of a manager mutation (edit permissions / revoke) the view reacts to. */
     public sealed interface ActionOutcome {
+        /** The service carried out the change. */
         record Success() implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the change or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }

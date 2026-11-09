@@ -29,6 +29,12 @@ public class MyCompaniesPresenter {
     private final CompanyManagementService companyManagementService;
     private final SessionIdentity identity;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param companyManagementService reads the member's companies and appoints co-owners
+     * @param identity                 resolves the live member, if any
+     */
     public MyCompaniesPresenter(CompanyManagementService companyManagementService, SessionIdentity identity) {
         this.companyManagementService = companyManagementService;
         this.identity = identity;
@@ -45,9 +51,23 @@ public class MyCompaniesPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #load}, which the view switches on. */
     public sealed interface Outcome {
+        /**
+         * The companies loaded.
+         *
+         * @param companies the member's active memberships, possibly none
+         */
         record Success(List<UserCompanyDTO> companies) implements Outcome { }
+
+        /** The visitor is not a live member: a guest or an admin. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
@@ -74,11 +94,29 @@ public class MyCompaniesPresenter {
         return companyManagementService.isOwnerOf(memberToken, companyId);
     }
 
+    /**
+     * Makes {@code companyId} the company selected in the workspace ({@link CurrentCompanies}). Whether
+     * the member may act on it stays the services' check.
+     *
+     * @param companyId the company the member chose
+     */
     public void selectCompany(int companyId) {
         CurrentCompanies.setCurrentCompany(companyId);
     }
 
 
+    /**
+     * Invites a member to co-own the selected company. The company is picked by
+     * {@link SelectedCompany}'s rule from the member's companies, and nothing is appointed when none is
+     * picked.
+     *
+     * @param inviteeIdentifier the invitee, as a username or an email address, as typed
+     * @return {@link AppointOutcome.NoCompany} when the member belongs to no company;
+     *     {@link AppointOutcome.ChooseCompany} when no single company can be picked;
+     *     {@link AppointOutcome.UserNotFound} when no member matches the invitee;
+     *     {@link AppointOutcome.NotAuthenticated} when no token is stored or the service rejects it;
+     *     {@link AppointOutcome.Failure} with {@code ServiceErrors}' text for any other failure
+     */
     public AppointOutcome appoint(String inviteeIdentifier) {
         String token = AuthSession.token();
         if (token == null) return new AppointOutcome.NotAuthenticated();
@@ -100,16 +138,35 @@ public class MyCompaniesPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #appoint}, which the view switches on. */
     public sealed interface AppointOutcome {
+        /** The co-owner invitation is sent. */
         record Success() implements AppointOutcome {}
+
+        /** No token is stored, or the service rejected it as invalid. */
         record NotAuthenticated() implements AppointOutcome {}
+
+        /** The member belongs to no company. */
         record NoCompany() implements AppointOutcome {}
+
         /**
          * The member belongs to several companies and has selected none of them, or the selection is a
          * company they do not belong to.
          */
         record ChooseCompany() implements AppointOutcome {}
+
+        /**
+         * No member matches the invitee.
+         *
+         * @param username the invitee as the member typed it
+         */
         record UserNotFound(String username) implements AppointOutcome {}
+
+        /**
+         * The service refused the appointment or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements AppointOutcome {}
     }
 }

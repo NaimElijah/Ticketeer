@@ -25,6 +25,12 @@ public class NotificationBellPresenter {
     private final INotificationService notificationService;
     private final DisplayTime displayTime;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param notificationService stores the read mark
+     * @param displayTime         formats the age of a notification
+     */
     public NotificationBellPresenter(INotificationService notificationService, DisplayTime displayTime) {
         this.notificationService = notificationService;
         this.displayTime = displayTime;
@@ -62,8 +68,17 @@ public class NotificationBellPresenter {
 
     /** What became of one mark-read: stored, nobody signed in, or refused with a reason to show. */
     public sealed interface MarkReadOutcome {
+        /** The service stored the read mark. */
         record Success() implements MarkReadOutcome { }
+
+        /** No member is signed in; an admin session counts as no member. */
         record NotAuthenticated() implements MarkReadOutcome { }
+
+        /**
+         * The store refused the mark.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements MarkReadOutcome { }
     }
 }

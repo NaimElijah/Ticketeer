@@ -24,13 +24,23 @@ public class NewInquiryPresenter {
     private final MessagingService messagingService;
     private final CatalogService catalogService;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param messagingService opens the inquiry
+     * @param catalogService   searches companies for the picker
+     */
     @Autowired
     public NewInquiryPresenter(MessagingService messagingService, CatalogService catalogService) {
         this.messagingService = messagingService;
         this.catalogService = catalogService;
     }
 
-    /** Searches active companies by name for the picker. Company names are public — no token needed. */
+    /**
+     * Searches active companies by name for the picker. Company names are public — no token needed.
+     *
+     * @param query part of a company name; {@code null} or blank lists every active company
+     */
     public SearchOutcome searchCompanies(String query) {
         try {
             return new SearchOutcome.Success(catalogService.searchCompaniesByName(query));
@@ -39,7 +49,14 @@ public class NewInquiryPresenter {
         }
     }
 
-    /** Opens an INQUIRY to {@code companyId} on behalf of the signed-in member. */
+    /**
+     * Opens an INQUIRY to {@code companyId} on behalf of the signed-in member.
+     *
+     * @param token     the member's token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param companyId the company to write to
+     * @param subject   the inquiry's subject
+     * @param body      the first message
+     */
     public ActionOutcome submit(String token, int companyId, String subject, String body) {
         if (token == null) {
             return new ActionOutcome.NotAuthenticated();
@@ -57,14 +74,38 @@ public class NewInquiryPresenter {
 
     /** Sealed outcome for the company picker search. */
     public sealed interface SearchOutcome {
+        /**
+         * The search ran.
+         *
+         * @param companies the matching active companies, sorted by name, possibly none
+         */
         record Success(List<CompanySummaryDTO> companies) implements SearchOutcome { }
+
+        /**
+         * The search failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements SearchOutcome { }
     }
 
     /** Result of submitting an inquiry the view reacts to (carries the new conversation id). */
     public sealed interface ActionOutcome {
+        /**
+         * The inquiry is opened.
+         *
+         * @param conversationId the new conversation's id
+         */
         record Success(String conversationId) implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the inquiry or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }

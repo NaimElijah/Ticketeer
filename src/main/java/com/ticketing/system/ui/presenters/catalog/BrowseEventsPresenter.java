@@ -22,6 +22,7 @@ public class BrowseEventsPresenter {
 
     private final CatalogService catalogService;
 
+    /** Creates the presenter over the catalog service. */
     public BrowseEventsPresenter(CatalogService catalogService) {
         this.catalogService = catalogService;
     }

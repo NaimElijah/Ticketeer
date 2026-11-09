@@ -23,6 +23,11 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+/**
+ * Presenter for {@code EventManagementView}: loads, edits, creates and cancels one event of the
+ * caller's company. Holds no Vaadin imports; each call takes the member token the view reads from its
+ * session and returns a typed outcome.
+ */
 @Component
 public class EventManagementPresenter {
 
@@ -30,6 +35,13 @@ public class EventManagementPresenter {
     private final CompanyManagementService companyService;
     private final PlatformTimeProperties platformTime;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param eventService  loads, edits, creates and cancels events
+     * @param companyService lists the companies the caller belongs to
+     * @param platformTime  the platform's time-zone setting, behind {@link #defaultTimeZone()}
+     */
     @Autowired
     public EventManagementPresenter(EventManagementService eventService,
                                     CompanyManagementService companyService,
@@ -44,6 +56,15 @@ public class EventManagementPresenter {
         return platformTime.timeZone();
     }
 
+    /**
+     * Loads one event for editing.
+     *
+     * @param token   the caller's member token; {@code null} gives {@link LoadOutcome.NotAuthenticated}
+     * @param eventId the event to load
+     * @return {@link LoadOutcome.NotFound} when no such event exists; {@link LoadOutcome.Failure} with
+     *     {@code ServiceErrors}' text for any other failure, including a caller who is not a member of
+     *     the event's company
+     */
     public LoadOutcome load(String token, int eventId) {
         if (token == null) return new LoadOutcome.NotAuthenticated();
         try {
@@ -58,6 +79,14 @@ public class EventManagementPresenter {
         }
     }
 
+    /**
+     * Saves the edited details of an event.
+     *
+     * @param token the caller's member token; {@code null} gives {@link SaveOutcome.NotAuthenticated}
+     * @param dto   the event's id and its new details
+     * @return {@link SaveOutcome.Failure} with {@code ServiceErrors}' text when the service refuses
+     *     the edit or fails
+     */
     public SaveOutcome save(String token, EventUpdateDTO dto) {
         if (token == null) return new SaveOutcome.NotAuthenticated();
         try {
@@ -80,6 +109,24 @@ public class EventManagementPresenter {
      * Domain value objects ({@link Location}, {@link ShowDate}) are assembled here so the view stays
      * free of domain construction. {@code starts} and {@code ends} are wall-clock times at the venue,
      * read in {@code timeZone} (ADR-008).
+     *
+     * @param token              the caller's member token; {@code null} gives
+     *     {@link CreateOutcome.NotAuthenticated}
+     * @param preferredCompanyId the company the workspace has selected, or {@code null} for none
+     * @param name               the event title
+     * @param description        the event description
+     * @param categoryName       the name of an {@code EventCategory} constant
+     * @param country            the venue's country
+     * @param city               the venue's city
+     * @param starts             when the show starts, as venue wall-clock time
+     * @param ends               when the show ends, as venue wall-clock time
+     * @param timeZone           the venue's time zone
+     * @param artists            the lineup, at least one name
+     * @param rating             the organizer's rating, from 0 to 5
+     * @return {@link CreateOutcome.InvalidInput} when a required input is missing or out of range, or
+     *     the service refuses it; {@link CreateOutcome.NoCompany} when the caller belongs to no
+     *     company; {@link CreateOutcome.ChooseCompany} when no single company can be picked;
+     *     {@link CreateOutcome.Failure} with {@code ServiceErrors}' text for any other failure
      */
     public CreateOutcome create(String token, Integer preferredCompanyId, String name,
                                 String description, String categoryName, String country, String city,
@@ -160,36 +207,89 @@ public class EventManagementPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #load}, which the view switches on. */
     public sealed interface LoadOutcome {
+        /**
+         * The event loaded.
+         *
+         * @param event the event's details
+         */
         record Success(EventDetailDTO event) implements LoadOutcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements LoadOutcome {}
+
+        /** No event has that id. */
         record NotFound() implements LoadOutcome {}
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements LoadOutcome {}
     }
 
+    /** Sealed outcome of {@link #save}, which the view switches on. */
     public sealed interface SaveOutcome {
+        /** The service stored the edit. */
         record Success() implements SaveOutcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements SaveOutcome {}
+
+        /**
+         * The service refused the edit or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements SaveOutcome {}
     }
 
+    /** Sealed outcome of {@link #create}, which the view switches on. */
     public sealed interface CreateOutcome {
+        /**
+         * The event is created in DRAFT state.
+         *
+         * @param eventId the new event's id
+         */
         record Success(String eventId) implements CreateOutcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements CreateOutcome {}
+
+        /** The caller belongs to no company. */
         record NoCompany() implements CreateOutcome {}
+
         /**
          * The caller belongs to several companies and has selected none of them, or the selection is a
          * company they do not belong to.
          */
         record ChooseCompany() implements CreateOutcome {}
+
+        /**
+         * A required input is missing or out of range, or the service refused the event.
+         *
+         * @param reason the text the user may read
+         */
         record InvalidInput(String reason) implements CreateOutcome {}
+
+        /**
+         * Any other failure.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements CreateOutcome {}
     }
 
     /** What {@link #cancel} did. */
     public sealed interface CancelOutcome {
+        /** The event is cancelled and the service reported no refund failure. */
         record Success() implements CancelOutcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements CancelOutcome {}
+
         /**
          * The event is cancelled, but some of its refunds failed: the cancel commits before its refunds run.
          *
@@ -206,6 +306,12 @@ public class EventManagementPresenter {
          *                           are not; its own message says which (ADR-001)
          */
         record RefundFailed(String reason, boolean cancelAgainRetries) implements CancelOutcome {}
+
+        /**
+         * The cancel failed for a reason other than a refund failure.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements CancelOutcome {}
     }
 }

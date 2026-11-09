@@ -25,6 +25,7 @@ public class SearchPresenter {
 
     private final CatalogService catalogService;
 
+    /** Creates the presenter over the catalog service. */
     public SearchPresenter(CatalogService catalogService) {
         this.catalogService = catalogService;
     }

@@ -34,10 +34,20 @@ public class ReceiptPresenter {
 
     private final MemberAccountService memberAccountService;
 
+    /** Creates the presenter over the member account service. */
     public ReceiptPresenter(MemberAccountService memberAccountService) {
         this.memberAccountService = memberAccountService;
     }
 
+    /**
+     * Loads one receipt of the signed-in member.
+     *
+     * @param token     the member's token; {@code null} or a rejected token gives a {@link Outcome.Failure}
+     *     asking the user to sign in
+     * @param receiptId the receipt to load
+     * @return {@link Outcome.Success} with the receipt; {@link Outcome.NotFound} when no such receipt
+     *     exists or it belongs to another account; {@link Outcome.Failure} for any other failure
+     */
     public Outcome load(String token, int receiptId) {
         try {
             PurchaseRecordDTO receipt = memberAccountService.viewMyReceipt(token, receiptId);
@@ -84,7 +94,19 @@ public class ReceiptPresenter {
          * @param refunds its refunds summed, or empty when it has none
          */
         record Success(PurchaseRecordDTO receipt, Optional<Refunds> refunds) implements Outcome { }
+
+        /**
+         * No receipt with that id exists for this member.
+         *
+         * @param message fixed text for the user
+         */
         record NotFound(String message)  implements Outcome { }
+
+        /**
+         * The load failed, or the visitor has to sign in.
+         *
+         * @param message the text the user may read
+         */
         record Failure(String message)   implements Outcome { }
     }
 }

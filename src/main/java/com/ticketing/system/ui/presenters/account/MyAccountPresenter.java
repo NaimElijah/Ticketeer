@@ -27,6 +27,7 @@ public class MyAccountPresenter {
     private final MemberAccountService memberAccountService;
     private final SessionIdentity identity;
 
+    /** Creates the presenter over the history service and the resolver of the live member. */
     public MyAccountPresenter(MemberAccountService memberAccountService, SessionIdentity identity) {
         this.memberAccountService = memberAccountService;
         this.identity = identity;
@@ -54,7 +55,18 @@ public class MyAccountPresenter {
 
     /** Sealed outcome the view switches on to render the history or an error state. */
     public sealed interface Outcome {
+        /**
+         * The history, which is empty for a visitor who is not a live member.
+         *
+         * @param history the member's orders
+         */
         record Success(PurchaseHistoryDTO history) implements Outcome { }
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 

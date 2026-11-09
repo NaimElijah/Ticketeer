@@ -30,6 +30,7 @@ public class EventDetailsPresenter {
 
     private final CatalogService catalogService;
 
+    /** Creates the presenter over the catalog service. */
     public EventDetailsPresenter(CatalogService catalogService) {
         this.catalogService = catalogService;
     }
@@ -38,6 +39,11 @@ public class EventDetailsPresenter {
      * Loads the event header/description/schedule/lineup plus its zone summary. An event without a
      * venue map still renders its detail, with no zones; any other failure to read the map fails the
      * load, so a store outage never reads as an event without a map.
+     *
+     * @param credential the visitor's credential: a member's token or a guest's session id
+     * @param eventId    the event to load
+     * @return {@link Outcome.NotFound} when the event does not exist or is not publicly visible;
+     *     {@link Outcome.Failure} when the credential is rejected or a read fails
      */
     public Outcome load(String credential, int eventId) {
         EventDetailDTO event;
@@ -79,9 +85,31 @@ public class EventDetailsPresenter {
 
     /** Sealed outcome the view switches on to render the page or an error banner. */
     public sealed interface Outcome {
+        /**
+         * The event and its venue summary loaded.
+         *
+         * @param event         the event's header, description, schedule and lineup
+         * @param zones         the zones of the event's venue map; empty when it has no map yet
+         * @param gridRows      rows of the venue map's grid; a default when there is no map
+         * @param gridCols      columns of the venue map's grid; a default when there is no map
+         * @param companyRating the organizer's derived rating, or {@code null} when it could not be
+         *     read or the company has no rated events
+         */
         record Success(EventDetailDTO event, List<InventoryZoneDTO> zones,
                        int gridRows, int gridCols, Double companyRating) implements Outcome { }
+
+        /**
+         * The event does not exist or is not publicly visible.
+         *
+         * @param message fixed text for the user
+         */
         record NotFound(String message) implements Outcome { }
+
+        /**
+         * The credential was rejected or a read failed.
+         *
+         * @param message the text the user may read
+         */
         record Failure(String message)  implements Outcome { }
     }
 }

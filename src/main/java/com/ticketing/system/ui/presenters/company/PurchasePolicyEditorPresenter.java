@@ -40,6 +40,13 @@ public class PurchasePolicyEditorPresenter {
     private final EventManagementService   eventManagementService;
     private final SessionIdentity          identity;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param companyManagementService lists the caller's companies and reads and writes company policies
+     * @param eventManagementService   lists a company's events and reads and writes event policies
+     * @param identity                 resolves the live member, if any
+     */
     @Autowired
     public PurchasePolicyEditorPresenter(CompanyManagementService companyManagementService,
                                          EventManagementService eventManagementService,
@@ -50,14 +57,29 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /** The visitor as the editor needs them: the live member's token, if there is one. */
     public Identity resolveIdentity() {
         return new Identity(identity.memberToken());
     }
 
+    /**
+     * The visitor, as {@link #resolveIdentity()} resolved it.
+     *
+     * @param memberToken the live member's token, or {@code null} for a guest or an admin
+     */
     public record Identity(String memberToken) { }
 
-   
 
+
+    /**
+     * Finds the companies whose policy the caller can open in the editor.
+     *
+     * @param token the caller's member token; {@code null} gives {@link ContextOutcome.NotAuthenticated}
+     * @return {@link ContextOutcome.Ready} with the caller's companies, managers' included, since the
+     *     service decides per call whether a manager may edit policies; {@link ContextOutcome.NoCompany}
+     *     when the caller belongs to none; {@link ContextOutcome.Failure} with {@code ServiceErrors}'
+     *     text for any other failure
+     */
     public ContextOutcome resolveContext(String token) {
         if (token == null) return new ContextOutcome.NotAuthenticated();
         try {
@@ -85,16 +107,34 @@ public class PurchasePolicyEditorPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #resolveContext}, which the view switches on. */
     public sealed interface ContextOutcome {
+        /**
+         * The caller has companies to edit.
+         *
+         * @param companies the caller's companies
+         */
         record Ready(List<MyCompanyDTO> companies) implements ContextOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ContextOutcome { }
+
+        /** The caller belongs to no company. */
         record NoCompany() implements ContextOutcome { }
+
+        /**
+         * The read failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ContextOutcome { }
     }
 
 
+    /** How a {@link Group} combines its children: all of them must hold, or any one of them. */
     public enum Op { AND, OR }
 
+    /** The kinds of rule the editor can build, each with the unit its value is counted in. */
     public enum RuleType {
         AgeAtLeast("years"),
         QuantityAtLeast("tickets"),
@@ -102,6 +142,7 @@ public class PurchasePolicyEditorPresenter {
 
         private final String unit;
         RuleType(String unit) { this.unit = unit; }
+        /** The unit the rule's value is counted in: {@code years} or {@code tickets}. */
         public String unit() { return unit; }
 
         String prettyEnglish(String value) {
@@ -113,10 +154,13 @@ public class PurchasePolicyEditorPresenter {
         }
     }
 
+    /** One node of the editable policy tree. */
     public sealed interface Node permits Group, Rule, KeptRule {
+        /** The node's id, generated at random when the node is built; the view passes it back to name the node. */
         String id();
     }
 
+    /** A node that combines its children with an {@link Op}. The tree's root is always a group. */
     public static final class Group implements Node {
         private final String id = newId();
         private Op op;
@@ -124,9 +168,11 @@ public class PurchasePolicyEditorPresenter {
         private Group(Op op) { this.op = op; }
         public String id() { return id; }
         public Op op() { return op; }
+        /** The group's children in order, as a read-only view; the presenter's methods change them. */
         public List<Node> children() { return Collections.unmodifiableList(children); }
     }
 
+    /** A leaf the editor can edit: a {@link RuleType} and the value it is compared with. */
     public static final class Rule implements Node {
         private final String id = newId();
         private RuleType type;
@@ -161,18 +207,40 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /**
+     * Adds a rule, "age at least 18" to start with, as the last child of a group. Does nothing when
+     * {@code parentId} names no group of the tree.
+     *
+     * @param root     the tree
+     * @param parentId the id of the group to add to
+     */
     public void addRule(Group root, String parentId) {
         if (find(root, parentId) instanceof Group g) {
             g.children.add(new Rule(RuleType.AgeAtLeast, "18"));
         }
     }
 
+    /**
+     * Adds an empty {@code AND} group as the last child of a group. Does nothing when {@code parentId}
+     * names no group of the tree.
+     *
+     * @param root     the tree
+     * @param parentId the id of the group to add to
+     */
     public void addGroup(Group root, String parentId) {
         if (find(root, parentId) instanceof Group g) {
             g.children.add(new Group(Op.AND));
         }
     }
 
+    /**
+     * Changes a rule's type and value. Does nothing when {@code nodeId} names no rule of the tree.
+     *
+     * @param root   the tree
+     * @param nodeId the id of the rule to change
+     * @param type   the new type; {@code null} keeps the current one
+     * @param value  the new value as typed, kept trimmed; {@code null} becomes an empty string
+     */
     public void updateRule(Group root, String nodeId, RuleType type, String value) {
         if (find(root, nodeId) instanceof Rule r) {
             if (type != null) r.type = type;   // ignore null type — keeps r.type non-null for toTreeJson/nodeToDTO
@@ -180,12 +248,27 @@ public class PurchasePolicyEditorPresenter {
         }
     }
 
+    /**
+     * Changes how a group combines its children. Does nothing when {@code nodeId} names no group of
+     * the tree.
+     *
+     * @param root   the tree
+     * @param nodeId the id of the group to change
+     * @param op     the new operator; {@code null} keeps the current one
+     */
     public void updateGroupOp(Group root, String nodeId, Op op) {
         if (find(root, nodeId) instanceof Group g) {
             if (op != null) g.op = op;          // ignore null op — downstream assumes a non-null operator
         }
     }
 
+    /**
+     * Removes a node, with its descendants, from its parent. Does nothing for the root and for an id
+     * the tree does not hold.
+     *
+     * @param root   the tree
+     * @param nodeId the id of the node to remove
+     */
     public void deleteNode(Group root, String nodeId) {
         Group parent = findParent(root, nodeId);
         if (parent != null) {
@@ -199,6 +282,13 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /**
+     * Finds a node by id.
+     *
+     * @param root   the tree
+     * @param nodeId the id to look for
+     * @return the node, the root included, or {@code null} when the tree holds no such id
+     */
     public Node findNode(Group root, String nodeId) {
         return find(root, nodeId);
     }
@@ -226,6 +316,14 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /**
+     * Renders a node and its descendants as the JSON the tree diagram reads. Every node has an
+     * {@code id}, a {@code kind} ({@code rule} or {@code comp}) and a {@code label}; a group also has
+     * its {@code op} and its {@code children}. Text inside a label is escaped for JSON.
+     *
+     * @param n the node to render, usually the root
+     * @return the JSON text
+     */
     public String toTreeJson(Node n) {
         if (n instanceof Rule r) {
             return "{\"id\":\"" + r.id() + "\",\"kind\":\"rule\",\"label\":\""
@@ -246,6 +344,13 @@ public class PurchasePolicyEditorPresenter {
              + "\",\"children\":[" + children + "]}";
     }
 
+    /**
+     * Describes the policy in a sentence for the page. The result is HTML: the user's text in it is
+     * escaped, and the markup is only {@code b}, {@code i} and {@code span} tags.
+     *
+     * @param root the tree
+     * @return the sentence; a hint to add a rule when the root has no children
+     */
     public String toPlainEnglishHtml(Group root) {
         if (root.children.isEmpty()) {
             return "No restrictions yet — click the root group and add a rule to get started.";
@@ -276,6 +381,13 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /**
+     * Checks that the tree can be saved. An empty root is valid and means no restrictions. Otherwise
+     * every rule needs a whole-number value and every group at least one child.
+     *
+     * @param root the tree
+     * @return a valid {@link Validity}, or the first problem found, in a message the user may read
+     */
     public Validity validate(Group root) {
         // An empty root means "no restrictions" — a valid NONE policy (see nodeToDTO).
         if (root.children.isEmpty()) {
@@ -310,12 +422,30 @@ public class PurchasePolicyEditorPresenter {
         return Validity.OK;
     }
 
+    /**
+     * The result of {@link #validate}.
+     *
+     * @param valid   whether the tree can be saved
+     * @param message for a problem, what is wrong, in text the user may read
+     */
     public record Validity(boolean valid, String message) {
         static final Validity OK = new Validity(true, "Valid");
         static Validity invalid(String why) { return new Validity(false, why); }
     }
 
 
+    /**
+     * Loads a stored policy into an editable tree. A policy of type {@code NONE}, or none stored, gives
+     * an empty tree.
+     *
+     * @param token        the caller's member token; {@code null} gives {@link LoadOutcome.NotAuthenticated}
+     * @param companyId    the company whose policy to load
+     * @param eventId      the event whose policy to load; used only when {@code isEventLevel} is set
+     *     and the id is positive, else the company's policy is loaded
+     * @param isEventLevel {@code true} to load the event's own policy
+     * @return {@link LoadOutcome.Success} with the tree; {@link LoadOutcome.Failure} with
+     *     {@code ServiceErrors}' text when the service refuses or fails
+     */
     public LoadOutcome load(String token, int companyId, int eventId, boolean isEventLevel) {
         if (token == null) return new LoadOutcome.NotAuthenticated();
         try {
@@ -360,6 +490,20 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /**
+     * Validates the tree and stores it as the company's or the event's policy. A group with a single
+     * child is stored as that child, and an empty root as {@code NONE}, since the backend refuses a
+     * composite with fewer than two children.
+     *
+     * @param token        the caller's member token; {@code null} gives {@link SaveOutcome.NotAuthenticated}
+     * @param companyId    the company the policy belongs to
+     * @param eventId      the event, when {@code isEventLevel} is set
+     * @param isEventLevel {@code true} to store the event's own policy, {@code false} the company's
+     * @param root         the tree to store
+     * @return {@link SaveOutcome.Invalid} when {@link #validate} refuses the tree, without calling the
+     *     service; {@link SaveOutcome.Failure} with {@code ServiceErrors}' text when the service
+     *     refuses or fails
+     */
     public SaveOutcome save(String token, int companyId, int eventId, boolean isEventLevel, Group root) {
         if (token == null) return new SaveOutcome.NotAuthenticated();
         Validity v = validate(root);
@@ -438,16 +582,46 @@ public class PurchasePolicyEditorPresenter {
     }
 
 
+    /** Sealed outcome of {@link #load}, which the view switches on. */
     public sealed interface LoadOutcome {
+        /**
+         * The policy loaded.
+         *
+         * @param root the policy as an editable tree
+         */
         record Success(Group root) implements LoadOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements LoadOutcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements LoadOutcome { }
     }
 
+    /** Sealed outcome of {@link #save}, which the view switches on. */
     public sealed interface SaveOutcome {
+        /** The service stored the policy. */
         record Success() implements SaveOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements SaveOutcome { }
+
+        /**
+         * The tree failed {@link #validate}, so the service was not called.
+         *
+         * @param reason what is wrong, in text the user may read
+         */
         record Invalid(String reason) implements SaveOutcome { }
+
+        /**
+         * The service refused the policy or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements SaveOutcome { }
     }
 }

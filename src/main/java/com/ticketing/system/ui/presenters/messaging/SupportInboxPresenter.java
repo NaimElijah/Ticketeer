@@ -31,6 +31,7 @@ public class SupportInboxPresenter {
 
     private final MessagingService messagingService;
 
+    /** Creates the presenter over the messaging service. */
     @Autowired
     public SupportInboxPresenter(MessagingService messagingService) {
         this.messagingService = messagingService;
@@ -50,7 +51,13 @@ public class SupportInboxPresenter {
         }
     }
 
-    /** Appends a reply to {@code conversationId} on behalf of the signed-in member. */
+    /**
+     * Appends a reply to {@code conversationId} on behalf of the signed-in member.
+     *
+     * @param token          the member's token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param conversationId the conversation to answer
+     * @param body           the reply text
+     */
     public ActionOutcome reply(String token, String conversationId, String body) {
         if (token == null) {
             return new ActionOutcome.NotAuthenticated();
@@ -118,15 +125,37 @@ public class SupportInboxPresenter {
 
     /** Sealed outcome the view switches on to render the inbox or an empty state. */
     public sealed interface Outcome {
+        /**
+         * The inbox loaded.
+         *
+         * @param conversations the member's conversations, newest first, possibly none
+         */
         record Success(List<ConversationDTO> conversations) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Result of a reply or an open the view reacts to. */
     public sealed interface ActionOutcome {
+        /** The service carried out the action. */
         record Success() implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the action or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 }
