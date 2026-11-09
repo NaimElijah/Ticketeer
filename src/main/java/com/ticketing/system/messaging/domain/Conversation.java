@@ -176,7 +176,8 @@ public class Conversation implements InvariantChecked {
      * @throws BusinessRuleViolationException if this is a complaint and the sender is not an admin or
      *         an admin has already answered, or if the body is too long
      * @throws InvalidParticipantException if the sender is not a participant of the conversation
-     * @throws IllegalStateException if the body is null or blank, or {@code now} is null
+     * @throws IllegalStateException if the body is null or blank, or {@code now} is null or before
+     *         {@code createdAt}
      */
     public void addMessage(int senderId, ParticipantType senderType, String body, LocalDateTime now) {
         if (isClosed()) {

@@ -67,9 +67,10 @@ import lombok.extern.slf4j.Slf4j;
  * members share one id space, so a notice to an admin's id would reach the member with that id
  * (ADR-012). Admins see complaints and replies in their queue and inbox instead.
  *
- * <p>On the Jpa adapters, two concurrent writes to the same conversation are separated by
- * {@code @Version}, and the loser gets a
- * {@link com.ticketing.system.shared.exception.ConcurrentReservationException}.
+ * <p>On the Jpa adapters, two concurrent writes that add a message or change the status are separated
+ * by {@code @Version}, and the loser gets a
+ * {@link com.ticketing.system.shared.exception.ConcurrentReservationException}; a read mark updates
+ * only message rows and does not conflict.
  */
 @Service
 @Slf4j
