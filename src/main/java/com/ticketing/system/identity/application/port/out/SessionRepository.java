@@ -10,8 +10,8 @@ import com.ticketing.system.shared.IRepository;
 /**
  * Aggregate-root entry point for the {@link Session} aggregate.
  *
- * <p>Implemented in Infrastructure (V1: in-memory, V2: JPA-backed).
- * See docs/auth-rework-plan.md.
+ * <p>Implemented by {@code MemorySessionRepository} and {@code JpaSessionRepository}, selected by
+ * profile (ADR-005).
  */
 public interface SessionRepository extends IRepository<Session, String> {
 

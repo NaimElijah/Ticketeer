@@ -14,7 +14,7 @@ import jakarta.persistence.Version;
 
 /**
  * Session aggregate — the unified identity record for Guest, Member and Admin
- * sessions. Part of the auth rework (see docs/auth-rework-plan.md).
+ * sessions.
  *
  * <ul>
  *   <li><b>Guest session:</b> kind {@link SessionKind#GUEST}, {@code userId == null}.

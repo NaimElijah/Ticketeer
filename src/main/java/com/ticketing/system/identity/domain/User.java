@@ -50,11 +50,11 @@ public class User implements InvariantChecked {
     /** Constructs a user with the given assigned id, credentials and age, enforcing the invariants. */
     public User(int userId, String username, String email, String password, int age) {
         TextLimits.requireFits("Username", username);
-        this.userId = userId;       // assigned id (minted by the repository)
-        this.username = username;   // display / login name
-        this.email = email;         // unique contact + secondary login key
-        this.password = password;   // stored password hash (hashing owned by the application layer)
-        this.age = age;             // used by age-gated purchase policies
+        this.userId = userId;
+        this.username = username;
+        this.email = email;
+        this.password = password;   // already hashed: hashing belongs to the application layer
+        this.age = age;
         checkInvariants();
     }
 
@@ -85,7 +85,7 @@ public class User implements InvariantChecked {
     /**
      * The stored password hash. UC-12. The Application layer owns the password hasher and does the
      * raw-vs-hash comparison (mirrors {@code Admin.getPasswordHash()}), keeping this entity free of
-     * any Application/Infrastructure dependency.
+     * any application or adapter dependency.
      */
     public String getPasswordHash() {
         return password;

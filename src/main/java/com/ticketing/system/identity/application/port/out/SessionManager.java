@@ -5,7 +5,7 @@ import java.util.Optional;
 import com.ticketing.system.identity.domain.Session;
 
 /**
- * Port for session / token management. Implemented in Infrastructure by
+ * Port for session / token management. Implemented by
  * {@code JwtSessionManager}. Used by {@code AuthenticationService} (UC-12/14) and by
  * every application service that authenticates its caller.
  *
@@ -29,13 +29,16 @@ import com.ticketing.system.identity.domain.Session;
  */
 public interface SessionManager {
 
-    /** Issues a member token after successful login. UC-12. */
+    /**
+     * Saves a new Member session row for {@code userId} and issues a member JWT bound to it. UC-12.
+     * Sign-in itself promotes the guest's session and issues its token through
+     * {@link #generateTokenForSession}; no production code calls this method.
+     */
     String generateToken(int userId, String username);
 
     /**
-     * Issues a member JWT bound to an existing Session row. Used by promote-on-login
-     * (Phase 3 of the unified-session rework) so the Guest's sessionId is
-     * preserved into the Member flow and any attached cart survives.
+     * Issues a member JWT bound to an existing Session row. Used by promote-on-login so the Guest's
+     * sessionId is preserved into the Member flow and any attached cart survives.
      *
      * @throws IllegalArgumentException if {@code session} is null
      * @throws IllegalStateException if {@code session} is not a Member session (a Guest or an
@@ -134,14 +137,19 @@ public interface SessionManager {
     int extractAdminId(String token);
 
     /**
-     * Returns the username a member token carries. Member tokens only, with the exceptions of
-     * {@link #extractUserId}.
+     * Returns the username a member token carries. Member tokens only: it rejects a token as
+     * {@link #extractUserId} does.
      */
     String extractUsername(String token);
 
     /**
-     * Returns the sessionId (sid claim) of a live member or admin token. Used by the
-     * cart-binding logic on Guest→Member promotion (D9a / Phase 4.1b).
+     * Returns the sessionId (sid claim) of a live member or admin token. No production code calls
+     * it yet.
+     *
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException
+     *     malformed, bad signature, revoked, or not bound to its session row
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException
+     *     past the {@code exp} claim or the session row's expiry
      */
     String extractSessionId(String token);
 

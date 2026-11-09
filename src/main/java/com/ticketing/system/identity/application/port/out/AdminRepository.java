@@ -12,11 +12,10 @@ public interface AdminRepository extends IRepository<Admin, Integer> {
 
     Admin findByUsername(String username);
 
-    /** All system admins. Backs messaging notifications to the admin queue (II.3.3 / II.6.3.1). */
+    /** All system admins. Read by the boot-time password rotation (ADR-014). */
     List<Admin> findAll();
 
-    // Used by SystemAdminService.initializePlatform() per UC-1 / I.1.4
-    // (default-admin existence check).
+    // Used by SystemAdminService per UC-1 / I.1.4 (default-admin existence check).
     boolean existsAny();
 
     /**

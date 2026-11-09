@@ -34,9 +34,8 @@ import jakarta.persistence.PersistenceContext;
  * {@code null}, merge/persist treats it as transient and tries to INSERT (duplicate key).
  * That never happens in the application (sids are unique), only in the in-memory
  * overwrite contract; it's handled by copying the state onto the managed row via
- * {@link Session#overwriteFrom}. Each write carries its own {@code @Transactional} so the
- * adapter is self-sufficient before the service layer gains transactions (#359); the read
- * delegations inherit Spring Data's read-only tx.
+ * {@link Session#overwriteFrom}. Each write carries its own {@code @Transactional}, so it joins the
+ * caller's transaction and also works when called outside one (#359).
  *
  * <p>{@code existsByUserId}'s "now" comes from the injected {@link Clock} (parity with
  * {@code MemorySessionRepository}), and the member-kind and non-expired filters run in SQL.
@@ -97,8 +96,8 @@ public class JpaSessionRepository implements SessionRepository {
         if (sessionId == null) {
             return;
         }
-        // Idempotent: deleteById would throw EmptyResultDataAccessException for an
-        // unknown id, but the contract requires a silent no-op (GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrow).
+        // Idempotent: an unknown id is a silent no-op, as the contract requires
+        // (GivenUnknownOrNullId_WhenDelete_ThenDoesNotThrowAndTheStoredSessionStays).
         if (data.existsById(sessionId)) {
             data.deleteById(sessionId);
         }

@@ -304,7 +304,7 @@ public class AuthenticationService {
      * Explicitly ends a Guest session. Idempotent — unknown / null / blank
      * input is a no-op, and so is the id of a Member or Admin session, which only
      * logout ends (ADR-012). Attached cart cleanup is the sweeper's
-     * responsibility (Phase 5).
+     * responsibility (UC-2).
      */
     @Transactional
     public void endGuestSession(String sessionId) {
@@ -342,6 +342,12 @@ public class AuthenticationService {
      * @throws DuplicateUsernameException  username already taken, including by a registration that
      *                                     committed after this one's check
      * @throws DuplicateEmailException     email already registered
+     * @throws GuestSessionRequiredException the request's guest session id is missing, unknown,
+     *                                     expired or not a guest session's; checked after the
+     *                                     format checks above
+     * @throws com.ticketing.system.shared.exception.BusinessRuleViolationException username is
+     *                                     longer than {@value com.ticketing.system.shared.domain.TextLimits#MAX_TEXT_LENGTH}
+     *                                     characters
      */
     @Transactional
     public void register(RegisterRequestDTO request) {

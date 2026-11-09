@@ -34,8 +34,8 @@ public class MemberQueryService {
     }
 
     /**
-     * True when a User with the given username already exists. Blank /
-     * null input is treated as "doesn't exist" — the presenter handles
+     * True when a User with the given username, once surrounding whitespace is trimmed, already
+     * exists. Blank / null input is treated as "doesn't exist" — the presenter handles
      * the format validation; this method is purely the existence
      * predicate.
      */
