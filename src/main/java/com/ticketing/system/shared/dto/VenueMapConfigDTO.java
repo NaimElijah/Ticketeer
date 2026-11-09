@@ -2,8 +2,9 @@ package com.ticketing.system.shared.dto;
 
 import java.util.List;
 
-// Input to EventManagementService.configureVenueMap() (UC-20).
-// On commit, Tickets are pre-generated per the unified-Ticket model.
+// Input to EventManagementService.configureVenueMap() (UC-20): the event's venue map is replaced by
+// these zones and seats, and a DRAFT event with at least one zone becomes SCHEDULED. No Ticket is
+// created here; tickets are created at checkout.
 public record VenueMapConfigDTO(
     String eventId,
     String venueName,

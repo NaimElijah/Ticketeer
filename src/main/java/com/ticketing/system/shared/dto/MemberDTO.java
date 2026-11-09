@@ -1,8 +1,7 @@
 package com.ticketing.system.shared.dto;
 
-// Lightweight Member projection — used as actor info in responses
-// and in OrganizationalTreeNodeDTO references.
-// Never includes passwordHash, security tokens, or anything sensitive.
+// A member's id, username and email: the member's own profile, returned by
+// MemberQueryService.getMemberProfile. Carries no password hash and no token.
 public record MemberDTO(
     int userId,
     String username,

@@ -3,8 +3,10 @@ package com.ticketing.system.shared.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// Output of ReservationService.reserve() (UC-5/9).
-// Returns the lock outcome plus the resulting cart state so the UI doesn't need a second roundtrip.
+// Output of ReservationService.reserveForMember / reserveForGuest and of removeForMember /
+// removeForGuest (UC-5/9): the selection that was held or released, not the cart.
+// 'reservationExpiresAt' is the time a hold started by that call runs out (a removal reports the same
+// calculation from the time of the removal).
 public class ReservationResultDTO {
 
     private final int eventId;

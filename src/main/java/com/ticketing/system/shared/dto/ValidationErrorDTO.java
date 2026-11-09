@@ -1,7 +1,7 @@
 package com.ticketing.system.shared.dto;
 
-// One field-level validation failure (e.g. JSR-303 @NotBlank, @Email).
-// Aggregated into ErrorResponseDTO.fieldErrors when multiple failures occur.
+// One field-level validation failure, an element of ErrorResponseDTO.fieldErrors. Nothing builds it
+// today.
 public record ValidationErrorDTO(
     String field,
     String rejectedValue,

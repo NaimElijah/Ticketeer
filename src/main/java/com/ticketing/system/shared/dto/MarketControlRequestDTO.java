@@ -1,7 +1,8 @@
 package com.ticketing.system.shared.dto;
 
 // Input to SystemAdminService.openMarket() / closeMarket() (UC-32).
-// 'reason' is recorded for the audit log (no Close UC explicitly defined).
+// 'action' is not read: the method called decides whether the market opens or closes.
+// 'reason' is logged by closeMarket (a blank one is replaced by a default); openMarket ignores it.
 // 'token' carries the requesting admin's session credential — the service
 // authorizes the toggle via requireSystemAdmin(token).
 public record MarketControlRequestDTO(

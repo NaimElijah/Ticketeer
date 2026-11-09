@@ -2,7 +2,7 @@ package com.ticketing.system.shared.dto;
 
 import java.time.LocalDateTime;
 
-// One Message rendered for the UI. Replaces the old InboxMessageDTO.
+// One Message rendered for the UI.
 // 'senderType' is sent as a string to keep DTO independent of the domain enum.
 public record MessageDTO(
     String messageId,

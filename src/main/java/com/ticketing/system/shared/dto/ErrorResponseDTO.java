@@ -3,8 +3,8 @@ package com.ticketing.system.shared.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// Generic error envelope returned by the application layer when an exception is caught.
-// V2 (REST) will map this to an HTTP error body.
+// An error envelope: a code, a message, a correlation id and per-field errors. Nothing builds or
+// returns it today; presenters turn a failure into text with ServiceErrors.
 // 'fieldErrors' is populated for validation failures only.
 public record ErrorResponseDTO(
     String errorCode,                    // domain exception class simple name

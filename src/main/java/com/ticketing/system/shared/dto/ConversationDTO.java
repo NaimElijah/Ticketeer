@@ -3,8 +3,7 @@ package com.ticketing.system.shared.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// View of a Conversation from the centralized messaging subsystem.
-// Replaces the old company-only Conversation/Inbox DTOs.
+// View of a Conversation from the messaging subsystem.
 // 'type' / 'status' / participant types as strings to keep DTO independent of domain enums.
 public record ConversationDTO(
     String conversationId,

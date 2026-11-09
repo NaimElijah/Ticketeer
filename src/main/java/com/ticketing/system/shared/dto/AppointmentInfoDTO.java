@@ -3,8 +3,12 @@ package com.ticketing.system.shared.dto;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// View of a single CompanyAppointment.
-// Used by UC-25 (org tree leaf) and any "view my pending appointments" query.
+/**
+ * One company appointment as an owner sees it. Returned by
+ * {@code CompanyManagementService.listManagers} (the active managers) and
+ * {@code listPendingInvitations} (the offers awaiting an answer). A member's own invitations use
+ * {@link InvitationDTO}.
+ */
 public record AppointmentInfoDTO(
     String appointmentId,
     int companyId,
