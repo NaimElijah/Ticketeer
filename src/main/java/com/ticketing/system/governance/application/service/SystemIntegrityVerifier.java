@@ -28,21 +28,22 @@ import com.ticketing.system.identity.domain.User;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Verifies the platform's structural correctness against persisted state, invoked from
- * {@code SystemAdminService.initializePlatform()} after the I.1 post-conditions hold.
+ * Verifies the platform's structural correctness against persisted state. {@code SystemAdminService}
+ * invokes it from {@code initializePlatform()} and each time the market opens (from READY or CLOSED),
+ * after its System Admin check.
  *
  * <p>This javadoc is the single coverage map for <i>every</i> correctness/integrity requirement
  * in {@code docs/requirements/requirements.md} (§1 correctness constraints, §2 integrations,
  * §3 commercial rules, and the relevant SLRs). Only <b>scannable structural state</b> is checked
- * in this class; connection rules are checked at initialization, and behavioural / transaction
- * rules are enforced at their call sites — cited below so nothing is silently dropped.
+ * in this class; connection rules are checked at initialization and market open, and behavioural /
+ * transaction rules are enforced at their call sites — cited below so nothing is silently dropped.
  *
  * <h3>Scanned here (structural state)</h3>
  * <ul>
  *   <li><b>§1 #6 active company has ≥1 Owner — VERIFIED.</b></li>
  *   <li><b>§1 #4 producer (owner/manager) is a registered user — VERIFIED.</b></li>
  *   <li><b>§1 #1 unique username, #8 ≤1 active order/member/event, #12 sellable ≤ inventory —
- *       VERIFIED.</b> Guest carts are left out of #8: a pre-V10 instance serving during a rolling
+ *       VERIFIED.</b> Guest carts are left out of §1 #8: a pre-V10 instance serving during a rolling
  *       deploy can still leave two on one session id (NaimElijah/Ticketeer#224, V10's header), and this
  *       scan's failure stops the boot. NaimElijah/Ticketeer#275 scans them once no such instance can
  *       serve.</li>
@@ -50,11 +51,12 @@ import lombok.extern.slf4j.Slf4j;
  *       not scanned, and owner revocation can currently break it (#126).</li>
  * </ul>
  *
- * <h3>Checked at initialization (connection rules)</h3>
+ * <h3>Checked at initialization and market open (connection rules)</h3>
  * <ul>
- *   <li>§1 #2 ≥1 System Admin — asserted by {@code SystemAdminService.verifyInitializationInvariants()};
- *       §2 ≥1 payment + ≥1 ticket-issuance connection — asserted last, by
- *       {@code SystemAdminService.requireExternalServicesReachable()} (ADR-003).</li>
+ *   <li>§1 #2 ≥1 System Admin — asserted by {@code SystemAdminService.verifyInitializationInvariants()}
+ *       at initialization and by an equivalent check when the market opens;
+ *       §2 ≥1 payment + ≥1 ticket-issuance connection — asserted last at initialization, and first when
+ *       the market opens, by {@code SystemAdminService.requireExternalServicesReachable()} (ADR-003).</li>
  * </ul>
  *
  * <h3>Enforced at their call sites (behavioural / transaction rules — not scannable state)</h3>
@@ -77,10 +79,10 @@ import lombok.extern.slf4j.Slf4j;
  *       ({@code NoPurchasePolicy}); a company discount policy is not built yet (NaimElijah/Ticketeer#67).</li>
  * </ul>
  *
- * <p><b>V1/V2 note:</b> the in-memory repos are empty when this runs at boot (runner is
- * {@code @Order(0)}, before the dev seeders), so the scans pass trivially today; their value is
- * realized in V3 when persisted state is loaded and re-validated on startup (SLR.6 / SLR.7). The
- * logic is proven by unit tests now, and this class is the growth point for the V3 scans.
+ * <p>The scans read whatever the repositories hold when they run (SLR.6 / SLR.7). On the default
+ * profile that is the PostgreSQL data of earlier runs, loaded and re-validated at boot. They find
+ * nothing to check on an empty database: a first start, or dev's in-memory H2 at boot, where the
+ * runner ({@code @Order(0)}) runs before the dev seeders.
  */
 @Service
 @Slf4j
@@ -91,6 +93,7 @@ public class SystemIntegrityVerifier {
     private final EventRepository eventRepository;
     private final ActiveOrderRepository activeOrderRepository;
 
+    /** Creates the verifier over the repositories whose persisted state it scans. */
     public SystemIntegrityVerifier(UserRepository userRepository,
                                    ProductionCompanyRepository companyRepository,
                                    EventRepository eventRepository,
@@ -101,13 +104,28 @@ public class SystemIntegrityVerifier {
         this.activeOrderRepository = activeOrderRepository;
     }
 
-    // Read-only inside a transaction so the loaded JPA aggregates' lazy collections (event zones,
-    // cart items, show dates, …) stay reachable while the scans traverse them (#372).
+    /**
+     * Scans the persisted state for a break of the structural correctness constraints listed on the
+     * class, and returns normally when it finds none.
+     *
+     * <p>The scans run in this order and stop at the first violation: every active company has an
+     * owner; every owner and manager of an active company is a registered user; every loaded user,
+     * company, event and active order passes its own invariant check; usernames are unique; no member
+     * holds two active orders for one event; no zone has more sold and reserved tickets than its
+     * capacity.
+     *
+     * <p>Read-only: the scans never write. The one transaction also keeps the loaded aggregates
+     * attached while the scans traverse them (upstream#372).
+     *
+     * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException at the first
+     *         violation. The message names the offending records by id; for a broken aggregate
+     *         invariant the cause is the aggregate's own exception
+     */
     @Transactional(readOnly = true)
     public void verify() {
         verifyActiveCompaniesHaveOwner();      // constraint #6
         verifyProducersAreUsers();             // constraint #4
-        revalidateLoadedAggregates();          // #372 — re-run each loaded aggregate's own invariants
+        revalidateLoadedAggregates();          // upstream#372 — re-run each loaded aggregate's own invariants
         verifyUniqueUsernames();               // constraint #1
         verifyOneActiveOrderPerMemberEvent();  // constraint #8, members only
         verifyInventoryWithinCapacity();       // constraint #12
@@ -117,7 +135,7 @@ public class SystemIntegrityVerifier {
     // Every message below names its records by id, never by a company name or a username: the self-heal
     // logs a violation at ERROR on every tick while it lasts.
 
-    // #6 — every active production company has at least one Owner.
+    // constraint #6 — every active production company has at least one Owner.
     private void verifyActiveCompaniesHaveOwner() {
         for (ProductionCompany company : companyRepository.findActive()) {
             if (company.getOwnerIds().isEmpty()) {
@@ -127,7 +145,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #4 — every producer (owner or manager) of an active company resolves to a known user.
+    // constraint #4 — every producer (owner or manager) of an active company resolves to a known user.
     private void verifyProducersAreUsers() {
         for (ProductionCompany company : companyRepository.findActive()) {
             List<Integer> producerIds = new ArrayList<>(company.getOwnerIds());
@@ -144,7 +162,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // ---- #372 V3 scans: re-validate the LOADED DB state (no-ops on the empty in-memory stack) ----
+    // ---- upstream#372: re-validate the state loaded from the repositories ----
 
     // Re-run every loaded aggregate's own invariant. A row persisted (or hand-edited) into a state
     // that breaks its aggregate invariant blocks the market from opening.
@@ -172,7 +190,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #1 — usernames are system-wide unique. On the Jpa adapters uk_users_username (V4) already
+    // constraint #1 — usernames are system-wide unique. On the Jpa adapters uk_users_username (V4) already
     // forbids a duplicate; this scan still covers the Memory adapter and any row written around the
     // adapters.
     private void verifyUniqueUsernames() {
@@ -190,7 +208,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #8 — at most one active order per member per event; flag a member whose two distinct orders
+    // constraint #8 — at most one active order per member per event; flag a member whose two distinct orders
     // both hold the same event. Guest carts are skipped: uk_active_orders_guest_session_id (V10,
     // NaimElijah/Ticketeer#224) holds a session to one, except the carts a pre-V10 instance writes during
     // a rolling deploy, which the sweeper clears (requirements.md §1 #8), and failing here would stop the
@@ -221,7 +239,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // #12 — a zone's committed tickets (sold + reserved) must not exceed its physical capacity.
+    // constraint #12 — a zone's committed tickets (sold + reserved) must not exceed its physical capacity.
     private void verifyInventoryWithinCapacity() {
         for (Event event : eventRepository.findAll()) {
             if (event.getVenueMap() == null || event.getVenueMap().getInventoryZones() == null) {

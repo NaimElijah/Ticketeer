@@ -92,7 +92,7 @@ class CompanyEventListPresenterTest {
 
     @Test
     void GivenAManagerMembership_WhenLoad_ThenReturnsThatCompanysEvents() {
-        // The exact bug (#429): a manager holds a Manager appointment, not an Owner one, so the old
+        // The exact bug (upstream#429): a manager holds a Manager appointment, not an Owner one, so the old
         // owner-only lookup returned NoCompany. findMyCompanies keeps managers; the presenter must
         // resolve the company and serve its events.
         when(companyService.findMyCompanies(TOKEN)).thenReturn(List.of(company(COMPANY_ID, "Manager")));

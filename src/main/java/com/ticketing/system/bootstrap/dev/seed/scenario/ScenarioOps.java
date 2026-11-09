@@ -143,7 +143,13 @@ public final class ScenarioOps {
         registry.put("add-coupon", this::addCoupon);
     }
 
-    /** Dispatch one command, recording its outcome through the harness. */
+    /**
+     * Dispatches one command, recording its outcome through the harness.
+     *
+     * @throws SeedHarness.SeedAbortException when the step fails and the harness is fail-fast
+     * @throws IllegalArgumentException when an {@code expect-error} line names no operation, which is
+     *         thrown mid-run whatever the harness's fail-fast setting
+     */
     public void execute(ScenarioCommand cmd, ScenarioContext ctx, SeedHarness harness) {
         if (cmd.op().equals(ScenarioParser.EXPECT_ERROR_OP)) {
             executeExpectError(cmd, ctx, harness);
@@ -372,7 +378,7 @@ public final class ScenarioOps {
         eventService.cancelEventAndRefund(ctx.token(by), ctx.eventId(eventAlias));
     }
 
-    // -- messaging (via #334) --------------------------------------------
+    // -- messaging (via upstream#334) --------------------------------------------
 
     private void contactCompany(ScenarioCommand cmd, ScenarioContext ctx) {
         String from = cmd.requirePos(0, "member alias");

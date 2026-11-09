@@ -13,6 +13,7 @@ import com.vaadin.flow.component.html.Span;
  */
 public class OrgTreeLegend extends Composite<Div> {
 
+    /** Builds the legend, one entry each for the Founder, Owner and Manager styles. */
     public OrgTreeLegend() {
         Div row = getContent();
         row.getStyle().set("display", "flex").set("gap", "20px").set("flex-wrap", "wrap");

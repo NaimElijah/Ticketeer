@@ -23,10 +23,14 @@ import jakarta.persistence.Enumerated;
 @Embeddable
 public class TransactionRecord implements InvariantChecked {
 
+    /** What an external transaction did. */
     public enum TransactionType {
-        PAYMENT_CHARGE,    // corresponds to a successful charge via PaymentGateway. Amount should be positive.
-        TICKET_ISSUANCE,   // corresponds to successful ticket issuance via TicketIssuer. Amount should be zero.
-        REFUND             // corresponds to a successful refund via PaymentGateway. Amount should be positive, representing the refunded amount.
+        /** A charge made through the {@code PaymentGateway}; its amount is the amount charged. */
+        PAYMENT_CHARGE,
+        /** A ticket issuance made through the {@code TicketIssuer}; its amount is zero. */
+        TICKET_ISSUANCE,
+        /** A refund made through the {@code PaymentGateway}; its amount is the amount refunded. */
+        REFUND
     }
 
     @Enumerated(EnumType.STRING)
@@ -61,6 +65,17 @@ public class TransactionRecord implements InvariantChecked {
         checkInvariants();
     }
 
+    /**
+     * Records a payment charge.
+     *
+     * @param paymentTransactionId the gateway's transaction id, positive
+     * @param gatewayName          the gateway that made the charge, not blank
+     * @param amount               the amount charged, not negative
+     * @param currency             the currency charged, not blank
+     * @param chargedAt            when the gateway made the charge; not {@code null}
+     * @throws IllegalArgumentException if {@code paymentTransactionId} is not positive
+     * @throws IllegalStateException    if another argument breaks the limits above
+     */
     public static TransactionRecord paymentCharge(int paymentTransactionId, String gatewayName, double amount, String currency, LocalDateTime chargedAt) {
         if (paymentTransactionId <= 0) {
             throw new IllegalArgumentException("paymentTransactionId must be positive");
@@ -75,6 +90,14 @@ public class TransactionRecord implements InvariantChecked {
         );
     }
 
+    /**
+     * Records a ticket issuance. It has amount zero and no currency.
+     *
+     * @param issuanceTransactionId the issuer's transaction id, not blank
+     * @param issuerName            the issuer, not blank
+     * @param issuedAt              when the issuer issued the tickets; not {@code null}
+     * @throws IllegalStateException if an argument breaks the limits above
+     */
     public static TransactionRecord ticketIssuance(String issuanceTransactionId, String issuerName, LocalDateTime issuedAt) {
         return new TransactionRecord(
                 TransactionType.TICKET_ISSUANCE,
@@ -86,6 +109,16 @@ public class TransactionRecord implements InvariantChecked {
         );
     }
 
+    /**
+     * Records a refund.
+     *
+     * @param refundTransactionId the gateway's refund id, not blank
+     * @param gatewayName         the gateway that made the refund, not blank
+     * @param amount              the amount refunded, not negative
+     * @param currency            the currency refunded, not blank
+     * @param refundedAt          when the gateway made the refund; not {@code null}
+     * @throws IllegalStateException if an argument breaks the limits above
+     */
     public static TransactionRecord refund(String refundTransactionId, String gatewayName, double amount, String currency, LocalDateTime refundedAt) {
         return new TransactionRecord(
                 TransactionType.REFUND,
@@ -113,6 +146,7 @@ public class TransactionRecord implements InvariantChecked {
         return amount;
     }
 
+    /** Returns the currency, or {@code null} for a ticket issuance, which has none. */
     public String getCurrency() {
         return currency;
     }

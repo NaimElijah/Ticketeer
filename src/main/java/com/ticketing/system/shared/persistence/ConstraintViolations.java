@@ -14,7 +14,9 @@ public final class ConstraintViolations {
     private ConstraintViolations() { }
 
     /**
-     * Matched by containment, ignoring case: PostgreSQL reports the constraint as named, while H2 reports
+     * Tells whether a violation broke the named constraint.
+     *
+     * <p>Matched by containment, ignoring case: PostgreSQL reports the constraint as named, while H2 reports
      * the name of the index behind it, schema-qualified and suffixed ({@code PUBLIC.UK_USERS_USERNAME_INDEX_4}).
      *
      * @param violation  what the flush or the commit threw

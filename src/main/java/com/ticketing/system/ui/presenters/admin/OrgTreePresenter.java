@@ -20,6 +20,7 @@ public class OrgTreePresenter {
 
     private final CompanyManagementService companyManagementService;
 
+    /** Creates the presenter over the company management service. */
     @Autowired
     public OrgTreePresenter(CompanyManagementService companyManagementService) {
         this.companyManagementService = companyManagementService;
@@ -29,6 +30,13 @@ public class OrgTreePresenter {
      * Loads the organizational tree for the selected company.
      * Admins see all companies; owners see only their own. When {@code companyId}
      * is null (first load) or not in the list, the first company is used.
+     *
+     * @param token     the signed-in caller's token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
+     * @param companyId the company to show, or {@code null} for the first
+     * @param isAdmin   {@code true} to list and read as an admin, {@code false} as an owner
+     * @return {@link Outcome.NoCompany} when the caller has no company to list; {@link Outcome.Failure}
+     *     with {@code ServiceErrors}' text for any other failure
      */
     public Outcome load(String token, Integer companyId, boolean isAdmin) {
         if (token == null) {
@@ -58,11 +66,28 @@ public class OrgTreePresenter {
 
     /** Sealed outcome the view switches on. */
     public sealed interface Outcome {
+        /**
+         * The tree loaded.
+         *
+         * @param companies the companies the caller may pick from
+         * @param selected  the company whose tree is shown; one of {@code companies}
+         * @param tree      the selected company's organizational tree
+         */
         record Success(List<ProductionCompanyDTO> companies,
                        ProductionCompanyDTO selected,
                        OrganizationalTreeNodeDTO tree) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /** The caller has no company to show a tree for. */
         record NoCompany() implements Outcome { }
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

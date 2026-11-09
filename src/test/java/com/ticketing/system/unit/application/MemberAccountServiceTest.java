@@ -58,7 +58,7 @@ class MemberAccountServiceTest {
         );
     }
 
-    // ---- viewMyReceipt (#276): single member-owned receipt; throws instead of degrading ----
+    // ---- viewMyReceipt (upstream#276): single member-owned receipt; throws instead of degrading ----
 
     static final int RECEIPT_ID = 7;
     static final int OTHER_USER = 99;

@@ -123,7 +123,6 @@ public class MemoryOrderReceiptRepository implements OrderReceiptRepository {
     @Override
     public List<OrderReceipt> findGlobal(GlobalHistoryFiltersDTO filters) {
         if (filters == null) {
-            // If no filters are provided, return all receipts.
             return List.copyOf(receiptsById.values());
         }
 
@@ -131,25 +130,21 @@ public class MemoryOrderReceiptRepository implements OrderReceiptRepository {
                 .filter(receipt -> {
                     boolean matches = true;
                     
-                    // Filter by buyerUserId if provided
                     if (filters.buyerUserId() != null) {
                         matches &= receipt.isMemberReceipt()
                                 && receipt.getHolderUserId().equals(filters.buyerUserId());
                     }
 
-                    // Filter by eventIds if provided
                     if (filters.eventIds() != null) {
                         matches &= receipt.getReceiptLines().stream()
                                 .anyMatch(line -> filters.eventIds().contains(line.getEventId()));
                     }
                     
-                    // Filter by date range if provided
                     if (filters.fromDate() != null) {
                         matches &= !receipt.getPurchaseTime()
                                 .isBefore(filters.fromDate().atStartOfDay());
                     }
 
-                    // Filter by date range if provided
                     if (filters.toDate() != null) {
                         // The end date runs up to the next midnight: purchase times carry fractions of a second.
                         matches &= receipt.getPurchaseTime()

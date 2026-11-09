@@ -1,5 +1,5 @@
 package com.ticketing.system.reporting.application.service;
-// CompanyRatings lives in catalog (rating is derived from catalog Events); CompanyManagementService in
+// CompanyRatings lives in catalog (rating is derived from catalog Events); CompanyMembershipService in
 // organization; reporting reads both downward, which is allowed.
 import com.ticketing.system.catalog.application.service.CompanyRatings;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
@@ -42,9 +42,10 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
  *
  * <p>Every read is company-scoped and authorizes the caller itself (#22): it validates the
  * session token, requires an active appointment in the company, and checks the organization
- * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. Sales
- * figures are the company's own share of each receipt (a receipt can mix events from several
- * companies), over the trailing 30 days, counting only lines that are not refunded (#21).
+ * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. The
+ * dashboard's sales figures are the company's own share of each receipt (a receipt can mix events
+ * from several companies), over the trailing 30 days, counting only lines that are not refunded
+ * (#21).
  */
 @Service
 @Slf4j
@@ -61,7 +62,7 @@ public class CompanyAnalyticsService {
     private final TicketRepository ticketRepository;
     private final ProductionCompanyRepository companyRepository;
     private final UserRepository userRepository;
-    // Company-membership/authorization checks moved off the User aggregate (task #20); reporting
+    // Company-membership/authorization checks moved off the User aggregate; reporting
     // already depends on organization.
     private final CompanyMembershipService companyMembershipService;
     // Session/token port — every company-scoped read authenticates its caller (#22).
@@ -69,6 +70,11 @@ public class CompanyAnalyticsService {
     // The 30-day window ends now on this clock; purchase times are UTC wall time (ADR-008).
     private final Clock clock;
 
+    /**
+     * Creates the service over the read ports it aggregates and the organization's membership checks.
+     *
+     * @param clock the clock that ends the dashboard's 30-day window; purchase times are UTC wall time
+     */
     public CompanyAnalyticsService(
             EventRepository eventRepository,
             CatalogEventDisplayPort eventDisplayPort,
@@ -93,8 +99,9 @@ public class CompanyAnalyticsService {
     }
 
     /**
-     * Live dashboard counters for one company, as seen by the calling member. Returns zeros for a
-     * fresh company with no events.
+     * Live dashboard counters for one company, as seen by the calling member. A company with no
+     * events has no active events, tickets or revenue, and a {@code null} rating. Open inquiries do
+     * not depend on events.
      *
      * <p>Figures the caller may not see are withheld as {@code null}: revenue and tickets sold
      * need {@link Permission#VIEW_SALES} and open inquiries need
@@ -158,7 +165,7 @@ public class CompanyAnalyticsService {
 
     /**
      * UC-22 — the company's sales history: one record per receipt that holds at least one ticket
-     * for the company's events, carrying only that company's lines and revenue. Payment
+     * for the company's events, carrying only that company's lines and their total. Payment
      * transactions are never included: they cover the whole order, which may hold other
      * companies' tickets (#121); the admin global history (UC-31) shows them.
      *
@@ -226,9 +233,9 @@ public class CompanyAnalyticsService {
      * @throws InvalidTokenException if the token is not valid
      */
     private int authenticate(String token) {
-        if (!sessionManager.validateToken(token)) {  // reject unknown/expired tokens
+        if (!sessionManager.validateToken(token)) {
             throw new InvalidTokenException("Invalid token");
         }
-        return sessionManager.extractUserId(token);  // token valid → extract the caller's id
+        return sessionManager.extractUserId(token);
     }
 }

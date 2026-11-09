@@ -8,6 +8,11 @@ package com.ticketing.system.shared.exception;
  */
 public class GuestSessionRequiredException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param reason why the guest session was refused; it is the whole message
+     */
     public GuestSessionRequiredException(String reason) {
         super(reason);
     }

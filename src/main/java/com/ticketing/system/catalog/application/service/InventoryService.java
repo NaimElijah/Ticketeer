@@ -36,11 +36,10 @@ import com.ticketing.system.shared.exception.InsufficientInventoryException;
 
 /**
  * Catalog application service that owns all Event/InventoryZone inventory mutation on behalf of the
- * sales context, implementing {@link InventoryCommandPort}. The reserve/release/confirm/return logic
- * (event lock, load, policy check, domain mutation, save) was relocated here verbatim from sales'
- * {@code ReservationService}/{@code CheckoutService}/{@code RefundService} so that no sales
- * application service touches a {@code catalog.domain} type. The exact lock acquisition order and
- * transactional save points are preserved — see {@link InventoryCommandPort} for the locking contract.
+ * sales context, implementing {@link InventoryCommandPort}. The load, domain mutation and save of each
+ * reserve, release, confirm and return happen here, so that no sales application service touches a
+ * {@code catalog.domain} type; reserve also checks the purchase policy. Which methods take the event
+ * lock is per method: see {@link InventoryCommandPort} for the locking and transaction contract.
  */
 @Service
 @Slf4j
@@ -69,8 +68,8 @@ public class InventoryService implements InventoryCommandPort {
      */
     public InventoryService(EventRepository eventRepository, ProductionCompanyRepository companyRepository,
             PlatformTransactionManager transactionManager) {
-        this.eventRepository = eventRepository;       // store the event port
-        this.companyRepository = companyRepository;   // store the company port
+        this.eventRepository = eventRepository;
+        this.companyRepository = companyRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -83,36 +82,36 @@ public class InventoryService implements InventoryCommandPort {
         // lock, so the global order-before-event acquisition order is preserved.
         eventRepository.lockForBuyerOperation(eventId);
         try {
-            Event event = getEventOrThrow(eventId);                 // load + existence check
-            InventoryZone zone = getZoneOrThrow(event, zoneId);     // venue map + zone existence check
+            Event event = getEventOrThrow(eventId);
+            InventoryZone zone = getZoneOrThrow(event, zoneId);
             // Effective purchase policy (company AND event) at the RESERVE stage — max + (member) age
             // are enforced; minimum and unknown (guest) age are deferred to checkout.
             PurchaseContext context = new PurchaseContext(
                     buyerId, buyerAge, eventId, event.getCompanyId(), totalQuantityForPolicy, PurchaseStage.RESERVE);
-            ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId()); // owning company
-            event.validateEffectivePolicy(company.getPurchasePolicy(), context); // throws on rejection
-            double pricePerTicket = zone.getprice();                // unit price for the caller's cart line
-            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil)); // mutate inventory (ownership-stamped)
-            eventRepository.save(event);                            // persist under the held lock
-            return pricePerTicket;                                  // hand the price back to sales
+            ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
+            event.validateEffectivePolicy(company.getPurchasePolicy(), context);
+            double pricePerTicket = zone.getprice();
+            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil));
+            eventRepository.save(event);
+            return pricePerTicket;
         } finally {
-            eventRepository.unlockBuyerOperation(eventId);          // always release the buyer-lock
+            eventRepository.unlockBuyerOperation(eventId);
         }
     }
 
     /** {@inheritDoc} SELF-LOCKING single-event release; returns the unit price for rollback rebuilds. */
     @Override
     public double release(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey) {
-        eventRepository.lockForBuyerOperation(eventId);             // event lock inside the port
+        eventRepository.lockForBuyerOperation(eventId);
         try {
-            Event event = getEventOrThrow(eventId);                 // load + existence check
-            InventoryZone zone = getZoneOrThrow(event, zoneId);     // zone existence check + price source
-            double pricePerTicket = zone.getprice();                // captured for the caller's rollback re-add
-            event.releaseInventory(zoneId, toDomainSelection(selection, orderKey, null)); // release the held selection
-            eventRepository.save(event);                            // persist under the held lock
-            return pricePerTicket;                                  // unit price back to sales
+            Event event = getEventOrThrow(eventId);
+            InventoryZone zone = getZoneOrThrow(event, zoneId);
+            double pricePerTicket = zone.getprice();
+            event.releaseInventory(zoneId, toDomainSelection(selection, orderKey, null));
+            eventRepository.save(event);
+            return pricePerTicket;
         } finally {
-            eventRepository.unlockBuyerOperation(eventId);          // release the buyer-lock
+            eventRepository.unlockBuyerOperation(eventId);
         }
     }
 
@@ -121,13 +120,13 @@ public class InventoryService implements InventoryCommandPort {
     public void restore(int eventId, int zoneId, InventorySelectionDTO selection, String orderKey,
             LocalDateTime holdUntil) {
         Objects.requireNonNull(holdUntil, "holdUntil");
-        eventRepository.lockForBuyerOperation(eventId);             // event lock inside the port
+        eventRepository.lockForBuyerOperation(eventId);
         try {
-            Event event = getEventOrThrow(eventId);                 // load + existence check
-            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil)); // re-reserve (no policy re-check)
-            eventRepository.save(event);                            // persist under the held lock
+            Event event = getEventOrThrow(eventId);
+            event.reserveInventory(zoneId, toDomainSelection(selection, orderKey, holdUntil));
+            eventRepository.save(event);
         } finally {
-            eventRepository.unlockBuyerOperation(eventId);          // release the buyer-lock
+            eventRepository.unlockBuyerOperation(eventId);
         }
     }
 
@@ -137,7 +136,6 @@ public class InventoryService implements InventoryCommandPort {
      */
     @Override
     public void returnSoldToStock(List<InventoryLineDTO> lines) {
-        // Group the flat refund lines by event then zone so each event is locked and saved once.
         Map<Integer, Map<Integer, List<InventoryLineDTO>>> byEventThenZone = groupByEventAndZone(lines);
 
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : byEventThenZone.entrySet()) {
@@ -147,11 +145,11 @@ public class InventoryService implements InventoryCommandPort {
             // failed stock return must never fail the refund. It does leave the places SOLD for good, with
             // nothing to repair them, so every way it can fail is logged at ERROR.
             try {
-                eventRepository.lockForBuyerOperation(eventId);     // self-lock this event
+                eventRepository.lockForBuyerOperation(eventId);
                 try {
                     returnEventToStock(eventId, eventEntry.getValue());
                 } finally {
-                    eventRepository.unlockBuyerOperation(eventId);  // release this event's lock
+                    eventRepository.unlockBuyerOperation(eventId);
                 }
             } catch (RuntimeException e) {
                 log.error("Refund: returning places to stock failed; they stay SOLD. eventId={}, placesByZone={}",
@@ -202,7 +200,7 @@ public class InventoryService implements InventoryCommandPort {
         for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : linesByZone.entrySet()) {
             int zoneId = zoneEntry.getKey();
             try {
-                // SOLD tickets are returned WITHOUT an order key (ownership isn't checked here).
+                // A sold place carries no hold, so the selection has no order key and no ownership check applies.
                 event.returnSoldToStock(zoneId, toStockSelection(zoneEntry.getValue()));
                 anyReturned = true;
             } catch (RuntimeException zoneRefusal) {
@@ -213,7 +211,7 @@ public class InventoryService implements InventoryCommandPort {
             }
         }
         if (anyReturned) {
-            eventRepository.save(event);                            // persist only if something changed
+            eventRepository.save(event);
         }
     }
 
@@ -226,32 +224,32 @@ public class InventoryService implements InventoryCommandPort {
     /** {@inheritDoc} Pure read — final per-ticket price via the event's discount policy. */
     @Override
     public double priceTicket(int eventId, int eventQuantity, double priceAtReservation, LocalDateTime now) {
-        Event event = eventRepository.findById(eventId);            // load the event
-        return event.calculatePriceforoneticket(eventQuantity, priceAtReservation, now); // discount-policy price
+        Event event = eventRepository.findById(eventId);
+        return event.calculatePriceforoneticket(eventQuantity, priceAtReservation, now);
     }
 
     /** {@inheritDoc} Pure read — the event's display name. */
     @Override
     public String eventName(int eventId) {
-        Event event = eventRepository.findById(eventId);            // load the event
-        return event.getName();                                    // the event's name
+        Event event = eventRepository.findById(eventId);
+        return event.getName();
     }
 
     /** {@inheritDoc} Pure read — validates the effective (company AND event) policy at CHECKOUT stage. */
     @Override
     public void validatePurchasePolicy(int eventId, int buyerId, Integer buyerAge, int quantity) {
-        Event event = eventRepository.findById(eventId);           // load the event
+        Event event = eventRepository.findById(eventId);
         // CHECKOUT-stage context (every policy rule enforced): the 5-arg constructor defaults the stage.
         PurchaseContext context = new PurchaseContext(buyerId, buyerAge, event.getId(), event.getCompanyId(), quantity);
-        ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId()); // owning company
-        event.validateEffectivePolicy(company.getPurchasePolicy(), context); // throws on rejection
+        ProductionCompany company = companyRepository.getCompanyById(event.getCompanyId());
+        event.validateEffectivePolicy(company.getPurchasePolicy(), context);
     }
 
     /** {@inheritDoc} Each event must exist and be ON_SALE or SOLD_OUT; holds each against a cancel until the caller's transaction ends. */
     @Override
     public void validateEventsOnSale(List<Integer> eventIds) {
         for (Integer eventId : eventIds) {
-            Event event = eventRepository.findForSale(eventId);    // holds the event against a cancel until commit
+            Event event = eventRepository.findForSale(eventId);
             // SOLD_OUT is allowed: an event that sold out while these tickets were reserved must still let
             // the holders complete their purchase (mirrors Event.validateCanConfirmSale).
             if (event.getStatus() != EventStatus.ON_SALE && event.getStatus() != EventStatus.SOLD_OUT) {
@@ -266,15 +264,15 @@ public class InventoryService implements InventoryCommandPort {
         Map<Integer, Map<Integer, List<InventoryLineDTO>>> grouped = groupByEventAndZone(lines);
 
         for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : grouped.entrySet()) {
-            Event event = eventRepository.findById(eventEntry.getKey()); // load the event
+            Event event = eventRepository.findById(eventEntry.getKey());
 
             for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : eventEntry.getValue().entrySet()) {
                 int zoneId = zoneEntry.getKey();
                 List<InventoryLineDTO> zoneItems = zoneEntry.getValue();
 
-                InventoryZone zone = event.getVenueMap().getZone(zoneId); // resolve the zone
+                InventoryZone zone = event.getVenueMap().getZone(zoneId);
 
-                List<String> seatNumbers = extractSeatNumbers(zoneItems); // seated seats in this zone
+                List<String> seatNumbers = extractSeatNumbers(zoneItems);
 
                 if (seatNumbers.isEmpty()) {
                     if (zone.isSeated()) {
@@ -296,8 +294,7 @@ public class InventoryService implements InventoryCommandPort {
                             throw new ConcurrentReservationException(
                                     "Seat " + seatNumber + " is no longer RESERVED — reservation may have expired");
                         }
-                        // Ownership check: ensure this checkout's order still holds the seat. Skip when the
-                        // seat was reserved without an explicit order key (anonymous sentinel).
+                        // Ownership check: this checkout's order must still hold the seat.
                         Seat seat = seatedZone.getSeatByLabel(seatNumber);
                         String seatOwner = seat.getReservedByOrderKey();
                         if (orderKey != null && !orderKey.equals(seatOwner)) {
@@ -321,26 +318,26 @@ public class InventoryService implements InventoryCommandPort {
         List<ConfirmedUnit> confirmed = new ArrayList<>();
         try {
             for (Map.Entry<Integer, Map<Integer, List<InventoryLineDTO>>> eventEntry : grouped.entrySet()) {
-                Event event = eventRepository.findById(eventEntry.getKey()); // load the event
+                Event event = eventRepository.findById(eventEntry.getKey());
 
                 for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : eventEntry.getValue().entrySet()) {
                     int zoneId = zoneEntry.getKey();
                     List<InventoryLineDTO> zoneItems = zoneEntry.getValue();
 
-                    List<String> seatNumbers = extractSeatNumbers(zoneItems); // seated seats (empty = standing)
+                    List<String> seatNumbers = extractSeatNumbers(zoneItems);
                     InventorySelection selection = seatNumbers.isEmpty()
                             ? InventorySelection.standing(zoneItems.size(), orderKey)
                             : InventorySelection.seated(seatNumbers, orderKey);
 
-                    event.confirmInventorySale(zoneId, selection);          // RESERVED -> SOLD (ownership-checked)
-                    confirmed.add(new ConfirmedUnit(event, zoneId, selection)); // remember for compensation
+                    event.confirmInventorySale(zoneId, selection);
+                    confirmed.add(new ConfirmedUnit(event, zoneId, selection));
                 }
 
-                eventRepository.save(event);                                // persist this event once
+                eventRepository.save(event);
             }
         } catch (RuntimeException confirmFailure) {
-            compensateConfirmedSales(confirmed);                            // reverse anything already SOLD
-            throw confirmFailure;                                          // re-raise the original failure
+            compensateConfirmedSales(confirmed);
+            throw confirmFailure;
         }
     }
 
@@ -385,7 +382,7 @@ public class InventoryService implements InventoryCommandPort {
         for (Map.Entry<Integer, List<InventoryLineDTO>> zoneEntry : linesByZone.entrySet()) {
             int zoneId = zoneEntry.getKey();
             List<InventoryLineDTO> zoneItems = zoneEntry.getValue();
-            List<String> seatNumbers = extractSeatNumbers(zoneItems);  // seated seats (empty = standing)
+            List<String> seatNumbers = extractSeatNumbers(zoneItems);
             try {
                 if (seatNumbers.isEmpty()) {
                     event.releaseInventory(zoneId, InventorySelection.standing(zoneItems.size(), orderKey));
@@ -399,12 +396,12 @@ public class InventoryService implements InventoryCommandPort {
             }
         }
         if (anyReleased) {
-            eventRepository.save(event);                               // persist only if something changed
+            eventRepository.save(event);
         }
     }
 
     // ---------------------------------------------------------------------
-    // Internal helpers (moved verbatim from the former sales services)
+    // Internal helpers
     // ---------------------------------------------------------------------
 
     /** Loads an event by id, throwing {@link EventNotFoundException} if it does not exist (reserve/release path). */
@@ -412,14 +409,14 @@ public class InventoryService implements InventoryCommandPort {
         return eventRepository.findById(eventId);
     }
 
-    /** Resolves a zone from an event's venue map, normalizing both the throw and the null contract of getZone. */
+    /** Resolves a zone from an event's venue map, normalizing the throw of getZone. */
     private InventoryZone getZoneOrThrow(Event event, int zoneId) {
         if (event.getVenueMap() == null) {
             throw new IllegalStateException("Venue map is not configured for event: " + event.getId());
         }
         InventoryZone zone;
         try {
-            zone = event.getVenueMap().getZone(zoneId);            // may throw IllegalArgumentException
+            zone = event.getVenueMap().getZone(zoneId);
         } catch (IllegalArgumentException e) {
             log.warn("Request rejected: zone not found. eventId={}, zoneId={}", event.getId(), zoneId);
             throw new IllegalArgumentException("Zone not found: " + zoneId);
@@ -445,13 +442,13 @@ public class InventoryService implements InventoryCommandPort {
 
     /** Builds an ownership-less selection (SOLD-return path) from a zone's refund lines. */
     private InventorySelection toStockSelection(List<InventoryLineDTO> zoneLines) {
-        List<String> seatNumbers = extractSeatNumbers(zoneLines);  // seated seats in this zone
+        List<String> seatNumbers = extractSeatNumbers(zoneLines);
         return seatNumbers.isEmpty()
-                ? InventorySelection.standing(zoneLines.size())    // N standing units, no order key
-                : InventorySelection.seated(seatNumbers);          // seated seats, no order key
+                ? InventorySelection.standing(zoneLines.size())
+                : InventorySelection.seated(seatNumbers);
     }
 
-    /** Groups flat inventory lines by event id and then by zone id (mirrors the former checkout grouping). */
+    /** Groups flat inventory lines by event id and then by zone id, so each event is handled once. */
     private Map<Integer, Map<Integer, List<InventoryLineDTO>>> groupByEventAndZone(List<InventoryLineDTO> lines) {
         return lines.stream()
                 .collect(Collectors.groupingBy(
@@ -476,8 +473,8 @@ public class InventoryService implements InventoryCommandPort {
         for (int i = confirmed.size() - 1; i >= 0; i--) {
             ConfirmedUnit unit = confirmed.get(i);
             try {
-                unit.event().returnSoldToStock(unit.zoneId(), unit.selection()); // SOLD -> AVAILABLE
-                eventRepository.save(unit.event());                              // persist the reversal
+                unit.event().returnSoldToStock(unit.zoneId(), unit.selection());
+                eventRepository.save(unit.event());
             } catch (RuntimeException compensationFailure) {
                 log.error("Failed to compensate a confirmed sale during checkout rollback. zoneId={}",
                         unit.zoneId(), compensationFailure);

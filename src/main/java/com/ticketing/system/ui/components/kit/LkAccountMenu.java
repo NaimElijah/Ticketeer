@@ -4,12 +4,20 @@ import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.Span;
 
 /**
- * Account dropdown — avatar / name / email header + nav menu.
- * Ports {@code AccountMenu}, with {@link #buyer(String, String, String)}
- * and {@link #admin(String, String)} factories matching the reference.
+ * Account dropdown — avatar / name / subline header + nav menu. The shells build
+ * their own {@link LkMenu} and use the constructor; {@link #buyer(String, String, String)}
+ * and {@link #admin(String, String)} build menus of fixed items that do nothing when clicked.
  */
 public class LkAccountMenu extends Div {
 
+    /**
+     * @param avatarInitials the initials in the avatar circle
+     * @param name           the user's name, in the header
+     * @param subline        the line under the name, such as a role or an email
+     * @param menu           the menu shown under the header
+     * @param avatarBg       a CSS background colour for the avatar; {@code null} for the theme's
+     * @param avatarFg       a CSS text colour for the initials; {@code null} for the theme's
+     */
     public LkAccountMenu(String avatarInitials, String name, String subline,
                          LkMenu menu, String avatarBg, String avatarFg) {
         addClassName("lk-acct");
@@ -32,6 +40,13 @@ public class LkAccountMenu extends Div {
         add(head, menu);
     }
 
+    /**
+     * A menu of buyer items with the email as the subline. The items have no click handlers.
+     *
+     * @param initials the initials in the avatar circle
+     * @param name     the user's name
+     * @param email    shown under the name
+     */
     public static LkAccountMenu buyer(String initials, String name, String email) {
         LkMenu menu = new LkMenu(
             new LkMenu.Item("ticket", "My Tickets"),
@@ -48,6 +63,13 @@ public class LkAccountMenu extends Div {
         return new LkAccountMenu(initials, name, email, menu, null, null);
     }
 
+    /**
+     * A menu of platform-admin items, with the subline "System administrator" and an orange-on-white
+     * avatar. The items have no click handlers.
+     *
+     * @param initials the initials in the avatar circle
+     * @param name     the admin's name
+     */
     public static LkAccountMenu admin(String initials, String name) {
         LkMenu menu = new LkMenu(
             new LkMenu.Item("gear",   "Admin Settings"),

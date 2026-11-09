@@ -6,6 +6,8 @@ package com.ticketing.system.shared.dto;
  * <p>The token identifies the session to invalidate. UC-14 per II.3.1 is purely
  * a session-termination concern; cart state is governed by II.3.0.1 / II.3.0.3
  * and is not touched here.
+ *
+ * @param token the session token to revoke; {@code null}, blank or already revoked is a no-op
  */
 public record LogoutRequestDTO(
     String token

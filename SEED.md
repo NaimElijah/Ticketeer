@@ -105,7 +105,7 @@ stops the boot with a bind error naming `seed.mode` (ADR-003).
 |---|---|
 | `off` (default outside dev) | Do nothing. |
 | `reseed` | Open the market and run the scenario. If a user the scenario registers already exists (by username, honouring a line's `username=`), the scenario has run against this database before: no step runs, a WARN points at `seed.mode=reset`, and the boot goes on. Users the scenario does not register, such as `dev.member`, do not count. **dev's default.** |
-| `wipe` | Delete **all business data** (keeping the platform admin), then stop. *Destructive.* |
+| `wipe` | Delete **all business data** (keeping the platform admin) and seed nothing; the boot goes on. *Destructive.* |
 | `reset` | Read the scenario, `wipe`, then reseed (`DevUserSeeder` + scenario). A scenario that is missing, unreadable or refused by the parser stops the boot before anything is deleted. The scenario runs even if its users existed, since the wipe removed them. *Destructive.* |
 | `ask` | Interactive startup menu — choose the mode *and* scenario on the console at boot. If stdin yields EOF/empty input, or an `IOException` (logged at WARN), a prompt falls back to its default (`off` for the mode, `demo` for the scenario). An unrecognised mode is skipped with a warning. An unrecognised scenario is refused, the valid names are shown, and the question is asked again; if the console then ends, or cannot be read, the boot stops with a message naming the valid choices instead of taking the default. |
 
@@ -120,8 +120,9 @@ deleted and refuse — so a stray `SEED_MODE=reset` can never wipe a database on
 ```
 
 The wipe is `JpaRepoCleaner`, which deletes through the Spring Data repositories — H2 and Postgres
-alike. It deliberately keeps the `admins` row so a reset still has an admin to re-open the market for
-the reseed's checkouts (`PlatformInitializationRunner` re-creates it regardless).
+alike. It deliberately keeps the `admins` row: `PlatformInitializationRunner` creates the default admin only
+when none exists and has already run by then, and a reset needs an admin to re-open the market for the
+reseed's checkouts.
 
 ## Choosing / replaying a different scenario
 

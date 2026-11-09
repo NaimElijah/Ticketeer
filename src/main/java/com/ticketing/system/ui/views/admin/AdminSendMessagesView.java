@@ -48,6 +48,8 @@ import java.util.Map;
  * shown as chips), "All members", or "All producers". Each recipient receives a two-way DIRECT
  * conversation in their Support Inbox.
  * Backed by {@link AdminSendMessagesPresenter} → {@code MessagingService}.
+ *
+ * <p>Served at {@code /admin/messages}.
  */
 @Route(value = "admin/messages", layout = PlatformAdminLayout.class)
 @PageTitle("Send Messages · Admin")
@@ -84,6 +86,9 @@ public class AdminSendMessagesView extends LkPage {
     /** History grid lives in its own slot so it can reload in place after a send. */
     private final Div historySlot = new Div();
 
+    /**
+     * Creates the page and loads the sent-outreach history.
+     */
     public AdminSendMessagesView(AdminSendMessagesPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

@@ -1,7 +1,7 @@
 package com.ticketing.system.sales.adapter.out.wsep;
-import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.SensitiveDataMasker;
+import com.ticketing.system.shared.external.WsepCommunicationException;
+import com.ticketing.system.shared.external.WsepHttpClient;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -51,6 +51,12 @@ public class WsepTicketIssuer implements TicketIssuer {
     private final WsepHttpClient http;
     private final Clock clock;   // stamps issuances (UTC wall time, ADR-008)
 
+    /**
+     * Creates the issuer.
+     *
+     * @param http  the WSEP client that sends each action
+     * @param clock the source of the time stamped on issuances (ADR-008)
+     */
     public WsepTicketIssuer(WsepHttpClient http, Clock clock) {
         this.http = http;
         this.clock = clock;
@@ -65,7 +71,7 @@ public class WsepTicketIssuer implements TicketIssuer {
     public boolean verifyConnection() {
         try {
             // Retried (idempotent handshake): a cold-starting WSEP endpoint may miss the first attempt
-            // but answer a later one, so a transient blip doesn't leave the market closed at boot (#455).
+            // but answer a later one, so a transient blip doesn't leave the market closed at boot (upstream#455).
             boolean ok = "OK".equalsIgnoreCase(http.postWithRetry(WsepHttpClient.action("handshake")));
             log.debug("wsep handshake (issuer): reachable={}", ok);
             return ok;

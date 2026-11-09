@@ -1,14 +1,19 @@
 package com.ticketing.system.shared.event;
 
 /**
- * Integration event published by the catalog context (EventManagementService) once per ticket
- * holder when an event is cancelled and refunds are processed. The notifications context listens
- * for it and raises an event-cancelled notification. Mirrors the former
- * {@code INotificationService.notifyEventCancelled} call.
+ * Integration event published by the sales context (EventCancellationRefundService) once per
+ * member in each refund run for a cancelled event, after the refund of one of that member's receipts
+ * is recorded. A guest buyer has no user id and gets none. The notifications context listens for it
+ * and raises an event-cancelled notification. The listener hands its components to
+ * {@code INotificationService.notifyEventCancelled}.
+ *
+ * @param userId the ticket holder to notify
+ * @param eventId the event that was cancelled
+ * @param eventName the display name of the cancelled event
  */
 public record EventCancelledNotice(
-        int userId,        // the ticket holder to notify
-        int eventId,       // the event that was cancelled
-        String eventName   // the display name of the cancelled event
+        int userId,
+        int eventId,
+        String eventName
 ) {
 }

@@ -38,12 +38,24 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 
-// V3: aggregate root mapped to JPA. Assigned int @Id (minted by nextId()); comapnyid is a by-id
-// column; category/status stored by name; @Version drives the event-level optimistic lock
-// (structural/lifecycle edits) while Seat and InventoryZone carry their own @Version so independent
-// buyer reservations never false-conflict. artistsNames and showDates (@Embeddable) are element
-// collections; venueMap is an owned @OneToOne (nullable in DRAFT); the policies are stored as JSON.
-// A protected no-arg ctor lets Hibernate hydrate; the public ctors enforce the invariants.
+/**
+ * The event aggregate root: an event's details, show dates, {@link VenueMap}, lifecycle status
+ * ({@link EventStatus}) and purchase and discount policies (UC-19, UC-20, UC-21).
+ *
+ * <p>The inventory edit methods of this class check that the owning company asks and that the event
+ * is still DRAFT or SCHEDULED. Buyer operations ({@link #reserveInventory},
+ * {@link #releaseInventory}, {@link #confirmInventorySale}, {@link #returnSoldToStock}) change seat and
+ * zone state, and move the event between ON_SALE and SOLD_OUT when stock runs out or frees up.
+ *
+ * <p>Persistence: the id is an assigned {@code int} (minted by {@code EventRepository.nextId()}); the
+ * company is held by id; category and status are stored by name. {@code @Version} drives the
+ * event-level optimistic lock for structural and lifecycle edits, while {@link Seat} and
+ * {@link InventoryZone} carry their own {@code @Version} so independent buyer reservations never
+ * false-conflict. The venue map row has no {@code @Version}, so a write that changes only that row is
+ * last-write-wins. Artist names and show dates are element collections; the venue map is an owned
+ * {@code @OneToOne} (the column is nullable, but {@code addEvent} binds an empty map); the policies are
+ * stored as JSON. A protected no-arg constructor lets Hibernate hydrate; the public constructors enforce the invariants.
+ */
 @Slf4j
 @Entity
 @Table(name = "events")
@@ -84,7 +96,7 @@ public class Event implements InvariantChecked {
     @jakarta.persistence.CollectionTable(name = "event_show_dates", joinColumns = @JoinColumn(name = "event_id"))
     private List<ShowDate> showDates;
     // The IANA zone the show dates are wall-clock times in (ADR-008). It lives on the event rather
-    // than the VenueMap because the map may be null in DRAFT while show dates are already mandatory.
+    // than the VenueMap because the constructor accepts a null map while show dates are already mandatory.
     @Column(name = "time_zone", nullable = false, length = 64)
     private ZoneId timeZone;
     @Convert(converter = PurchasePolicyJsonConverter.class)
@@ -106,8 +118,11 @@ public class Event implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Event() { }
 
-    // Description-less constructor — kept for existing callers/tests. Delegates with a null
-    // description (description is optional and carries no invariant).
+    /**
+     * Creates an event with no description. No production code calls it; it delegates to
+     * {@link #Event(int, String, String, Double, List, EventCategory, int, EventStatus, VenueMap, List, ZoneId, PurchasePolicy, DiscountPolicy)}
+     * with a {@code null} description, and so throws what that constructor throws.
+     */
     public Event(int id, String name, Double rating, List<String> artistsNames, EventCategory category, int comapnyid,
             EventStatus status, VenueMap venueMap, List<ShowDate> showDates, ZoneId timeZone,
             PurchasePolicy PurchasePolicy, DiscountPolicy discountPolicy) {
@@ -116,9 +131,30 @@ public class Event implements InvariantChecked {
     }
 
     /**
-     * @param showDates wall-clock times at the venue, read in {@code timeZone}
-     * @param timeZone  the venue's IANA zone (ADR-008); required
-     * @throws IllegalArgumentException if an artist's name is null or blank
+     * Creates an event in the given status. The status is stored as given; no lifecycle transition runs.
+     *
+     * @param id            the event's id; positive
+     * @param name          the event's name; non-blank, at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param description   the event's description, or {@code null} for none; at most
+     *                      {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param rating        the event's rating from 0 to 5, or {@code null} if unrated
+     * @param artistsNames  the lineup; at least one name, each non-blank and at most
+     *                      {@link TextLimits#MAX_TEXT_LENGTH} characters; copied
+     * @param category      the event's category
+     * @param comapnyid     the id of the owning company; positive
+     * @param status        the event's lifecycle status
+     * @param venueMap      the venue map, or {@code null} for none; {@code addEvent} binds an empty map
+     * @param showDates     at least one show, as wall-clock times at the venue read in {@code timeZone};
+     *                      copied
+     * @param timeZone      the venue's IANA zone (ADR-008)
+     * @param PurchasePolicy the event's own purchase policy, or {@code null} for {@link NoPurchasePolicy}
+     * @param discountPolicy the event's discount policy
+     * @throws BusinessRuleViolationException if the name, the description or an artist's name is too long;
+     *                                        its message is shown to the user
+     * @throws IllegalArgumentException       if an artist's name is null or blank
+     * @throws IllegalStateException          if any other invariant fails: a non-positive id or company id,
+     *                                        a blank name, a rating outside 0 to 5, or a missing category,
+     *                                        status, lineup, show date, time zone or discount policy
      */
     public Event(int id, String name, String description, Double rating, List<String> artistsNames,
             EventCategory category, int comapnyid, EventStatus status, VenueMap venueMap, List<ShowDate> showDates,
@@ -139,11 +175,9 @@ public class Event implements InvariantChecked {
         this.venueMap = venueMap;
         this.showDates = showDates == null ? null : new ArrayList<>(showDates);
         this.timeZone = timeZone;
-        // purchasePolicy defaults to NoPurchasePolicy when not supplied.
         this.purchasePolicy = PurchasePolicy == null ? new NoPurchasePolicy() : PurchasePolicy;
-        // Discount Policies are not currently in the implementation plan so in the creation of the event we manually,
-        // without outside intervention, set the discount to 0, not doing any discount automatically without the ability to
-        // change this from the outside right now.
+        // Stored as given; checkInvariants refuses null. No path sets an event's discount yet (OQ-36, NaimElijah/Ticketeer#259),
+        // so EventManagementService.addEvent passes a 0% policy.
         this.discountPolicy = discountPolicy;
         checkInvariants();
     }
@@ -154,8 +188,18 @@ public class Event implements InvariantChecked {
 
 
     /**
-     * Generic inventory reservation. The zone itself decides whether this is a
-     * standing quantity or a seated selection.
+     * Reserves inventory in one zone. The zone decides whether the selection is a standing quantity or
+     * seated seats. When this takes the last available place or seat of an ON_SALE event, the event
+     * becomes SOLD_OUT. That flip is atomic for threads sharing this instance (the in-memory adapter); on
+     * Jpa, concurrent flips are separated by the event's {@code @Version}.
+     *
+     * @param zoneId    the zone within the venue map
+     * @param selection the quantity or seats to reserve; carries the holding order's key
+     * @return {@code true}; a refusal is an exception
+     * @throws IllegalArgumentException if {@code selection} is {@code null}, the zone does not exist, or
+     *                                  the selection is of the wrong kind or invalid for the zone
+     * @throws IllegalStateException    if the event has no venue map or is not ON_SALE, or the zone has
+     *                                  too few available places or a requested seat is not available
      */
     public boolean reserveInventory(int zoneId, InventorySelection selection) {
         validateCanReserve(selection);
@@ -170,6 +214,19 @@ public class Event implements InvariantChecked {
         return true;
     }
 
+    /**
+     * Releases held (RESERVED) inventory in one zone back to AVAILABLE, whatever the event's status.
+     * A SOLD_OUT event becomes ON_SALE again once any place or seat is available.
+     *
+     * @param zoneId    the zone within the venue map
+     * @param selection the quantity or seats to release; when it carries an order key, the zone checks
+     *                  that order holds them
+     * @return {@code true}; a refusal is an exception
+     * @throws IllegalArgumentException if {@code selection} is {@code null}, the zone does not exist, or
+     *                                  the selection is of the wrong kind or invalid for the zone
+     * @throws IllegalStateException    if the event has no venue map, or the zone holds less than the
+     *                                  selection for that order
+     */
     public boolean releaseInventory(int zoneId, InventorySelection selection) {
         validateInventoryAction(selection);
         this.venueMap.releaseInventory(zoneId, selection);
@@ -187,6 +244,14 @@ public class Event implements InvariantChecked {
      * Return previously SOLD inventory to AVAILABLE stock (member refund). Mirrors
      * {@link #releaseInventory} but acts on SOLD seats/places rather than RESERVED holds,
      * and likewise re-opens a sold-out event once a place frees up.
+     *
+     * @param zoneId    the zone within the venue map
+     * @param selection the SOLD quantity or seats to return; any order key is ignored
+     * @return {@code true}; a refusal is an exception
+     * @throws IllegalArgumentException if {@code selection} is {@code null}, the zone does not exist, or
+     *                                  the selection is of the wrong kind or invalid for the zone
+     * @throws IllegalStateException    if the event has no venue map, or the zone has fewer SOLD places
+     *                                  (or a requested seat is not SOLD) than the selection
      */
     public boolean returnSoldToStock(int zoneId, InventorySelection selection) {
         validateInventoryAction(selection);
@@ -200,6 +265,18 @@ public class Event implements InvariantChecked {
         return true;
     }
 
+    /**
+     * Turns held (RESERVED) inventory in one zone into SOLD. Allowed while the event is ON_SALE or
+     * SOLD_OUT, so holders of reservations made before it sold out can still complete their purchase.
+     *
+     * @param zoneId    the zone within the venue map
+     * @param selection the quantity or seats to confirm; when it carries an order key, the zone checks
+     *                  that order holds them
+     * @throws IllegalArgumentException if {@code selection} is {@code null}, the zone does not exist, or
+     *                                  the selection is of the wrong kind or invalid for the zone
+     * @throws IllegalStateException    if the event has no venue map or is not ON_SALE or SOLD_OUT, or the
+     *                                  zone holds less than the selection for that order
+     */
     public void confirmInventorySale(int zoneId, InventorySelection selection) {
         validateCanConfirmSale(selection);
         this.venueMap.confirmSale(zoneId, selection);
@@ -246,6 +323,16 @@ public class Event implements InvariantChecked {
     }
 
 
+    /**
+     * Checks that a zone has at least {@code quantity} places available. The event needs a venue map.
+     *
+     * @param zoneId   the zone within the venue map
+     * @param quantity the number of places wanted
+     * @return {@code true}; too few places is an exception
+     * @throws IllegalArgumentException if the zone does not exist, or {@code quantity} is not positive
+     *                                  for a standing zone
+     * @throws IllegalStateException    if the zone has fewer than {@code quantity} places available
+     */
     public boolean checkAvailability(int zoneId, int quantity) {
         return this.venueMap.checkAvailability(zoneId, quantity);
     }
@@ -254,11 +341,30 @@ public class Event implements InvariantChecked {
         return id;
     }
 
-    
+    /**
+     * Prices a purchase of {@code quantity} tickets through the event's discount policy.
+     *
+     * @param quantity                    the number of tickets; positive
+     * @param priceAtoneticketReservation the price of one ticket when it was reserved; not negative
+     * @param now                         the pricing time; the flat percentage policy does not read it
+     * @return the total for all {@code quantity} tickets after the discount
+     * @throws IllegalArgumentException if {@code quantity} is not positive, or the price is {@code null}
+     *                                  or negative
+     */
     public double calculatePrice(int quantity, Double priceAtoneticketReservation, LocalDateTime now) {
         return discountPolicy.calculate(quantity, priceAtoneticketReservation, now);
     }
-    //? These 2 functions are not in the implementation plan, so above for each event we just give discount 0, so not doing any discount.
+    /**
+     * Prices one ticket of a purchase of {@code quantity} tickets through the event's discount policy.
+     * Takes the same arguments as {@link #calculatePrice}.
+     *
+     * @param quantity                    the number of tickets in the purchase; positive
+     * @param priceAtoneticketReservation the price of one ticket when it was reserved; not negative
+     * @param now                         the pricing time; the flat percentage policy does not read it
+     * @return the per-ticket price after the discount
+     * @throws IllegalArgumentException if {@code quantity} is not positive, or the price is {@code null}
+     *                                  or negative
+     */
     public double calculatePriceforoneticket(int quantity, Double priceAtoneticketReservation, LocalDateTime now) {
         return discountPolicy.calculatePriceforoneticket(quantity, priceAtoneticketReservation, now);
     }
@@ -276,8 +382,8 @@ public class Event implements InvariantChecked {
      * @param incomingCompanyId the company asking
      * @throws UnauthorizedActionException if another company asks
      * @throws IllegalArgumentException    if {@code venueMap} is null
-     * @throws IllegalStateException       if tickets are reserved or sold, or if the event is SCHEDULED and
-     *                                     the new map has no zone
+     * @throws IllegalStateException       if the event is past SCHEDULED, if tickets are reserved or sold, or
+     *                                     if the event is SCHEDULED and the new map has no zone
      */
     public void configureVenueMap(VenueMap venueMap, int incomingCompanyId) {
         if (comapnyid != incomingCompanyId) {
@@ -323,6 +429,23 @@ public class Event implements InvariantChecked {
 
 
 
+    /**
+     * Adds a standing zone to the venue map, on the owning company's behalf. The zone gets the map's
+     * next zone id.
+     *
+     * @param zoneName          the zone's name; non-blank, at most {@link TextLimits#MAX_TEXT_LENGTH}
+     *                          characters, and different from every other zone's name ignoring case
+     * @param capacity          the number of places; not negative
+     * @param pricePerTicket    the price of one place, from 0 to {@link InventoryZone#MAX_PRICE}
+     * @param incomingCompanyId the company asking
+     * @return the new zone's id
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map, or the name is too long (its
+     *                                        message is written for the user)
+     * @throws IllegalArgumentException       if another zone already has the name
+     * @throws IllegalStateException          if the event is past SCHEDULED, or the name, capacity or price
+     *                                        breaks the zone's invariants
+     */
     public int addStandingZone(String zoneName, int capacity, double pricePerTicket, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
         int newZoneId = venueMap.getNextZoneId();
@@ -336,7 +459,24 @@ public class Event implements InvariantChecked {
         return newZoneId;
     }
 
-    
+    /**
+     * Adds a seated zone to the venue map, on the owning company's behalf. The zone gets the map's
+     * next zone id.
+     *
+     * @param zoneName          the zone's name; non-blank, at most {@link TextLimits#MAX_TEXT_LENGTH}
+     *                          characters, and different from every other zone's name ignoring case
+     * @param pricePerTicket    the price of one seat, from 0 to {@link InventoryZone#MAX_PRICE}
+     * @param seats             the zone's seats; at least one, with distinct labels
+     * @param incomingCompanyId the company asking
+     * @return the new zone's id
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map, or the name is too long (its
+     *                                        message is written for the user)
+     * @throws IllegalArgumentException       if {@code seats} is null or empty, two seats share a label, or
+     *                                        another zone already has the name
+     * @throws IllegalStateException          if the event is past SCHEDULED, or the name or price breaks the
+     *                                        zone's invariants
+     */
     public int addSeatedZone(String zoneName, double pricePerTicket, List<Seat> seats, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
 
@@ -390,11 +530,39 @@ public class Event implements InvariantChecked {
 
 
 
+    /**
+     * Adds places to a standing zone, on the owning company's behalf.
+     *
+     * @param zoneId            the standing zone
+     * @param amountToAdd       the number of places to add; positive
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map
+     * @throws IllegalArgumentException       if the map has no such zone, or {@code amountToAdd} is not
+     *                                        positive
+     * @throws IllegalStateException          if the event is past SCHEDULED, or the zone is not a standing
+     *                                        zone
+     */
     public void addPlacesToStandingZone(int zoneId, int amountToAdd, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
         this.getVenueMapOrThrow().addPlacesToStandingZone(zoneId, amountToAdd);
     }
 
+    /**
+     * Removes places from a standing zone, on the owning company's behalf. Only available places can go:
+     * reserved and sold ones stay.
+     *
+     * @param zoneId            the standing zone
+     * @param amountToRemove    the number of places to remove; positive and at most the zone's available
+     *                          places
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map
+     * @throws IllegalArgumentException       if the map has no such zone, {@code amountToRemove} is not
+     *                                        positive, or it exceeds the zone's available places
+     * @throws IllegalStateException          if the event is past SCHEDULED, or the zone is not a standing
+     *                                        zone
+     */
     public void removePlacesFromStandingZone(int zoneId, int amountToRemove, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
         this.getVenueMapOrThrow().removePlacesFromStandingZone(zoneId, amountToRemove);
@@ -402,11 +570,39 @@ public class Event implements InvariantChecked {
 
 
 
+    /**
+     * Adds seats to a seated zone, on the owning company's behalf.
+     *
+     * @param zoneId            the seated zone
+     * @param seatsToAdd        the new seats; at least one, each AVAILABLE, with labels distinct from each
+     *                          other and from the zone's existing seats
+     * @param incomingCompanyId the company asking
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map
+     * @throws IllegalArgumentException       if the map has no such zone, the zone is not a seated zone, or
+     *                                        {@code seatsToAdd} is empty, holds a null or non-AVAILABLE
+     *                                        seat, or repeats a label the zone already has
+     * @throws IllegalStateException          if the event is past SCHEDULED, or a seat breaks its own
+     *                                        invariants
+     */
     public void addSeatsToSeatedZone(int zoneId, List<Seat> seatsToAdd, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
         this.getVenueMapOrThrow().addSeatsToSeatedZone(zoneId, seatsToAdd);
     }
 
+    /**
+     * Removes seats from a seated zone, on the owning company's behalf. All the seats go or none do.
+     *
+     * @param zoneId             the seated zone
+     * @param seatLabelsToRemove the labels to remove; at least one, non-blank and distinct
+     * @param incomingCompanyId  the company asking
+     * @throws UnauthorizedActionException    if another company asks
+     * @throws BusinessRuleViolationException if the event has no venue map
+     * @throws IllegalArgumentException       if the map has no such zone, the zone is not a seated zone, or
+     *                                        {@code seatLabelsToRemove} is empty, has a blank or repeated
+     *                                        label, or names a seat the zone does not have
+     * @throws IllegalStateException          if the event is past SCHEDULED, or a named seat is not AVAILABLE
+     */
     public void removeSeatsFromSeatedZone(int zoneId, List<String> seatLabelsToRemove, int incomingCompanyId) {
         validateCanEditExistingVenueInventory(incomingCompanyId);
         this.getVenueMapOrThrow().removeSeatsFromSeatedZone(zoneId, seatLabelsToRemove);
@@ -446,8 +642,14 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-20 — DRAFT -> SCHEDULED once a venue map with inventory is bound (tickets pre-generated).
-    // Auto-fired from configureVenueMap; safe to call directly (idempotent when already SCHEDULED).
+    /**
+     * UC-20: moves the event from DRAFT to SCHEDULED once a venue map with at least one zone is bound.
+     * Creates no tickets: a ticket is created at checkout. {@link #configureVenueMap} calls it when it
+     * binds such a map to a DRAFT event. Does nothing when the event is already SCHEDULED.
+     *
+     * @throws InvalidStateTransitionException if the event has no venue map or the map has no zone, or the
+     *                                         event is in any status but DRAFT or SCHEDULED
+     */
     public void transitionToScheduled() {
         if (status == EventStatus.SCHEDULED) {
             return;
@@ -466,7 +668,15 @@ public class Event implements InvariantChecked {
     }
 
 
-    // UC-19 / UC-32 — SCHEDULED -> ON_SALE when admin opens or owner publishes.
+    /**
+     * UC-19: moves the event from SCHEDULED to ON_SALE when a company member publishes it
+     * ({@code EventManagementService.publishEvent} or {@code changeEventStatus}). Opening the market
+     * (UC-32) does not call it. Does nothing when the event is already ON_SALE.
+     *
+     * @throws InvalidStateTransitionException if the event has no venue map or the map has no zone, has no
+     *                                         show date, or is in any status but SCHEDULED or ON_SALE
+     * @throws IllegalStateException           if the event breaks one of its invariants
+     */
     public void transitionToOnSale() {
         if (status == EventStatus.ON_SALE) {
             return;
@@ -492,7 +702,14 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-19 — soft cancel; fires EventCancelled event for UC-4.
+    /**
+     * UC-19: cancels the event softly, keeping it for history. It only changes the status:
+     * {@code EventManagementService.cancelEventAndRefund} publishes the {@code EventCancelledEvent} that
+     * starts the refunds (UC-4). Does nothing when the event is already CANCELED.
+     *
+     * @param reason a reason for the cancellation; this method ignores it
+     * @throws IllegalStateException if the event is COMPLETED
+     */
     public void transitionToCanceled(String reason) {
         if (status == EventStatus.CANCELED) {
             return;
@@ -508,7 +725,12 @@ public class Event implements InvariantChecked {
 
 
 
-    // ON_SALE / SOLD_OUT -> COMPLETED after the last show date.
+    /**
+     * Moves an ON_SALE or SOLD_OUT event to COMPLETED once its last show has passed. Does not check the
+     * show dates itself; see {@link #hasFinishedAsOf}. Does nothing when the event is already COMPLETED.
+     *
+     * @throws IllegalStateException if the event is in any status but ON_SALE, SOLD_OUT or COMPLETED
+     */
     public void transitionToCompleted() {
         if (status == EventStatus.COMPLETED) {
             return;
@@ -524,8 +746,14 @@ public class Event implements InvariantChecked {
     
 
 
-    // ON_SALE -> SOLD_OUT when no AVAILABLE tickets remain.
-    // Auto-fired from reserveInventory; safe to call directly (idempotent when already SOLD_OUT).
+    /**
+     * Moves an ON_SALE event to SOLD_OUT. {@link #reserveInventory} calls it when no AVAILABLE seat or
+     * standing place remains; it does not check that itself. Does nothing when the event is already
+     * SOLD_OUT. Atomic for threads sharing this instance (the in-memory adapter); on Jpa, concurrent flips
+     * are separated by the event's {@code @Version}.
+     *
+     * @throws InvalidStateTransitionException if the event is in any status but ON_SALE or SOLD_OUT
+     */
     public void markSoldOut() {
         // statusLock makes this read-modify-write atomic against concurrent buyer ops; reentrant when
         // called from reserveInventory's guarded block on the same thread.
@@ -543,8 +771,14 @@ public class Event implements InvariantChecked {
     }
 
 
-    // SOLD_OUT -> ON_SALE when availability reappears (a reservation is released).
-    // Auto-fired from releaseInventory; safe to call directly (idempotent when already ON_SALE).
+    /**
+     * Moves a SOLD_OUT event back to ON_SALE. {@link #releaseInventory} and {@link #returnSoldToStock}
+     * call it when a place or seat becomes available again; it does not check that itself. Does nothing
+     * when the event is already ON_SALE. Atomic for threads sharing this instance (the in-memory adapter);
+     * on Jpa, concurrent flips are separated by the event's {@code @Version}.
+     *
+     * @throws InvalidStateTransitionException if the event is in any status but SOLD_OUT or ON_SALE
+     */
     public void revertToOnSale() {
         // statusLock makes this read-modify-write atomic against concurrent buyer ops; reentrant when
         // called from releaseInventory/returnSoldToStock's guarded block on the same thread.
@@ -569,14 +803,32 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-19 — partial update of mutable metadata. Only allowed in DRAFT or SCHEDULED state.
-    // Caller must hold the event lock (EventRepository.lockForUpdate) before calling this method —
-    // the mutated fields are non-final, so concurrent reads depend on the service's lock discipline.
-    // Each argument is null-coalesced: null means "leave this field alone". The service is
-    // responsible for converting LocationDTO/ShowDateDTO into the domain Location/ShowDate passed here.
-    // A new time zone re-reads the existing show dates in that zone (ADR-008). A changed schedule or
-    // zone must still start after `now` at the venue; it is checked before any field changes, so a
-    // rejected edit leaves the aggregate untouched (the in-memory repository hands out live objects).
+    /**
+     * UC-19: updates the event's details, only while it is DRAFT or SCHEDULED. A {@code null} argument
+     * leaves that field alone, as does a blank {@code newName}. A new time zone re-reads the existing
+     * show dates in that zone (ADR-008). A changed schedule or zone must still start after {@code now}
+     * at the venue. That is checked before any field changes, so a rejected edit leaves the aggregate
+     * untouched (the in-memory repository hands out live objects).
+     *
+     * <p>The caller must hold the event lock ({@code EventRepository.lockForUpdate}): the fields are
+     * not synchronized, so concurrent reads rely on the service's lock discipline.
+     *
+     * @param newName     the new name, or {@code null}; at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param newDescription the new description, or {@code null}; at most {@link TextLimits#MAX_TEXT_LENGTH}
+     *                    characters
+     * @param newCategory the new category, or {@code null}
+     * @param newLocation the new venue location, or {@code null}; applied only when the event has a venue
+     *                    map, and ignored otherwise
+     * @param newTimeZone the new IANA zone the show dates are read in, or {@code null}
+     * @param newShowDates the new schedule, or {@code null}; when given, at least one show
+     * @param now         the instant a changed schedule or zone must start after
+     * @throws IllegalStateException          if the event is past SCHEDULED, or the edited event breaks an
+     *                                        invariant
+     * @throws IllegalArgumentException       if {@code newShowDates} is empty, or a show of the changed
+     *                                        schedule or zone starts at or before {@code now}
+     * @throws BusinessRuleViolationException if the name or description is too long (its message is shown
+     *                                        to the user)
+     */
     public void editDetails(String newName, String newDescription, EventCategory newCategory,
             Location newLocation, ZoneId newTimeZone, List<ShowDate> newShowDates, Instant now) {
         if (status != EventStatus.DRAFT && status != EventStatus.SCHEDULED) {
@@ -619,10 +871,12 @@ public class Event implements InvariantChecked {
         return name;
     }
 
+    /** @return the event's description, or {@code null} if it has none */
     public String getDescription() {
         return description;
     }
 
+    /** @return the event's rating from 0 to 5, or {@code null} if it is unrated */
     public Double getRating() {
         return rating;
     }
@@ -639,11 +893,12 @@ public class Event implements InvariantChecked {
         return category;
     }
 
+    /** @return an unmodifiable copy of the lineup; a change to the event's lineup does not show in it */
     public List<String> getArtistsNames() {
-        // create a new list to prevent external modification of the internal artistsNames list
         return List.copyOf(artistsNames);
     }
 
+    /** @return an unmodifiable copy of the schedule; the times are wall-clock times in {@link #getTimeZone()} */
     public List<ShowDate> getShowDates() {
         return List.copyOf(showDates);
     }
@@ -653,9 +908,15 @@ public class Event implements InvariantChecked {
         return timeZone;
     }
 
-    // True once the event's last show has ended as of `now` — drives auto-completion
-    // (ON_SALE / SOLD_OUT -> COMPLETED). A multi-leg event finishes only after its latest leg. The
-    // show times are read in the event's zone, so the answer does not depend on the server's zone.
+    /**
+     * Tells whether the event's last show has ended as of {@code now}; the completion sweeper uses it
+     * to complete ON_SALE and SOLD_OUT events. A multi-show event finishes only after its latest show.
+     * The show times are read in the event's zone, so the answer does not depend on the server's zone.
+     *
+     * @param now the instant to test against
+     * @return {@code true} if {@code now} is after the end of the latest show; {@code false} when that
+     *         show has not ended, or the event has no show dates
+     */
     public boolean hasFinishedAsOf(Instant now) {
         if (showDates == null || showDates.isEmpty()) {
             return false;
@@ -683,11 +944,11 @@ public class Event implements InvariantChecked {
         }
     }
 
+    /** @return the event's venue map, or {@code null} if none is bound; {@code addEvent} binds an empty map */
     public VenueMap getVenueMap() {
         return venueMap;
     }
 
-    // private getter
     private VenueMap getVenueMapOrThrow() {
         if (this.venueMap == null) {
             throw new IllegalStateException("Venue map must be initialized first");
@@ -707,6 +968,13 @@ public class Event implements InvariantChecked {
 
 
 
+    /**
+     * UC-21: replaces the event's own purchase policy. The owning company's policy is not touched; it is
+     * combined with this one each time a purchase is checked ({@link #validateEffectivePolicy}).
+     *
+     * @param purchasePolicy the new policy
+     * @throws IllegalArgumentException if {@code purchasePolicy} is {@code null}
+     */
     public void setPurchasePolicy(PurchasePolicy purchasePolicy) {
         if (purchasePolicy == null) {
             throw new IllegalArgumentException("Purchase policy cannot be null");
@@ -715,6 +983,14 @@ public class Event implements InvariantChecked {
         this.purchasePolicy = purchasePolicy;
     }
 
+    /**
+     * Checks a purchase against this event's own purchase policy only, without the company's policy;
+     * {@link #validateEffectivePolicy} checks both.
+     *
+     * @param context the purchase to check
+     * @throws IllegalArgumentException if {@code context} is {@code null}
+     * @throws IllegalStateException    if the policy is not satisfied; its message is written for the user
+     */
     public void validatePurchasePolicy(PurchaseContext context) {
         if (context == null) {
             throw new IllegalArgumentException("Purchase context cannot be null");
@@ -730,9 +1006,14 @@ public class Event implements InvariantChecked {
     }
 
     /**
-     * Validate the effective purchase policy — the supplied company policy AND this
-     * event's policy, composed into one {@link AndPurchasePolicy} structure. Both must
-     * hold; a rejection's message names only the rules the context breaks.
+     * Checks a purchase against the effective purchase policy: the supplied company policy AND this
+     * event's policy, composed into one {@link AndPurchasePolicy}. Both must hold; a rejection's message
+     * names only the rules the context breaks.
+     *
+     * @param companyPolicy the owning company's policy, or {@code null} for none
+     * @param context       the purchase to check
+     * @throws IllegalArgumentException if {@code context} is {@code null}
+     * @throws PolicyViolationException if either policy is not satisfied; its message is shown to the user
      */
     public void validateEffectivePolicy(PurchasePolicy companyPolicy, PurchaseContext context) {
         if (context == null) {
@@ -821,7 +1102,7 @@ public class Event implements InvariantChecked {
         if (discountPolicy == null) {
             throw new IllegalStateException("Event invariant violated: discountPolicy must not be null");
         }
-        // venueMap may be null in DRAFT state (UC-19) before UC-20 binds it — don't enforce non-null.
+        // The constructor accepts a null map, so don't enforce non-null.
         // If present, the VenueMap's own invariants apply (cascade-check when implemented).
     }
 

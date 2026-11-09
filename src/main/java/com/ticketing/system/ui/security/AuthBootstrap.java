@@ -39,7 +39,7 @@ import java.util.Set;
  *       counts its attempts against the member lockout.</li>
  *   <li><b>Capability gate</b> — targets annotated
  *       {@link RequireCapability} require the user to hold the named
- *       capability. The {@code fallbackFor} table picks the right
+ *       capability. {@code fallbackFor} picks the right
  *       "you can't go here, try this instead" destination based on the
  *       missing capability:
  *       <ul>

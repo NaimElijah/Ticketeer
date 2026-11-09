@@ -1,7 +1,7 @@
 package com.ticketing.system.shared.dto;
 
 /**
- * Read-side snapshot for the System Analytics dashboard (UC-46 / #43, #279).
+ * Read-side snapshot for the System Analytics dashboard (UC-46 / upstream#43, upstream#279).
  *
  * <p>Market status is carried separately by {@link MarketStateDTO}; this record
  * holds the platform performance metrics. Rates are per-minute over the trailing

@@ -21,7 +21,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
 /**
- * Dedicated platform-admin sign-in (#290) at {@code /admin/sign-in}. Authenticates against the
+ * Dedicated platform-admin sign-in (upstream#290) at {@code /admin/sign-in}. Authenticates against the
  * persisted admin pool through {@link AdminLoginPresenter} (real JWT, lockout, audit) — never the
  * member pool. Members reach their own form at {@code /login}.
  */
@@ -36,6 +36,9 @@ public class AdminLoginView extends LkAuthCard {
     private final AdminLoginPresenter presenter;
     private final LkFormErrors errors = new LkFormErrors();
 
+    /**
+     * Builds the admin sign-in form.
+     */
     public AdminLoginView(AdminLoginPresenter presenter) {
         super("Admin sign-in", "Restricted — platform administrators only.");
         this.presenter = presenter;

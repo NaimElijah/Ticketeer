@@ -18,9 +18,9 @@ import com.ticketing.system.messaging.application.port.out.ConversationRepositor
 import com.ticketing.system.messaging.domain.ParticipantType;
 
 /**
- * In-memory {@link ConversationRepository}. Lets Spring wire MessagingService.
- * Used only by the in-memory test suite ({@code test} with {@code memory});
- * every other run gets {@link JpaConversationRepository}.
+ * In-memory {@link ConversationRepository}, backed by a {@code ConcurrentHashMap}. Used only by the
+ * in-memory test suite ({@code test} with {@code memory}); every other run gets
+ * {@link JpaConversationRepository}. {@code lockForUpdate}/{@code unlock} take a per-id lock.
  */
 @Repository
 @Profile(PersistenceProfiles.IN_MEMORY_ADAPTERS)

@@ -6,7 +6,7 @@ import java.util.List;
 import com.vaadin.flow.server.VaadinSession;
 
 /**
- * Session-scoped holder for the visitor's recent top-bar searches (V2-SEARCH-01 / #281).
+ * Session-scoped holder for the visitor's recent top-bar searches (V2-SEARCH-01 / upstream#281).
  *
  * <p>Recent searches are per-user transient state; with no preferences persistence in V2 the
  * VaadinSession is the natural home (mirrors {@link GuestSession} / {@code CurrentCompanies}).
@@ -49,6 +49,7 @@ public final class RecentSearches {
         s.setAttribute(KEY, next);
     }
 
+    /** Forgets the recorded searches; does nothing without a Vaadin session. */
     public static void clear() {
         VaadinSession s = VaadinSession.getCurrent();
         if (s != null) s.setAttribute(KEY, null);

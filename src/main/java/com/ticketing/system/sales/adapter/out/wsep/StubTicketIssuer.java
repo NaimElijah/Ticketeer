@@ -15,16 +15,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-// In-process ticket issuer for TESTS ONLY (@Profile("test")). Every real run
-// (default/prod + the dev profile) uses WsepTicketIssuer instead.
+/**
+ * In-process {@link TicketIssuer} for tests only ({@code @Profile("test")}). Every real run, the
+ * {@code dev} profile included, uses {@link WsepTicketIssuer} instead.
+ *
+ * <p>It issues one random {@code QR-} barcode per requested item. A request must name exactly one
+ * buyer, a member id or a guest email, and at least one item.
+ */
 @Component
 @Profile("test")
 public class StubTicketIssuer implements TicketIssuer {
-    //* can change to be however wanted, this is a stub so we can do what we need with it */
     private static final String ISSUER_ID = "stub-ticket-issuer";
 
     private final Clock clock;
 
+    /**
+     * Creates the stub.
+     *
+     * @param clock the source of the time stamped on issuances (ADR-008)
+     */
     public StubTicketIssuer(Clock clock) {
         this.clock = clock;
     }
@@ -35,9 +44,14 @@ public class StubTicketIssuer implements TicketIssuer {
     }
 
     // Toggleable for UC-1/UC-32 tests: lets a test simulate an unreachable provider so the
-    // initialize / open-market failure paths can be exercised. Production default: reachable.
+    // initialize / open-market failure paths can be exercised. Default: reachable.
     private volatile boolean reachable = true;
 
+    /**
+     * Sets what {@link #verifyConnection()} reports from now on.
+     *
+     * @param reachable {@code false} simulates an unreachable provider
+     */
     public void setReachable(boolean reachable) {
         this.reachable = reachable;
     }
@@ -67,7 +81,6 @@ public class StubTicketIssuer implements TicketIssuer {
     
 
 
-    // helper method to validate the issuance request before processing. Throws TicketIssuanceFailedException if invalid.
     // Validates the issuance request for basic correctness. Throws TicketIssuanceFailedException if invalid.
     private void validateRequest(IssuanceRequestDTO request) {
         if (request == null) {

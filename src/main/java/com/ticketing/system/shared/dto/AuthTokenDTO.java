@@ -1,9 +1,17 @@
 package com.ticketing.system.shared.dto;
 
-// Returned by AuthenticationService.login() (UC-12) and signInAsAdmin() (#290).
-// 'expiresAt' is epoch millis to keep the DTO primitive-only.
-// 'isAdmin' lets the presentation layer know the pool the token was issued for without
-// consulting a hardcoded username set; member tokens default it to false.
+/**
+ * A signed-in session's token. Carried by {@link LoginDTO} for a member's login (UC-12) and
+ * returned by {@code AuthenticationService.signInAsAdmin} for an admin (upstream#290).
+ *
+ * @param token                the session token, which is the session's credential; {@link #toString()}
+ *                             leaves it out
+ * @param expiresAtEpochMillis when the token expires, in milliseconds since the epoch, to keep the DTO
+ *                             primitive-only
+ * @param userId               the member's id, or the admin's id for an admin token
+ * @param isAdmin              whether the token was issued for the admin pool, so the presentation layer
+ *                             need not guess from the username; {@code false} for a member token
+ */
 public record AuthTokenDTO(
     String token,
     long expiresAtEpochMillis,

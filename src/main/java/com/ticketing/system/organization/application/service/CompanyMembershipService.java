@@ -18,20 +18,17 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import com.ticketing.system.shared.exception.UnauthorizedActionException;
 
 /**
- * Owns company-membership (appointment) behaviour that used to live on the {@code User} aggregate
- * (task #20). Every method that was an instance method on {@code User} taking {@code companyId} is
- * re-expressed here as a static-flavoured operation taking the appointed user's id ({@code userId})
- * plus the company/permission arguments, loading and persisting {@link CompanyAppointment} aggregates
- * through the {@link CompanyAppointmentRepository} instead of walking {@code user.companyAppointments}.
+ * Owns company membership: the appointment lifecycle (offering, accepting, rejecting and revoking a role, and
+ * editing a manager's permissions) and the queries that say who holds which role or permission in a company.
  *
- * <p>Stripping appointments off {@code User} is what makes the foundational {@code identity} context
- * stop importing {@code organization}; the invariants and exceptions here are preserved verbatim from
- * the former {@code User} methods so behaviour is identical.
+ * <p>Each operation takes the appointed user's id and the company, and loads and persists
+ * {@link CompanyAppointment} aggregates through the {@link CompanyAppointmentRepository}. New appointments are
+ * stamped from the platform clock. Other contexts use the {@code require...}, {@code has...} and {@code is...}
+ * methods to check a member's role or permission.
  */
 @Service
 public class CompanyMembershipService {
 
-    // Sole dependency — the appointment aggregate's repository (Memory or JPA per profile).
     private final CompanyAppointmentRepository appointmentRepository;
     private final Clock clock;   // stamps new appointments (UTC wall time, ADR-008)
 
@@ -45,23 +42,31 @@ public class CompanyMembershipService {
     }
 
     // ---------------------------------------------------------------------------
-    // Lifecycle commands (former User mutators) — each persists via the repository
-    // instead of relying on User's @OneToMany cascade.
+    // Lifecycle commands — each persists its change through the repository.
     // ---------------------------------------------------------------------------
 
     /**
      * UC-23/UC-24 — the target accepts their pending invitation. If an active appointment already
      * exists (only a Manager appointment can, alongside a pending Owner appointment), it is revoked
      * first (which enforces the "only the original inviter may promote" rule) before the pending one
-     * is activated. Returns the now-active appointment.
+     * is activated.
+     *
+     * @param userId    the accepting user, the appointment's target
+     * @param companyId the company the pending appointment belongs to
+     * @return the now-active appointment
+     * @throws AppointmentNotFoundException   if the user has no pending appointment in the company
+     * @throws BusinessRuleViolationException if the user already holds an active appointment that this
+     *                                        acceptance may not replace: anything other than an active
+     *                                        Manager appointment under a pending Owner offer, or a Manager
+     *                                        appointment from a different inviter than the offer's
      */
     @Transactional
     public CompanyAppointment acceptInvitation(int userId, int companyId) {
-        CompanyAppointment appointment = getPendingCompanyAppointment(userId, companyId); // the pending offer
+        CompanyAppointment appointment = getPendingCompanyAppointment(userId, companyId);
         if (appointment == null) {
             throw new AppointmentNotFoundException("Cannot accept invitation: no appointment found for the specified company");
         }
-        CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId); // any current active role
+        CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId);
         if (activeAppointment != null) {
             // The only legal co-existence is: pending Owner offer while a Manager appointment is active
             // (accepting promotes the manager to owner). Any other combination is a rule violation.
@@ -76,27 +81,39 @@ public class CompanyMembershipService {
             }
             // revoke() re-checks the revoker's right — which is also the right to promote to owner.
             activeAppointment.revoke(appointment.getInviterId());
-            appointmentRepository.save(activeAppointment); // persist the revoked (formerly active) manager appointment
+            appointmentRepository.save(activeAppointment);
         }
-        appointment.accept(); // PENDING -> ACTIVE
-        return appointmentRepository.save(appointment); // persist the newly-active appointment
+        appointment.accept();
+        return appointmentRepository.save(appointment);
     }
 
-    /** UC-23/UC-24 — the target rejects their pending invitation (PENDING -> REJECTED). */
+    /**
+     * UC-23/UC-24 — the target rejects their pending invitation (PENDING -> REJECTED).
+     *
+     * @param userId    the rejecting user, the appointment's target
+     * @param companyId the company the pending appointment belongs to
+     * @throws AppointmentNotFoundException if the user has no pending appointment in the company
+     */
     @Transactional
     public void rejectInvitation(int userId, int companyId) {
-        CompanyAppointment appointment = getPendingCompanyAppointment(userId, companyId); // the pending offer
+        CompanyAppointment appointment = getPendingCompanyAppointment(userId, companyId);
         if (appointment == null) {
             throw new AppointmentNotFoundException("Cannot reject invitation: no appointment found for the specified company");
         }
-        appointment.reject(); // PENDING -> REJECTED
-        appointmentRepository.save(appointment); // persist the rejection
+        appointment.reject();
+        appointmentRepository.save(appointment);
     }
 
     /**
      * UC-24 — the target receives a pending Manager appointment. Fails if they already hold an active
      * or pending appointment in the company; the appointment starts PENDING and only becomes ACTIVE on
      * {@link #acceptInvitation(int, int)}.
+     *
+     * @param userId      the appointed user
+     * @param ownerId     the appointing owner, recorded as the appointment's inviter
+     * @param permissions the permissions the manager is granted; non-empty
+     * @throws BusinessRuleViolationException if the user already holds an active or pending appointment
+     * @throws IllegalStateException          if {@code permissions} is null or empty
      */
     @Transactional
     public void receiveManagerAppointment(int userId, int companyId, int ownerId, List<Permission> permissions) {
@@ -105,41 +122,48 @@ public class CompanyMembershipService {
             throw new BusinessRuleViolationException("User already has an active or pending appointment in this company");
         }
         CompanyAppointment appointment = CompanyAppointment.ManagerAppointment(
-                appointmentRepository.nextId(), // assigned id minted by storage
+                appointmentRepository.nextId(),
                 companyId,
                 userId,
                 ownerId,
                 permissions,
                 LocalDateTime.now(clock));
-        appointmentRepository.save(appointment); // persist the new pending manager appointment
+        appointmentRepository.save(appointment);
     }
 
     /**
      * UC-23 — the target receives a pending Owner appointment. Fails if a pending appointment already
      * exists, or if an active Owner appointment already exists (an active Manager appointment is fine —
      * accepting promotes it to Owner).
+     *
+     * @param userId      the appointed user
+     * @param appointerId the appointing owner, recorded as the appointment's inviter
+     * @throws BusinessRuleViolationException in the two cases above
      */
     @Transactional
     public void receiveOwnerAppointment(int userId, int companyId, int appointerId) {
         if (getPendingCompanyAppointment(userId, companyId) != null) {
             throw new BusinessRuleViolationException("User already has a pending appointment in this company");
         }
-        CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId); // current active role, if any
+        CompanyAppointment activeAppointment = getActiveCompanyAppointment(userId, companyId);
         if (activeAppointment != null && activeAppointment.getRole() == CompanyRole.Owner) {
             throw new BusinessRuleViolationException("User already has an active Owner appointment in this company");
         }
         CompanyAppointment appointment = CompanyAppointment.OwnerAppointment(
-                appointmentRepository.nextId(), // assigned id minted by storage
+                appointmentRepository.nextId(),
                 companyId,
                 userId,
                 appointerId,
                 LocalDateTime.now(clock));
-        appointmentRepository.save(appointment); // persist the new pending owner appointment
+        appointmentRepository.save(appointment);
     }
 
     /**
      * UC-18 — the founder receives an immediately-active Owner appointment on company creation (no
      * pending state). Fails if they already hold an active or pending appointment in the company.
+     *
+     * @param userId the founder, who is both the appointed user and the inviter
+     * @throws BusinessRuleViolationException if the user already holds an active or pending appointment
      */
     @Transactional
     public void addFounderAppointment(int userId, int companyId) {
@@ -148,51 +172,65 @@ public class CompanyMembershipService {
             throw new BusinessRuleViolationException("User already has an active or pending appointment in this company");
         }
         CompanyAppointment appointment = CompanyAppointment.FoundingAppointment(
-                appointmentRepository.nextId(), // assigned id minted by storage
+                appointmentRepository.nextId(),
                 companyId,
                 userId,
                 userId,
                 LocalDateTime.now(clock));
-        appointmentRepository.save(appointment); // persist the active founder/owner appointment
+        appointmentRepository.save(appointment);
     }
 
     /**
      * UC-24 — the original appointer replaces an active Manager appointment's permission set. Only the
      * appointer may edit, and only Manager appointments carry explicit permissions.
+     *
+     * @param userId         the manager whose permissions change
+     * @param companyId      the company the manager belongs to
+     * @param inviterId      the user making the edit
+     * @param newPermissions the manager's full permission set after the edit; non-empty
+     * @throws AppointmentNotFoundException   if the user has no active appointment in the company
+     * @throws UnauthorizedActionException    if {@code inviterId} did not make the appointment
+     * @throws BusinessRuleViolationException if the active appointment is not a Manager appointment
+     * @throws IllegalArgumentException       if {@code newPermissions} is null or empty
      */
     @Transactional
     public void modifyManagerPermissions(int userId, int companyId, int inviterId, List<Permission> newPermissions) {
-        CompanyAppointment appointment = getActiveCompanyAppointment(userId, companyId); // the active appointment to edit
+        CompanyAppointment appointment = getActiveCompanyAppointment(userId, companyId);
         if (appointment == null) {
             throw new AppointmentNotFoundException("No active appointment to edit found for the specified company");
         }
-        if (appointment.getInviterId() != inviterId) { // only the original appointer may modify
+        if (appointment.getInviterId() != inviterId) {
             throw new UnauthorizedActionException("Only the original appointer can modify manager permissions");
         }
         if (appointment.getRole() != CompanyRole.Manager) {
             throw new BusinessRuleViolationException("Can only modify permissions for manager appointments");
         }
-        appointment.updatePermissions(newPermissions); // replace the permission set (validated inside)
-        appointmentRepository.save(appointment); // persist the updated permissions
+        appointment.updatePermissions(newPermissions);
+        appointmentRepository.save(appointment);
     }
 
     /**
      * UC-24 — revoke the user's active appointment in the company. The revoke rules (who may revoke a
      * Manager vs Owner appointment) live in {@link CompanyAppointment#revoke(int)} and throw on breach.
+     *
+     * @param userId    the user whose appointment ends
+     * @param revokerId the user ending it
+     * @throws AppointmentNotFoundException if the user has no active appointment in the company
+     * @throws IllegalArgumentException     if {@code revokerId} may not revoke it
      */
     @Transactional
     public void revokeAppointment(int userId, int companyId, int revokerId) {
-        CompanyAppointment appointment = getActiveCompanyAppointment(userId, companyId); // the active appointment to revoke
+        CompanyAppointment appointment = getActiveCompanyAppointment(userId, companyId);
         if (appointment == null) {
             throw new AppointmentNotFoundException(
                     "Cannot remove appointment: no active appointment found to revoke for the specified company");
         }
-        appointment.revoke(revokerId); // ACTIVE -> REVOKED (permission checks inside)
-        appointmentRepository.save(appointment); // persist the revocation
+        appointment.revoke(revokerId);
+        appointmentRepository.save(appointment);
     }
 
     // ---------------------------------------------------------------------------
-    // Read-side queries (former User accessors).
+    // Read-side queries.
     // ---------------------------------------------------------------------------
 
     /** The user's ACTIVE appointment in the company, or {@code null} if none. */
@@ -242,7 +280,11 @@ public class CompanyMembershipService {
         return appointment != null && appointment.getRole() == CompanyRole.Owner;
     }
 
-    /** Throws unless the user is an active owner in the company. */
+    /**
+     * Throws unless the user is an active owner in the company.
+     *
+     * @throws UnauthorizedActionException if the user is not an active owner
+     */
     @Transactional(readOnly = true)
     public void requireOwnerInCompany(int userId, int companyId) {
         if (!isOwnerInCompany(userId, companyId)) {
@@ -256,7 +298,11 @@ public class CompanyMembershipService {
         return getActiveCompanyAppointment(userId, companyId) != null;
     }
 
-    /** Throws unless the user is an active member (Owner or Manager) of the company. */
+    /**
+     * Throws unless the user is an active member (Owner or Manager) of the company.
+     *
+     * @throws UnauthorizedActionException if the user is not an active member
+     */
     @Transactional(readOnly = true)
     public void requireMemberInCompany(int userId, int companyId) {
         if (!isMemberInCompany(userId, companyId)) {
@@ -264,7 +310,11 @@ public class CompanyMembershipService {
         }
     }
 
-    /** Throws unless the user holds the given permission (via an active appointment) in the company. */
+    /**
+     * Throws unless the user holds the given permission (via an active appointment) in the company.
+     *
+     * @throws UnauthorizedActionException if the user does not hold it
+     */
     @Transactional(readOnly = true)
     public void requirePermissionInCompany(int userId, int companyId, Permission permission) {
         if (!hasPermissionInCompany(userId, companyId, permission)) {

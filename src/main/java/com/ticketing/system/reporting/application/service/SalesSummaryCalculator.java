@@ -33,8 +33,11 @@ public class SalesSummaryCalculator {
                     .thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder()));
 
     /**
+     * Summarises order records into the headline sales figures.
+     *
      * @param records the order records to summarise; may be empty
-     * @return the figures over the lines of {@code records} that are not refunded
+     * @return the figures for {@code records}; every figure but the refunded-order count leaves out
+     *         refunded lines
      */
     public SalesSummaryDTO summarize(List<PurchaseRecordDTO> records) {
         List<TicketRecordDTO> sold = records.stream()

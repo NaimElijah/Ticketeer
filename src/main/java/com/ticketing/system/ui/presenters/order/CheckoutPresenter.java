@@ -27,6 +27,15 @@ import com.ticketing.system.ui.components.Money;
 import com.ticketing.system.ui.session.SessionIdentity;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+/**
+ * Presenter for {@code CheckoutView}: resolves the visitor, loads and prices the active order, runs
+ * the checkout for a member or a guest, and tells open checkout pages when their order expires. Holds
+ * no Vaadin imports; a failure of the service call that reads the order or runs the checkout comes
+ * back as a typed outcome.
+ *
+ * <p>The presenter keeps one piece of state, the set of registered {@link ExpiryListener}s, and is
+ * safe to share between sessions.
+ */
 @Component
 @Slf4j
 public class CheckoutPresenter {
@@ -43,6 +52,13 @@ public class CheckoutPresenter {
 
     private final Set<ExpiryListener> expiryListeners = ConcurrentHashMap.newKeySet();
 
+    /**
+     * Creates the presenter.
+     *
+     * @param reservationService reads the visitor's active order
+     * @param checkoutService    runs the checkout
+     * @param identity           resolves the visitor as a member or a guest
+     */
     @Autowired
     public CheckoutPresenter(ReservationService reservationService,
                              CheckoutService    checkoutService,
@@ -111,16 +127,48 @@ public class CheckoutPresenter {
         return new Pricing(subtotal, subtotal);
     }
 
+    /**
+     * The amounts the checkout page shows, in cents. Both are the sum of the order's line prices.
+     *
+     * @param subtotalCents the sum of the lines' prices
+     * @param totalCents    the amount shown as the order's total
+     */
     public record Pricing(long subtotalCents, long totalCents) { }
 
     // ---- pay ------------------------------------------------------------
 
+    /**
+     * Checks out the signed-in member's active order.
+     *
+     * @param memberToken    the member's token
+     * @param idempotencyKey identifies this submission to the service's idempotency check
+     * @param cardNumber     the card number as typed; whitespace is removed
+     * @param cvc            the security code as typed
+     * @param expiry         the expiry as typed, in the form {@code MM / YY}
+     * @param holder         the card holder's name as typed
+     * @return {@link PayOutcome.Success} with the result, otherwise the variant for the failure; see
+     *     {@link PayOutcome}
+     */
     public PayOutcome payAsMember(String memberToken, String idempotencyKey,
                                   String cardNumber, String cvc, String expiry, String holder) {
         CardDetailsDTO card = buildCard(cardNumber, cvc, expiry, holder);
         return runPay(() -> checkoutService.checkoutMember(memberToken, idempotencyKey, CURRENCY, card));
     }
 
+    /**
+     * Checks out a guest's active order.
+     *
+     * @param sessionId      the guest's session id
+     * @param guestEmail     the email address the order is bought under
+     * @param guestAge       the guest's age as entered
+     * @param idempotencyKey identifies this submission to the service's idempotency check
+     * @param cardNumber     the card number as typed; whitespace is removed
+     * @param cvc            the security code as typed
+     * @param expiry         the expiry as typed, in the form {@code MM / YY}
+     * @param holder         the card holder's name as typed
+     * @return {@link PayOutcome.Success} with the result, otherwise the variant for the failure; see
+     *     {@link PayOutcome}
+     */
     public PayOutcome payAsGuest(String sessionId, String guestEmail, int guestAge, String idempotencyKey,
                                  String cardNumber, String cvc, String expiry, String holder) {
         CardDetailsDTO card = buildCard(cardNumber, cvc, expiry, holder);
@@ -197,15 +245,37 @@ public class CheckoutPresenter {
 
     // ---- order-expiry push ---------------------------------------------
 
+    /** A checkout page that wants to hear when its visitor's order expires. */
     public interface ExpiryListener {
+        /**
+         * Whether an expired order is this listener's visitor's.
+         *
+         * @param userId    the member's user id, or 0 when the order is a guest's
+         * @param sessionId the session id the order was bound to; a member's order may have one, or
+         *     {@code null}
+         * @return {@code true} to have {@link #onExpired()} called
+         */
         boolean matches(int userId, String sessionId);
+
+        /** Called once for each expiry that {@link #matches} accepted. */
         void onExpired();
     }
 
+    /**
+     * Registers a checkout page for expiry notices. The presenter holds the listener until it is
+     * unregistered, so a page unregisters it when it detaches.
+     *
+     * @param listener the page's listener; registering the same instance twice has no further effect
+     */
     public void registerExpiryListener(ExpiryListener listener) {
         expiryListeners.add(listener);
     }
 
+    /**
+     * Stops expiry notices to a listener. Does nothing for a listener that is not registered.
+     *
+     * @param listener the listener to remove
+     */
     public void unregisterExpiryListener(ExpiryListener listener) {
         expiryListeners.remove(listener);
     }
@@ -233,22 +303,90 @@ public class CheckoutPresenter {
 
     // ---- outcomes -------------------------------------------------------
 
+    /** Sealed outcome of {@link #loadOrder}, which the view switches on. */
     public sealed interface LoadOutcome {
+        /**
+         * The visitor has an order to check out.
+         *
+         * @param order   the active order
+         * @param pricing its amounts
+         */
         record Loaded(ActiveOrderDTO order, Pricing pricing) implements LoadOutcome { }
+
+        /** The visitor has no order, or an order with no lines. */
         record Empty()                implements LoadOutcome { }
+
+        /**
+         * The read failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements LoadOutcome { }
     }
 
+    /** Sealed outcome of {@link #payAsMember} and {@link #payAsGuest}, which the view switches on. */
     public sealed interface PayOutcome {
+        /**
+         * The checkout completed.
+         *
+         * @param result what the service returned for the order
+         */
         record Success(CheckoutResultDTO result)     implements PayOutcome { }
+
+        /**
+         * The effective purchase policy (the company's and the event's) refused the order
+         * ({@code PolicyViolationException}).
+         *
+         * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
+         *     not reach the user
+         */
         record PolicyRejected(String reason)         implements PayOutcome { }
+
+        /**
+         * A {@code PaymentGatewayException} other than an unreachable gateway: the gateway declined the
+         * card, or the service refused the gateway's answer.
+         *
+         * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
+         *     not reach the user
+         */
         record PaymentDeclined(String reason)        implements PayOutcome { }
+
+        /**
+         * The seats or places are no longer available ({@code InsufficientInventoryException}).
+         *
+         * @param reason the exception's message; {@code CheckoutView} shows its own text, so this does
+         *     not reach the user
+         */
         record SoldOut(String reason)                implements PayOutcome { }
+
+        /**
+         * The order's hold ran out before or during the checkout.
+         *
+         * @param reason fixed text; {@code CheckoutView} shows its own wording
+         */
         record OrderExpired(String reason)           implements PayOutcome { }
+
+        /**
+         * The idempotency key is already cached for a different buyer. A replay by the same buyer is a
+         * {@link Success} carrying the first result.
+         */
         record DuplicateSubmission()                 implements PayOutcome { }
+
+        /**
+         * The payment gateway gave no usable answer: no reply, or one that could not be read
+         * ({@code PaymentGatewayUnreachableException}). It carries no reason.
+         */
         record GatewayUnavailable()                  implements PayOutcome { }
-        /** Tickets could not be issued after the charge; the charge is being refunded. */
+
+        /** Tickets could not be issued after the charge, and a refund was attempted. */
         record OrderNotCompleted()                   implements PayOutcome { }
+
+        /**
+         * Any other failure, including an empty order.
+         *
+         * @param reason the text the user may read: a {@code DomainException}'s message as it is, else
+         *     from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason)                implements PayOutcome { }
     }
 }

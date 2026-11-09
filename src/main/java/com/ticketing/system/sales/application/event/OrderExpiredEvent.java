@@ -6,7 +6,7 @@ package com.ticketing.system.sales.application.event;
  * views, so a sweep that rolls back announces nothing.
  *
  * @param userId    0 for guest carts
- * @param sessionId null for member carts
+ * @param sessionId the cart's session id; null for a member cart that has none
  */
 public record OrderExpiredEvent(int userId, String sessionId) {
 

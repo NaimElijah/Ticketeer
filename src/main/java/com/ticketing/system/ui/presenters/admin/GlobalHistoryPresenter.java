@@ -29,6 +29,7 @@ public class GlobalHistoryPresenter {
     private final SystemAdminService systemAdminService;
     private final SalesSummaryCalculator salesSummaryCalculator;
 
+    /** Creates the presenter over the admin history service and the calculator behind {@link #summarize}. */
     public GlobalHistoryPresenter(SystemAdminService systemAdminService,
                                   SalesSummaryCalculator salesSummaryCalculator) {
         this.systemAdminService = systemAdminService;

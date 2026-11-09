@@ -373,7 +373,7 @@ class SystemAdminServiceTest {
         when(sessionManager.extractAdminId(token)).thenThrow(new InvalidTokenException("session not found"));
     }
 
-    // --- #455: ensureMarketOpen (system self-heal — no admin token, recovers from a boot-time outage) ---
+    // --- upstream#455: ensureMarketOpen (system self-heal — no admin token, recovers from a boot-time outage) ---
 
     @Test
     void GivenReachableServices_WhenEnsureMarketOpen_ThenOpens() {

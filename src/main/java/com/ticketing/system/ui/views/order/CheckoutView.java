@@ -44,6 +44,12 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 
+/**
+ * Checkout page, served at {@code /checkout}. It shows the cart's lines, the total and the hold
+ * countdown, and a card payment form; a guest also gives an email and an age. Pay runs the purchase
+ * and, on success, opens {@link OrderConfirmationView}. When the hold expires, the page clears and
+ * says so. Open to guests.
+ */
 @Route(value = "checkout", layout = MainLayout.class)
 @PageTitle("Checkout · TicketHub")
 @AnonymousAllowed
@@ -126,6 +132,8 @@ public class CheckoutView extends LkPage implements BeforeEnterObserver, AfterNa
         };
 
     /**
+     * Creates the page; the order is loaded and the page is built when the route is entered.
+     *
      * @param clock the application clock (ADR-008), for the seconds the hold countdown has left
      */
     public CheckoutView(CheckoutPresenter presenter, Clock clock) {

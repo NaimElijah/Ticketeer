@@ -16,12 +16,27 @@ import com.ticketing.system.shared.exception.RefundFailedException;
 import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.support.ServiceErrors;
 
+/**
+ * Presenter for {@code CompanyEventListView}: lists the events of the caller's company, offers the
+ * country and city filter options drawn from those events, and runs the cancel, delete and status
+ * actions on one event. Holds no Vaadin imports; each call takes the member token the view reads from
+ * its session and returns a typed outcome.
+ *
+ * <p>The company is the caller's workspace selection when it is one of their companies, else the
+ * first of their companies. Managers count, since they may hold {@code MANAGE_INVENTORY}.
+ */
 @Component
 public class CompanyEventListPresenter {
 
     private final EventManagementService eventService;
     private final CompanyManagementService companyManagementService;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param eventService             lists and changes the company's events
+     * @param companyManagementService resolves which companies the caller belongs to
+     */
     @Autowired
     public CompanyEventListPresenter(EventManagementService eventService,
                                      CompanyManagementService companyManagementService) {
@@ -29,6 +44,17 @@ public class CompanyEventListPresenter {
         this.companyManagementService = companyManagementService;
     }
 
+    /**
+     * Loads the company's events, narrowed by the filters.
+     *
+     * @param token     the caller's member token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
+     * @param companyId the company the workspace has selected, or {@code null}; used when it is one of
+     *     the caller's companies, else the first of them is used
+     * @param filters   the view's filter set, or {@code null} for no filtering
+     * @return {@link Outcome.NoCompany} when the caller belongs to no company; {@link Outcome.Failure}
+     *     with {@code ServiceErrors}' text for any other failure
+     */
     public Outcome load(String token, Integer companyId, CatalogSearchFiltersDTO filters) {
         if (token == null) return new Outcome.NotAuthenticated();
         try {
@@ -133,6 +159,14 @@ public class CompanyEventListPresenter {
         }
     }
 
+    /**
+     * Permanently deletes a cancelled event.
+     *
+     * @param token   the caller's member token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param eventId the event to delete
+     * @return {@link ActionOutcome.Failure} with {@code ServiceErrors}' text when the service refuses,
+     *     for example for an event that is not cancelled or one with sales history
+     */
     public ActionOutcome deleteEvent(String token, int eventId) {
         if (token == null) return new ActionOutcome.NotAuthenticated();
         try {
@@ -145,6 +179,17 @@ public class CompanyEventListPresenter {
         }
     }
 
+    /**
+     * Moves an event to another status without cancelling it; cancelling goes through
+     * {@link #cancelEvent}.
+     *
+     * @param token        the caller's member token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param eventId      the event to change
+     * @param targetStatus the status to move to; the service accepts {@code SCHEDULED} and
+     *     {@code ON_SALE}
+     * @return {@link ActionOutcome.Failure} with {@code ServiceErrors}' text when the service refuses
+     *     the transition
+     */
     public ActionOutcome changeEventStatus(String token, int eventId, EventStatus targetStatus) {
         if (token == null) return new ActionOutcome.NotAuthenticated();
         try {
@@ -157,23 +202,53 @@ public class CompanyEventListPresenter {
         }
     }
 
+    /** Sealed outcome of {@link #load}, which the view switches on. */
     public sealed interface Outcome {
+        /**
+         * The events loaded.
+         *
+         * @param events the company's events, possibly none
+         */
         record Success(List<EventDetailDTO> events) implements Outcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome {}
+
+        /** The caller belongs to no company. */
         record NoCompany() implements Outcome {}
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome {}
     }
 
+    /** Sealed outcome of {@link #deleteEvent} and {@link #changeEventStatus}. */
     public sealed interface ActionOutcome {
+        /** The service carried out the action. */
         record Success() implements ActionOutcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome {}
+
+        /**
+         * The service refused the action or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome {}
     }
 
     /** What {@link #cancelEvent} did. */
     public sealed interface CancelOutcome {
+        /** The event is cancelled and the service reported no refund failure. */
         record Success() implements CancelOutcome {}
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements CancelOutcome {}
+
         /**
          * The event is cancelled, but some of its refunds failed: the cancel commits before its refunds run.
          *
@@ -190,6 +265,13 @@ public class CompanyEventListPresenter {
          *                           are not; its own message says which (ADR-001)
          */
         record RefundFailed(String reason, boolean cancelAgainRetries) implements CancelOutcome {}
+
+        /**
+         * The call threw something other than a refund failure. The event may already be cancelled,
+         * since the cancel commits before its refunds run.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements CancelOutcome {}
     }
 }

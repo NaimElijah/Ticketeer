@@ -39,6 +39,8 @@ import java.util.List;
  * and writes the single response. Sending it delivers the reply to the member's Support Inbox and
  * marks the complaint RESOLVED (one-shot — the member cannot reply). Backed by
  * {@link AdminComplaintQueuePresenter} → {@code MessagingService}.
+ *
+ * <p>Served at {@code /admin/complaints/:id/respond}, where {@code id} is the complaint's conversation id.
  */
 @Route(value = "admin/complaints/:id/respond", layout = PlatformAdminLayout.class)
 @PageTitle("Respond to Complaint · Admin")
@@ -56,6 +58,9 @@ public class AdminComplaintRespondView extends LkPage implements BeforeEnterObse
 
     private String conversationId;
 
+    /**
+     * Creates the page; the complaint is loaded when the route is entered.
+     */
     public AdminComplaintRespondView(AdminComplaintQueuePresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

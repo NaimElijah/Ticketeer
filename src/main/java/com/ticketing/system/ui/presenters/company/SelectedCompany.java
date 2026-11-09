@@ -8,19 +8,26 @@ import com.ticketing.system.ui.session.CurrentCompanies;
 
 /**
  * Picks the company a workspace action applies to out of the caller's companies: the one selected in
- * the workspace ({@link CurrentCompanies}), which is the company the capability gate checked. The
- * caller's company list is unordered, so its first entry can be any of them and is never a default.
- * A selection the caller does not belong to counts as no selection, not as a cue to pick another one,
- * so an action never lands in a company other than the one on screen. With nothing selected, a
- * caller with exactly one company gets that company, since there is nothing to choose.
+ * the workspace ({@link CurrentCompanies}). The caller's company list is unordered, so its first entry
+ * can be any of them and is never a default here. A selection the caller does not belong to counts as
+ * no selection, not as a cue to pick another one, so an action never lands in a company other than the
+ * one on screen. With nothing selected, a caller with exactly one company gets that company, since
+ * there is nothing to choose.
+ *
+ * <p>The capability gate has its own fallback for an empty selection
+ * ({@code Capabilities.forCurrentUser}). It only steers navigation; the services decide what the
+ * caller may do.
  */
 final class SelectedCompany {
 
     private SelectedCompany() { }
 
     /**
+     * Picks the company the workspace has selected out of {@code companies}.
+     *
+     * @param <T>         the form in which the action reads a company
      * @param companies   the caller's companies, in whichever form the action reads them
-     * @param companyIdOf the id of one of {@code companies}
+     * @param companyIdOf reads the id of one of {@code companies}
      * @return the selected company if it is among {@code companies}; with nothing selected, the only
      *     company; otherwise empty
      */
@@ -31,7 +38,12 @@ final class SelectedCompany {
     /**
      * As {@link #among(List, ToIntFunction)}, for a caller that is handed the workspace's selection.
      *
-     * @param selectedId the workspace's selected company id, or {@code null} for none
+     * @param <T>         the form in which the action reads a company
+     * @param selectedId  the workspace's selected company id, or {@code null} for none
+     * @param companies   the caller's companies
+     * @param companyIdOf reads the id of one of {@code companies}
+     * @return the company with id {@code selectedId} if it is among {@code companies}; with no id
+     *     given, the only company; otherwise empty
      */
     static <T> Optional<T> among(Integer selectedId, List<T> companies, ToIntFunction<T> companyIdOf) {
         if (selectedId == null) {

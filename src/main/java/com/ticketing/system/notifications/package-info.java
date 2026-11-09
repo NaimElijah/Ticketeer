@@ -13,9 +13,10 @@
  * {@code NotificationEventListener} consumes after their transaction commits, on the {@code notify-}
  * thread (ADR-004). Two known exceptions call {@code NotificationDispatchService} directly: identity's
  * {@code AuthenticationService} delivers pending notifications at login, and bootstrap's
- * {@code NotificationPollingScheduler} pushes them on a timer. The {@code ui} reads and marks them
- * through {@code INotificationService}. That port keeps its legacy name, because dropping the prefix
- * would collide with the {@code NotificationService} implementation.
+ * {@code NotificationPollingScheduler} pushes them on a timer. The {@code ui} marks them read and
+ * sends the shown ones back to pending through {@code INotificationService}. That port keeps its
+ * legacy name, because dropping the prefix would collide with the {@code NotificationService}
+ * implementation.
  */
 @org.springframework.modulith.ApplicationModule(displayName = "Notifications", type = org.springframework.modulith.ApplicationModule.Type.OPEN)
 package com.ticketing.system.notifications;

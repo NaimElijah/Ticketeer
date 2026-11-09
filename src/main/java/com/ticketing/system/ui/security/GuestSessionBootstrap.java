@@ -26,6 +26,7 @@ public class GuestSessionBootstrap implements VaadinServiceInitListener {
 
     private final AuthenticationService authenticationService;
 
+    /** @param authenticationService starts the guest sessions */
     public GuestSessionBootstrap(AuthenticationService authenticationService) {
         this.authenticationService = authenticationService;
     }

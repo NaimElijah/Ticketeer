@@ -51,6 +51,7 @@ public class PasswordStrengthMeter extends Div {
     private final Span label = new Span();
     private final Div ruleRow = new Div();
 
+    /** Builds the meter empty, as {@code update("")} leaves it. */
     public PasswordStrengthMeter() {
         addClassName("pw-strength-meter");
         getStyle().set("display", "flex").set("flex-direction", "column")
@@ -75,6 +76,11 @@ public class PasswordStrengthMeter extends Div {
         update("");
     }
 
+    /**
+     * Shows the strength tier and the rules met for {@code password}.
+     *
+     * @param password the field's current value; {@code null} or empty shows the empty meter
+     */
     public void update(String password) {
         PasswordStrength tier = PasswordStrength.of(password);
         bar.setValue(tier.progressValue());

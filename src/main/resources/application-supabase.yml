@@ -1,4 +1,4 @@
-# Supabase (remote Postgres) run profile — V3 Lane J (#377).
+# Supabase (remote Postgres) run profile — V3 Lane J (upstream#377).
 #
 # Activate with SPRING_PROFILES_ACTIVE=supabase. The Jpa* repositories are wired in every run
 # (ADR-005); this profile only adds the SSL/pooler datasource. Supply the connection
@@ -24,7 +24,7 @@ spring:
     hikari:
       # Supabase caps connections, so keep the pool small.
       maximum-pool-size: ${DB_POOL_SIZE:5}
-      # --- DB-reconnect / recovery resilience (SLR.6, #362), config-only: no health-poller, no retry lib ---
+      # --- DB-reconnect / recovery resilience (SLR.6, upstream#362), config-only: no health-poller, no retry lib ---
       # The reconnect is HikariCP's own job: it validates a pooled connection before lending it (the default
       # 30s connection-timeout / 5s validation-timeout bound a clean failure during an outage), so once
       # Postgres is back the next borrow gets a fresh connection and the app resumes with NO restart.

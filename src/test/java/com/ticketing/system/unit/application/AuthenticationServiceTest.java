@@ -941,7 +941,7 @@ class AuthenticationServiceTest {
         verifyNoInteractions(mockCartRestorationPort);
     }
 
-    // ---- admin sign-in (#290) ----
+    // ---- admin sign-in (upstream#290) ----
 
     @Test
     void GivenValidCredentials_WhenSignInAsAdmin_ThenReturnsAdminFlaggedToken() {

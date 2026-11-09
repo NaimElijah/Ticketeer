@@ -22,8 +22,6 @@ import com.ticketing.system.ui.support.ServiceErrors;
  * <p>Resolves the signed-in member's companies (owners + managers, real data) and the live
  * dashboard counters for the selected one. A single {@link #loadFor(String, Integer)} drives both
  * the first render (null companyId → default to the first company) and selector re-selection.
- * Per-company capability/persona re-resolution is still owned by the mock resolver (#256), so the
- * selector only re-renders stats + subtitle.
  */
 @Component
 public class OwnerDashboardPresenter {
@@ -31,6 +29,12 @@ public class OwnerDashboardPresenter {
     private final CompanyManagementService companyManagementService;
     private final CompanyAnalyticsService companyAnalyticsService;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param companyManagementService lists the companies the member belongs to
+     * @param companyAnalyticsService  reads the selected company's dashboard counters
+     */
     @Autowired
     public OwnerDashboardPresenter(CompanyManagementService companyManagementService,
                                    CompanyAnalyticsService companyAnalyticsService) {
@@ -41,6 +45,12 @@ public class OwnerDashboardPresenter {
     /**
      * Loads the member's companies plus the selected company's stats. When {@code companyId} is
      * null (first load) or unknown, the first company is selected.
+     *
+     * @param token     the member's token; {@code null} or a rejected token gives
+     *     {@link Outcome.NotAuthenticated}
+     * @param companyId the company to show, or {@code null} for the first
+     * @return {@link Outcome.NoCompany} when the member belongs to no company; {@link Outcome.Failure}
+     *     with {@code ServiceErrors}' text for any other failure
      */
     public Outcome loadFor(String token, Integer companyId) {
         if (token == null) {
@@ -77,10 +87,27 @@ public class OwnerDashboardPresenter {
 
     /** Sealed outcome the view switches on to render the dashboard or an empty state. */
     public sealed interface Outcome {
+        /**
+         * The dashboard loaded.
+         *
+         * @param companies the member's companies, managers' included
+         * @param selected  the company the counters belong to; one of {@code companies}
+         * @param stats     the selected company's dashboard counters
+         */
         record Success(List<MyCompanyDTO> companies, MyCompanyDTO selected,
                        CompanyDashboardDTO stats) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /** The member belongs to no company. */
         record NoCompany() implements Outcome { }
+
+        /**
+         * The load failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

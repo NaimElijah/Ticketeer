@@ -36,7 +36,7 @@ import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.sales.domain.TransactionRecord;
 
 /**
- * Unit tests for {@link SystemAnalyticsService} (UC-46 / #43, #279). The metrics
+ * Unit tests for {@link SystemAnalyticsService} (UC-46 / upstream#43, upstream#279). The metrics
  * port and order-receipt repository are stubbed so the rate / throughput math
  * and the purchase derivation are verified in isolation. The admin gate is stubbed to admit
  * {@code ADMIN_TOKEN}; {@code SystemAnalyticsServiceAdminGateTest} covers the gate itself.

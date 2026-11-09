@@ -9,7 +9,7 @@ this file holds what a coding session needs on top of them.
 Event management and ticketing platform: producers run companies and events, buyers browse and buy
 tickets. Spring Boot 3.5.16 + Vaadin Flow 24.10.7 + Spring Modulith 1.4.14 monolith, Java 21, Maven
 wrapper (Maven 3.9.16). It extends an upstream BGU course project (`AdamSimkinbgu/event-ticket-system`);
-history before July 2026 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
+history before 2026-07-08 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
 
 ## Commands
 
@@ -30,11 +30,11 @@ quoted and on one line, so they work in both shells.
 
 UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
-`seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default; runs no step when a user the scenario registers already exists, with a WARN pointing at `reset`) · `wipe` (delete, then stop) ·
+`seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default; runs no step when a user the scenario registers already exists, with a WARN pointing at `reset`) · `wipe` (delete, seed nothing; the boot goes on) ·
 `reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
 on a persistent DB; dev's H2 is in memory, already empty on every boot. A scenario file that is missing,
 unreadable or refused by the parser (a bare `expect-error`, for one) stops the boot in every profile, before any step runs (ADR-003, [ADR-021](../docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)). A failing scenario step stops it only while
-`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Outside `dev`, running a committed scenario logs a WARN that its accounts' passwords are published; nothing refuses it (#78). Full reference: `SEED.md`.
+`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003); an `expect-error` naming no operation stops it regardless. Outside `dev`, running a committed scenario logs a WARN that its accounts' passwords are published; nothing refuses it (#78). Full reference: `SEED.md`.
 
 ## Tests and CI
 
@@ -216,7 +216,7 @@ non-2xx status or a body over `MAX_RESPONSE_BODY_BYTES`, and
 
 - **Traceability IDs.** Preserve them when editing, and cite one when adding behaviour tied to a requirement.
   - Requirement and use-case IDs (`UC-1`, `I.1.4`, `II.3.0.x`, `SLR.6`) are defined in `docs/requirements/requirements.md`.
-  - There are **two `#n` namespaces**. In code and Javadoc, a bare `#n` (e.g. `#367`, `#410`) and codes like `V3-INIT-02` usually mean the upstream course repo. In commits, PRs, `requirements.md` and ADRs, `#n` is an issue in `NaimElijah/Ticketeer`. The numbers collide (#57), so don't look up a code-comment `#n` here and assume it's ours.
+  - A `#n` that names a ticket in code, Javadoc, `requirements.md`, ADRs, and commits or PRs since 2026-07-08 is an issue in `NaimElijah/Ticketeer`. A ticket in the upstream course repo, `AdamSimkinbgu/event-ticket-system`, is written `upstream#n` (#57); codes like `V3-INIT-02` are that repo's too, as are the bare numbers in imported commits from before 2026-07-08 and ADR-001's `#410`. Two later commits also cite numbers that are not this repo's: `8baec22b` (`#20/#21/#22`, migration-plan tasks) and `4d129d4f` (`#471`, `#335`, upstream's). The numbers collide, so never cite an upstream ticket as a bare `#n`. Numbers behind a label (`§1 #n` and the list after it, `constraint #n`, `Fix #n`, `Order #n`) are rules, findings and orders, not issues.
 - **Time** ([ADR-008](../docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)). Every "now" comes from the `Clock` bean (`shared/config/SecurityConfig.systemClock`, UTC): services and adapters inject it; domain methods and repository ports take `now`. `HexagonalRulesTest` fails the build on `now()`/`now(ZoneId)` of a `java.time` type, `System.currentTimeMillis()` ([ADR-022](../docs/ADRs/ADR-022-system-current-time-millis-is-a-system-clock-read.md)), `ZoneId.systemDefault()` or a second system clock in production code; `System.nanoTime()` stays allowed for durations.
   - Recorded timestamps are `LocalDateTime` holding UTC wall time (`LocalDateTime.now(clock)`). Show dates are wall time at the venue plus `Event.timeZone`; compare them as instants (`ShowDate.startsAt/endsAt(zone)`), never as wall times.
   - The UI shows recorded times and "today" through `ui/support/DisplayTime`, in `platform.time-zone`; show times with the event's own zone.

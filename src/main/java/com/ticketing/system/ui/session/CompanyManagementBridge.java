@@ -14,11 +14,13 @@ public class CompanyManagementBridge {
 
     private static CompanyManagementService companyManagementService;
 
+    /** Spring creates the bean; the constructor stores the service where {@link #service()} reads it. */
     @Autowired
     public CompanyManagementBridge(CompanyManagementService companyManagementService) {
         CompanyManagementBridge.companyManagementService = companyManagementService;
     }
 
+    /** The service; {@code null} until Spring has created this bean. */
     public static CompanyManagementService service() {
         return companyManagementService;
     }

@@ -9,9 +9,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
- * Activates Spring's {@code @Scheduled} support in production. The sweeper
- * component ({@link SessionAndOrderSweeper}) depends on it; without this
- * annotation the scheduled method would never fire in production.
+ * Activates Spring's {@code @Scheduled} support in every profile except {@code test}. The
+ * scheduled components, such as {@link SessionAndOrderSweeper}, depend on it; without this
+ * annotation their scheduled methods would never fire.
  *
  * <p>The market self-heal ({@link MarketSelfHealScheduler}) runs on a single-thread scheduler of its
  * own: while WSEP hangs, its probe takes about two minutes (two handshakes of up to three 20-second

@@ -1,11 +1,20 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when an operation references a company whose status is closed/suspended.
-// II.4.13.x (company closure, currently Cancelled in v0 scope) — defensive: even though
-// the closure UC isn't built, the domain should still reject ops on closed companies.
-// UC-3 (browse), UC-9 (reserve from closed company's events), UC-19/21/22/23/24 (manage closed company).
+/**
+ * Thrown when an operation names a company whose status is not {@code ACTIVE}.
+ *
+ * <p>Its only throw site is {@code CatalogService.requireActiveCompany}, reached only by
+ * {@code searchByCompany} (UC-3), which no production code calls today. Other catalog reads refuse a
+ * closed company's event as {@link EventNotFoundException}. II.4.13.x (company closure, cancelled in
+ * v0 scope).
+ */
 public class CompanyClosedException extends DomainException {
 
+    /**
+     * Creates the exception.
+     *
+     * @param companyId the company whose status is not {@code ACTIVE}
+     */
     public CompanyClosedException(int companyId) {
         super("Company " + companyId + " is closed");
     }

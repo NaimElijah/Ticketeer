@@ -31,6 +31,11 @@ import jakarta.annotation.security.PermitAll;
 
 import java.util.List;
 
+/**
+ * Complaint form for members, served at {@code /support/new}. It takes a category, a subject and the
+ * details, and sends them to the platform admins. On success it opens {@link SupportInboxView} with
+ * the new thread selected.
+ */
 @Route(value = "support/new", layout = MainLayout.class)
 @PageTitle("Submit Complaint · TicketHub")
 @PermitAll
@@ -48,6 +53,9 @@ public class SubmitComplaintView extends LkPage {
     private final TextField subject = new TextField("Subject");
     private final TextArea  details = new TextArea("Details");
 
+    /**
+     * Builds the complaint form.
+     */
     public SubmitComplaintView(SubmitComplaintPresenter presenter) {
         this.presenter = presenter;
 
@@ -125,7 +133,7 @@ public class SubmitComplaintView extends LkPage {
                 subject.getValue(), details.getValue(), about.getValue())) {
             case SubmitComplaintPresenter.Outcome.Success ok -> {
                 Toasts.success("Complaint submitted — we'll get back to you in your Support inbox.");
-                // Forward-compatible focus contract honored by SupportInboxView (#277).
+                // SupportInboxView opens the thread named by ?c= (upstream#277).
                 UI.getCurrent().navigate(SupportInboxView.class,
                     QueryParameters.of("c", ok.conversationId()));
             }

@@ -19,7 +19,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The database wipe behind {@code seed.mode=wipe}/{@code reset} (#366), active wherever the Jpa
+ * The database wipe behind {@code seed.mode=wipe}/{@code reset} (upstream#366), active wherever the Jpa
  * repository adapters are (dev's H2 and the Supabase Postgres alike).
  *
  * <p>{@code deleteAll()} per aggregate root removes the root rows and cascades to their owned
@@ -32,8 +32,9 @@ import lombok.extern.slf4j.Slf4j;
  * appointment left behind would hand its role to whichever user and company are created next (#170).
  *
  * <p>The {@code admins} table is <strong>deliberately not</strong> cleared: the bootstrap platform
- * admin is infrastructure (re-created by {@code PlatformInitializationRunner} anyway), and a reset
- * needs an admin to re-open the market for the reseed's checkouts.
+ * admin is infrastructure ({@code PlatformInitializationRunner} creates it only when no admin
+ * exists, and has already run by then), and a reset needs an admin to re-open the market for the
+ * reseed's checkouts.
  *
  * <p><strong>DESTRUCTIVE.</strong> Only invoked from a {@code wipe}/{@code reset} run, which is
  * opt-in (default {@code seed.mode=off}) and refused by {@code ScenarioRunner} unless
@@ -55,6 +56,10 @@ public class JpaRepoCleaner implements RepoCleaner {
     private final SpringDataSessionRepository sessions;
     private final SpringDataUserRepository users;
 
+    /**
+     * Creates the cleaner over the ten Spring Data repositories it clears; the admins' repository is
+     * deliberately absent.
+     */
     public JpaRepoCleaner(
             SpringDataTicketRepository tickets,
             SpringDataOrderReceiptRepository receipts,

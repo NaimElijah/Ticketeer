@@ -31,6 +31,7 @@ public class PolicyTreeMap extends Div {
     private BiConsumer<String, String> onAction;
     private String pendingJson;
 
+    /** Builds the empty map area; nothing shows until {@link #render(String)} is called. */
     public PolicyTreeMap() {
         addClassName("policy-tree-map");
         getStyle()
@@ -51,7 +52,12 @@ public class PolicyTreeMap extends Div {
         });
     }
 
-    /** Push a fresh JSON tree to the client and re-render. */
+    /**
+     * Push a fresh JSON tree to the client and re-render. Before the map is attached the tree is kept
+     * and drawn on attach; a later call before then replaces it.
+     *
+     * @param treeJson the tree in the JSON shape {@code policy-tree-map.js} reads
+     */
     public void render(String treeJson) {
         if (isAttached()) {
             callRender(treeJson);

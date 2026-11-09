@@ -44,7 +44,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 /**
  * Exercises {@link CompanyManagementService}'s membership read paths ({@code listForUser},
  * {@code isOwnerOf}), each of which answers for its token's own member and refuses any other token.
- * Since appointments were promoted off {@code User} (task #20), the appointment state is seeded
+ * Since appointments were promoted off {@code User}, the appointment state is seeded
  * through a real {@link CompanyMembershipService} (backed by an in-memory appointment repository)
  * rather than on the {@code User} object, and the service under test resolves membership through
  * that same instance.

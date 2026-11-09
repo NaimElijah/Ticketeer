@@ -9,6 +9,8 @@ import java.time.Instant;
  * requests until they either (a) end the session, (b) it expires, a fixed
  * lifetime after it started, or (c) they log in and the session is promoted to a Member
  * session in place.
+ *
+ * @param sessionId the guest session's id, which is its credential; {@link #toString()} leaves it out
  */
 public record GuestSessionDTO(String sessionId, Instant createdAt) {
 

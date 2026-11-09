@@ -33,6 +33,8 @@ import jakarta.annotation.security.PermitAll;
  * with no company, so its capability, {@link Capability#REGISTER_COMPANY}, is
  * one every member holds, owner or not; a signed-in admin, who is no member,
  * is turned away (#187, UI-A8).
+ *
+ * <p>Served at {@code /register-company}.
  */
 @Route(value = "register-company", layout = MainLayout.class)
 @PageTitle("Register a Company · TicketHub")
@@ -49,6 +51,9 @@ public class CompanyRegistrationView extends LkPage {
     private final TextField name = new TextField("Company name");
     private final TextArea description = new TextArea("Description");
 
+    /**
+     * Builds the company registration form.
+     */
     public CompanyRegistrationView(CompanyRegistrationPresenter presenter) {
         this.presenter = presenter;
         title("Register a Production Company");

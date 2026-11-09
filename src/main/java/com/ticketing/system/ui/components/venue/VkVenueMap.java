@@ -22,9 +22,31 @@ public class VkVenueMap extends Div {
     /** Each zone's button, by zone id, so a page that rebuilt the map can put focus back on one. */
     private final Map<String, NativeButton> zoneButtons = new HashMap<>();
 
+    /**
+     * One zone's rectangle on the floor plan.
+     *
+     * @param id     identifies the zone; passed to the pick callback
+     * @param label  the zone's name
+     * @param price  the price text, already formatted
+     * @param tone   the colour name, which picks the {@code vk-zone-<tone>} class; {@code "danger"}
+     *               marks a sold-out zone, shown disabled and not pickable
+     * @param note   a line under the price; {@code null} for none
+     * @param top    CSS length of the rectangle's top edge
+     * @param left   CSS length of the rectangle's left edge
+     * @param width  CSS length of the rectangle's width
+     * @param height CSS length of the rectangle's height
+     */
     public record Zone(String id, String label, String price, String tone,
                        String note, String top, String left, String width, String height) { }
 
+    /**
+     * @param zones      the zones to place on the plan
+     * @param selectedId the id of the highlighted zone; {@code null} or an id not in {@code zones}
+     *                   highlights none
+     * @param compact    whether to use the compact size
+     * @param onPick     receives the id of the zone the user picks, never that of a sold-out zone;
+     *                   may be {@code null}
+     */
     public VkVenueMap(List<Zone> zones, String selectedId, boolean compact, Consumer<String> onPick) {
         addClassName("vk-map");
         if (compact) addClassName("compact");

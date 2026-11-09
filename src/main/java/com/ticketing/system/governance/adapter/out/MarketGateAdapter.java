@@ -1,22 +1,21 @@
 package com.ticketing.system.governance.adapter.out;
 
-import org.springframework.stereotype.Component; // marks this as a Spring-managed bean so it wires into sales
+import org.springframework.stereotype.Component;
 
-import com.ticketing.system.governance.application.service.SystemAdminService; // governance owns the market lifecycle
-import com.ticketing.system.sales.application.port.out.MarketGate; // the sales outbound port this adapter fulfils
+import com.ticketing.system.governance.application.service.SystemAdminService;
+import com.ticketing.system.sales.application.port.out.MarketGate;
 
 /**
  * Governance-side adapter that satisfies the sales {@link MarketGate} outbound port.
  *
- * <p>Dependency inversion for the market gate: sales depends on the {@code MarketGate} port and no
- * longer references governance. Governance — the top-level consumer — implements the port here and
- * delegates to its own {@code SystemAdminService}, so the dependency now points from governance into
- * sales' port (the correct direction).
+ * <p>Dependency inversion for the market gate: sales depends on the {@code MarketGate} port and does
+ * not reference governance. Governance implements the port here and delegates to its own
+ * {@code SystemAdminService}, so the dependency points from governance into sales' port.
  */
-@Component // registered as a bean so Spring injects it wherever sales needs a MarketGate
+@Component
 public class MarketGateAdapter implements MarketGate {
 
-    private final SystemAdminService systemAdminService; // governance service that holds the market state
+    private final SystemAdminService systemAdminService;
 
     /**
      * Creates the adapter around the governance service that owns the market lifecycle.
@@ -24,7 +23,7 @@ public class MarketGateAdapter implements MarketGate {
      * @param systemAdminService the governance service whose market state is exposed to sales
      */
     public MarketGateAdapter(SystemAdminService systemAdminService) {
-        this.systemAdminService = systemAdminService; // store the governance service for delegation
+        this.systemAdminService = systemAdminService;
     }
 
     /**
@@ -34,6 +33,6 @@ public class MarketGateAdapter implements MarketGate {
      */
     @Override
     public boolean isOpen() {
-        return systemAdminService.isMarketOpen(); // delegate to governance's authoritative market state
+        return systemAdminService.isMarketOpen();
     }
 }

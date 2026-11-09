@@ -56,7 +56,7 @@ public class Ticket implements InvariantChecked {
     @Column(nullable = false)
     private TicketStatus status;
 
-    // D7 (auth rework #181): nullable. Set on the Member path of CheckoutService;
+    // D7 (auth rework upstream#181): nullable. Set on the Member path of CheckoutService;
     // stays null for Guest purchases.
     @Column(name = "holder_user_id")
     private Integer holderUserId;
@@ -72,7 +72,16 @@ public class Ticket implements InvariantChecked {
      * Seated-zone ticket constructor — {@code seatLabel} is the label of the
      * {@link com.ticketing.system.catalog.domain.Seat} this ticket refers
      * to inside its {@link com.ticketing.system.catalog.domain.SeatedZone}.
-     * Pass {@code null} for standing-zone tickets (or use the 5-arg form).
+     * Pass {@code null} for standing-zone tickets. The ticket starts PAID, with no holder.
+     *
+     * @param eventId        the event, positive
+     * @param zoneid         the zone, not negative
+     * @param orderReceiptId the receipt of the purchase, positive
+     * @param seatLabel      the seat label, or {@code null} for a standing ticket; not blank if given
+     * @param price          the price paid, not negative
+     * @param ticketId       the id minted by {@code TicketRepository.nextId()}, positive
+     * @param barcodeValue   the issuer's ticket code, or {@code null} if not issued yet
+     * @throws IllegalStateException if an argument breaks the limits above
      */
     public Ticket(int eventId, int zoneid, int orderReceiptId, String seatLabel, double price, int ticketId, String barcodeValue) {
         this.eventId = eventId;
@@ -82,7 +91,7 @@ public class Ticket implements InvariantChecked {
         this.ticketId = ticketId;
         this.orderReceiptId = orderReceiptId;
         this.barcodeValue = barcodeValue;
-        this.status = TicketStatus.PAID; // Default initial status, because tickets are created at payment time in the current design. Adjust as needed if creation timing changes.
+        this.status = TicketStatus.PAID; // tickets are created once they are paid for, at checkout
         this.holderUserId = null;
         checkInvariants();
     }
@@ -105,6 +114,12 @@ public class Ticket implements InvariantChecked {
         return orderReceiptId;
     }
 
+    /**
+     * Moves the ticket to another receipt.
+     *
+     * @param orderReceiptId the new receipt id
+     * @throws IllegalArgumentException if {@code orderReceiptId} is not positive
+     */
     public void setOrderReceiptId(int orderReceiptId) {
         if (orderReceiptId <= 0) {
             throw new IllegalArgumentException("orderReceiptId must be positive");
@@ -235,18 +250,23 @@ public class Ticket implements InvariantChecked {
         return zoneid;
     }
 
+    /** Returns the seat label, or {@code null} for a standing-zone ticket. */
     public String getSeatNumber() {
         return seatNumber;
     }
 
+    /** Returns the holding member's user id, or {@code null} for a guest purchase or an unreserved ticket. */
     public Integer getHolderUserId() {
         return holderUserId;
     }
 
     /**
      * Assigns this ticket to a Member at checkout (D7). Called once from the
-     * Member path of {@code CheckoutService.checkout}. Guest tickets stay
+     * Member path of {@code CheckoutService.checkoutMember}. Guest tickets stay
      * unassigned (holderUserId remains null).
+     *
+     * @param userId the member's user id, or {@code null} to clear it
+     * @throws IllegalArgumentException if {@code userId} is not positive
      */
     public void setHolderUserId(Integer userId) {
         if (userId != null && userId <= 0) {
@@ -256,6 +276,7 @@ public class Ticket implements InvariantChecked {
         checkInvariants();
     }
 
+    /** Returns the issuer's ticket code, or {@code null} if none is stored. */
     public String getBarcode() {
         return barcodeValue;
     }
@@ -264,6 +285,12 @@ public class Ticket implements InvariantChecked {
         return status;
     }
 
+    /**
+     * Replaces the ticket id.
+     *
+     * @param ticketId the new id, positive
+     * @throws IllegalStateException if the id is not positive; the ticket keeps its previous id
+     */
     public void setTicketId(int ticketId) {
         // Validate-before-commit: roll back if the new id is non-positive, so a rejected
         // call never leaves the ticket with a corrupted id.

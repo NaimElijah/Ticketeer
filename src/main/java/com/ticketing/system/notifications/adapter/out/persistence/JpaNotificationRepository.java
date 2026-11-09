@@ -13,15 +13,18 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
  * JPA-backed {@link NotificationRepository} — active in every run but the in-memory
- * test suite. Adapts the domain port onto Spring Data ({@link SpringDataNotificationRepository});
+ * test suite. Adapts the port onto Spring Data ({@link SpringDataNotificationRepository});
  * the application layer depends only on {@code NotificationRepository}, never on Spring Data.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrent writes are guarded by
  * {@code Notification}'s {@code @Version} optimistic lock within the surrounding transaction.
  * {@link #save} delegates to {@code data.save}: a fresh notification (version {@code null}) is
- * inserted, a loaded-then-mutated one (markDelivered / markPending) is updated under its
- * {@code @Version} check. The write is {@code @Transactional} so the adapter is self-sufficient
- * before the service layer gains transactions (#359); reads inherit Spring Data's read-only tx.
+ * inserted, a loaded-then-mutated one (markSent / markPending / markRead) is updated under its
+ * {@code @Version} check. The write is {@code @Transactional}, so a save made with no transaction
+ * open commits on its own: {@code NotificationDispatchService.deliverPending} and
+ * {@code NotificationService.revertSentToPending} suspend their callers' transactions and rely on
+ * that. {@code findById} inherits Spring Data's read-only tx; the two derived finders run with no
+ * transaction of their own.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)
@@ -29,6 +32,11 @@ public class JpaNotificationRepository implements NotificationRepository {
 
     private final SpringDataNotificationRepository data;
 
+    /**
+     * Wires the adapter to the Spring Data repository that backs it.
+     *
+     * @param data the Spring Data repository the port methods delegate to
+     */
     public JpaNotificationRepository(SpringDataNotificationRepository data) {
         this.data = data;
     }

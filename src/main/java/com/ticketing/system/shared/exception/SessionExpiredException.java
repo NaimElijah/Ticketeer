@@ -16,6 +16,7 @@ public class SessionExpiredException extends InvalidTokenException {
 
     private static final String MESSAGE = "Session expired; please re-authenticate";
 
+    /** Creates the exception with its fixed re-authenticate message. */
     public SessionExpiredException() {
         super(MESSAGE, null);
     }

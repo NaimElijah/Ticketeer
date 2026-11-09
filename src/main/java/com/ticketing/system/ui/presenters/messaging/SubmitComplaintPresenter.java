@@ -10,7 +10,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * MVP presenter for {@code SubmitComplaintView} (#267). Holds no Vaadin imports so
+ * MVP presenter for {@code SubmitComplaintView} (upstream#267). Holds no Vaadin imports so
  * the outcome → UI translation lives in the view and the service-call decision tree
  * is unit-testable in isolation (the view passes {@code AuthSession.token()} in,
  * mirroring {@code MyInvitationsPresenter}).
@@ -24,6 +24,7 @@ public class SubmitComplaintPresenter {
 
     private final MessagingService messagingService;
 
+    /** Creates the presenter over the messaging service. */
     @Autowired
     public SubmitComplaintPresenter(MessagingService messagingService) {
         this.messagingService = messagingService;
@@ -32,6 +33,13 @@ public class SubmitComplaintPresenter {
     /**
      * Files a complaint on behalf of the signed-in member and returns the new
      * conversation id so the view can redirect the inbox to it.
+     *
+     * @param token            the member's token; {@code null} gives {@link Outcome.NotAuthenticated}
+     * @param subject          the complaint's subject
+     * @param body             the details the member typed; at most {@link #maxDetailsLength} for the
+     *     chosen category
+     * @param relatedEntityRef what the complaint is about, which the service appends to the details;
+     *     {@code null} or blank for none
      */
     public Outcome submit(String token, String subject, String body, String relatedEntityRef) {
         if (token == null) {
@@ -60,8 +68,21 @@ public class SubmitComplaintPresenter {
 
     /** Sealed outcome the view switches on to redirect, re-auth, or surface an error. */
     public sealed interface Outcome {
+        /**
+         * The complaint is filed.
+         *
+         * @param conversationId the new complaint thread's id
+         */
         record Success(String conversationId) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The service refused the complaint or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 }

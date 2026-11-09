@@ -39,16 +39,20 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Company's member-inquiry inbox (#268): lists the member inquiries addressed to the company,
- * lets an owner/manager read each thread, reply, and close it — all backed by
- * {@link CompanyInquiryInboxPresenter} → {@code MessagingService}.
+ * Company's member-inquiry inbox (upstream#268): lists the member inquiries addressed to the company,
+ * lets an owner/manager read each thread and open the response page for one that is still
+ * open — all backed by {@link CompanyInquiryInboxPresenter} → {@code MessagingService}. Replying
+ * and closing happen on {@link CompanyInquiryRespondView}.
  *
- * <p>The company is resolved like {@code OwnerDashboardView}: the presenter picks the company id
- * seeded from {@link CurrentCompanies} (else the member's first company), and a topbar selector
- * lets multi-company owners switch. A client-side Status chip filters the loaded threads.
+ * <p>The company is resolved like {@code OwnerDashboardView}: the view asks the presenter for the id
+ * seeded from {@link CurrentCompanies}, which falls back to the member's first company when that id
+ * is absent or not the member's, and a topbar selector lets a member of several companies switch. A
+ * client-side Status chip filters the loaded threads.
  *
- * <p>Second wired master/detail messaging inbox after {@code SupportInboxView} (#277);
- * {@code AdminComplaintQueueView} (#269) mirrors this pattern.
+ * <p>Second wired master/detail messaging inbox after {@code SupportInboxView} (upstream#277);
+ * {@code AdminComplaintQueueView} (upstream#269) mirrors this pattern.
+ *
+ * <p>Served at {@code /owner/inquiries}.
  */
 @Route(value = "owner/inquiries", layout = WorkspaceLayout.class)
 @PageTitle("Customer Inquiries · TicketHub")
@@ -75,6 +79,9 @@ public class CompanyInquiryInboxView extends LkPage {
     private Integer companyId;   // the company currently being viewed (kept across reloads)
     private LkCard detailCard;
 
+    /**
+     * Creates the page and loads the inquiries of the company in focus.
+     */
     public CompanyInquiryInboxView(CompanyInquiryInboxPresenter presenter, DisplayTime displayTime) {
         this.presenter = presenter;
         this.displayTime = displayTime;

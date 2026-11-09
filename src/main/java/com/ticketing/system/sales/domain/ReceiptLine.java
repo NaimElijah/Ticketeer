@@ -47,6 +47,18 @@ public class ReceiptLine implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected ReceiptLine() { }
 
+    /**
+     * Creates an unrefunded line.
+     *
+     * @param ticketId   the ticket this line is for, positive
+     * @param price      the price paid for the ticket, not negative
+     * @param eventid    the event, positive
+     * @param zoneId     the zone, not negative
+     * @param seatNumber the seat label, or {@code null} for a standing place; not blank if given
+     * @param addedAt    the time recorded on the line, as UTC wall time (ADR-008); checkout passes the
+     *                   purchase time; not {@code null}
+     * @throws IllegalStateException if an argument breaks the limits above
+     */
     public ReceiptLine(int ticketId, double price, int eventid, int zoneId, String seatNumber, LocalDateTime addedAt) {
         this.ticketId = ticketId;
         this.price = price;
@@ -76,6 +88,7 @@ public class ReceiptLine implements InvariantChecked {
         return eventid;
     }
 
+    /** Returns the price paid for the line's ticket. */
     public double getPriceAtReservation() {
         return price;
     }
@@ -84,6 +97,7 @@ public class ReceiptLine implements InvariantChecked {
         return zoneId;
     }
 
+    /** Returns the seat label, or {@code null} for a standing place. */
     public String getSeatNumber() {
         return seatNumber;
     }

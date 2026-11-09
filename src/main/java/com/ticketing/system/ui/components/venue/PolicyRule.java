@@ -13,6 +13,14 @@ import com.vaadin.flow.component.html.Span;
  */
 public class PolicyRule extends Div {
 
+    /**
+     * Builds the row. Its type button and remove button have no click handlers.
+     *
+     * @param type  the rule type's name
+     * @param cmp   the comparison operator as shown, such as "≤"
+     * @param value the rule's value
+     * @param unit  the unit shown after the value; {@code null} or empty shows none
+     */
     public PolicyRule(String type, String cmp, String value, String unit) {
         addClassName("pe-rule");
 

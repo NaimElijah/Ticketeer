@@ -28,13 +28,22 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
 
-// V3: mapped to JPA. companyId is an ASSIGNED @Id (minted by nextId(), never @GeneratedValue);
-// founderId is a plain by-id column; status is stored by name; @Version drives optimistic locking.
-// ownerIds and managers map to two @ElementCollection by-id side-tables (the owner/manager
-// mutual-exclusion rule stays enforced in checkInvariants, not at the DB). The recursive
-// purchasePolicy tree is stored as one JSON text column (PurchasePolicyJsonConverter). The
-// discountPolicies are empty company-level stubs carrying no state, so they are @Transient. A
-// protected no-arg ctor lets Hibernate hydrate; the public ctor still enforces the invariants.
+/**
+ * A production company: the aggregate root for its identity, status, owners, managers and purchase policy.
+ *
+ * <p>The founder is the first owner and stays one. The owner list and the manager list never share a user, an
+ * invariant {@link #checkInvariants()} enforces. Permissions are held only by {@link CompanyAppointment}; the
+ * two lists repeat the role its active appointment states, and {@code CompanyManagementService} keeps them in
+ * step.
+ *
+ * <p>Persistence: {@code companyId} is an assigned id minted by {@code nextId()}, never
+ * {@code @GeneratedValue}; {@code founderId} is a plain by-id column; the status is stored by name;
+ * {@code @Version} drives optimistic locking. The owner and manager ids are two {@code @ElementCollection}
+ * by-id side tables, and the owner/manager mutual exclusion is enforced in {@code checkInvariants}, not by the
+ * database. The recursive purchase policy is one JSON text column ({@link PurchasePolicyJsonConverter}). The
+ * {@code discountPolicies} list is an empty stub that carries no state, so it is {@code @Transient}. A
+ * protected no-argument constructor lets Hibernate hydrate; the public constructor enforces the invariants.
+ */
 @Entity
 @Table(name = "companies")
 public class ProductionCompany implements InvariantChecked {
@@ -52,7 +61,7 @@ public class ProductionCompany implements InvariantChecked {
     private int founderId;
     /**
      * All current owners (includes {@link #founderId} at all times). Any owner
-     * can add or remove another owner; non-founder owners can also self-resign.
+     * can appoint another; revoking follows {@code CompanyAppointment.revoke}.
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "company_owner_ids", joinColumns = @JoinColumn(name = "company_id"))
@@ -91,6 +100,20 @@ public class ProductionCompany implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected ProductionCompany() { }
 
+    /**
+     * Creates a company whose only owner is its founder, with no managers and a {@link NoPurchasePolicy}.
+     *
+     * @param companyId     the company's id; positive
+     * @param founderId     the registering user, who becomes the first owner; positive
+     * @param name          a non-blank name of at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param companyStatus the company's status; not null
+     * @param description   at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param rating        a finite value from 0 to 5, or {@code null}
+     * @throws BusinessRuleViolationException if {@code name} or {@code description} is longer than
+     *                                        {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws IllegalStateException          if an invariant is violated: a non-positive id, a blank name, a
+     *                                        rating outside 0 to 5, or a null status
+     */
     public ProductionCompany(int companyId, int founderId, String name, CompanyStatus companyStatus, String description, Double rating) {
         TextLimits.requireFits(NAME_FIELD, name);
         TextLimits.requireFits(DESCRIPTION_FIELD, description);
@@ -108,6 +131,13 @@ public class ProductionCompany implements InvariantChecked {
         checkInvariants();
     }
 
+    /**
+     * Adds a manager. A rejected call leaves the manager list unchanged.
+     *
+     * @param targetId the user to add
+     * @throws BusinessRuleViolationException if the user is already a manager
+     * @throws IllegalStateException          if the user is an owner, since the roles are mutually exclusive
+     */
     public void addManager(int targetId) {
         if (managers.contains(targetId)) {
             throw new BusinessRuleViolationException("The target user is already a manager of this company");
@@ -126,7 +156,8 @@ public class ProductionCompany implements InvariantChecked {
 
     /**
      * Add a new owner. Caller (the {@code actorId}) must already be an owner.
-     * No-op if {@code newOwnerId} is already an owner.
+     * No-op if {@code newOwnerId} is already an owner. A user who is currently a manager is removed from
+     * the manager list as they join the owners.
      *
      * @throws UnauthorizedActionException
      * if {@code actorId} is not an owner
@@ -184,7 +215,13 @@ public class ProductionCompany implements InvariantChecked {
     }
 
 
-    // general appointment revoke for manager or owner, whatever is active for the target user right now.
+    /**
+     * Removes a user's manager or owner standing, whichever they hold.
+     *
+     * @param targetId the user whose standing ends
+     * @throws IllegalStateException   if the user is the founder
+     * @throws AppointmentNotFoundException if the user is neither a manager nor an owner
+     */
     public void RevokeAppointment(int targetId) {
         if (targetId == founderId) {
             throw new IllegalStateException("The founder cannot be revoked");
@@ -199,9 +236,9 @@ public class ProductionCompany implements InvariantChecked {
         checkInvariants();
     }
 
-    // ---------------------------------------------------------------------------
-    // Skeleton additions — CompanyStatus lifecycle + cycle check + getters.
-    // ---------------------------------------------------------------------------
+    /**
+     * Returns a copy of the manager ids; changing it does not change the company.
+     */
     public List<Integer> getManagers() {
         // Defensive copy — external callers must not be able to mutate the internal
         // managers list (which would let them violate the owner/manager-overlap invariant).
@@ -209,14 +246,16 @@ public class ProductionCompany implements InvariantChecked {
     }
 
     /**
-     * Legacy accessor — returns the founder's id. Most call sites should
-     * migrate to {@link #isOwner(int)} for permission checks or
-     * {@link #getOwnerIds()} for the full owner list.
+     * Returns the founder's id, the same as {@link #getFounderId()}; it is not an owner list. Use
+     * {@link #isOwner(int)} for permission checks and {@link #getOwnerIds()} for all owners.
      */
     public int getOwnerId() {
         return this.founderId;
     }
 
+    /**
+     * Returns a copy of the owner ids. Identical to {@link #getOwnerIds()}.
+     */
     public List<Integer> getOwnersIds() {
         // Defensive copy — see getOwnerIds() for the canonical snapshot accessor.
         return new ArrayList<>(this.ownerIds);
@@ -242,25 +281,16 @@ public class ProductionCompany implements InvariantChecked {
         return this.companyStatus == CompanyStatus.ACTIVE;
     }
 
-    /*
-     * // II.4.13.x (Cancelled v0; defensive).
-     * public void close(String reason) {
-     * throw new
-     * UnsupportedOperationException("II.4.13.x (Cancelled in v0): not implemented"
-     * );
-     * }
-     * 
-     * // II.4.14 (Cancelled v0; defensive).
-     * public void reopen() {
-     * throw new
-     * UnsupportedOperationException("II.4.14 (Cancelled in v0): not implemented");
-     * }
-     */
-
     public String getName() {
         return this.name;
     }
 
+    /**
+     * Renames the company. On failure the name is unchanged.
+     *
+     * @throws BusinessRuleViolationException if {@code name} is longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws IllegalStateException          if {@code name} is null or blank
+     */
     public void setName(String name) {
         // Validate-before-commit: roll back if the new name is blank/null, so a rejected
         // call never leaves the company with a corrupted name.
@@ -279,16 +309,32 @@ public class ProductionCompany implements InvariantChecked {
         return this.description;
     }
 
+    /**
+     * Sets the description.
+     *
+     * @throws BusinessRuleViolationException if it is longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     */
     public void setDescription(String description) {
         TextLimits.requireFits(DESCRIPTION_FIELD, description);
         this.description = description;
         checkInvariants();
     }
 
+    /**
+     * Returns the stored rating, a value from 0 to 5, or {@code null} when none is set. Nothing reads or updates
+     * it after registration: the rating shown to users is derived by catalog's {@code CompanyRatings}.
+     */
     public Double getRating() {
         return this.rating;
     }
 
+    /**
+     * Sets the stored rating, which nothing updates after registration (see {@link #getRating()}). On failure
+     * the rating is unchanged.
+     *
+     * @param rating a finite value from 0 to 5, or {@code null}
+     * @throws IllegalStateException if {@code rating} is outside that range
+     */
     public void setRating(Double rating) {
         // Validate-before-commit: roll back if the new rating is out of range, so a rejected
         // call never leaves the company with a corrupted rating.
@@ -302,8 +348,9 @@ public class ProductionCompany implements InvariantChecked {
         }
     }
 
-    // UC-18 — Founder is the original creator, immutable for the lifetime of the
-    // company.
+    /**
+     * UC-18 — returns the founder's id: the company's original creator, fixed for its lifetime.
+     */
     public int getFounderId() {
         return founderId;
     }
@@ -313,8 +360,7 @@ public class ProductionCompany implements InvariantChecked {
     }
 
     /**
-     * Permission gate for owner-only actions. Now accepts <em>any</em> current
-     * owner (per the multi-owner refactor) rather than founder-only.
+     * Permission gate for owner-only actions. Any current owner passes, not only the founder.
      *
      * @throws UnauthorizedActionException if {@code ownerId2} is not a current
      *                                     owner
@@ -371,6 +417,10 @@ public class ProductionCompany implements InvariantChecked {
         }
     }
 
+    /**
+     * Returns the company's purchase policy; never {@code null}. A company without one reports a
+     * {@link NoPurchasePolicy}.
+     */
     public PurchasePolicy getPurchasePolicy() {
     if (this.purchasePolicy == null) {
         this.purchasePolicy = new NoPurchasePolicy();
@@ -379,6 +429,11 @@ public class ProductionCompany implements InvariantChecked {
     return this.purchasePolicy;
 }
 
+/**
+ * Replaces the company's purchase policy.
+ *
+ * @throws IllegalArgumentException if {@code purchasePolicy} is null
+ */
 public void setPurchasePolicy(PurchasePolicy purchasePolicy) {
     if (purchasePolicy == null) {
         throw new IllegalArgumentException("Purchase policy cannot be null");
@@ -388,6 +443,12 @@ public void setPurchasePolicy(PurchasePolicy purchasePolicy) {
     checkInvariants();
 }
 
+/**
+ * Narrows the purchase policy: the company's current policy and {@code additionalPolicy} must both be
+ * satisfied, as an {@link AndPurchasePolicy}.
+ *
+ * @throws IllegalArgumentException if {@code additionalPolicy} is null
+ */
 public void extendPurchasePolicy(PurchasePolicy additionalPolicy) {
     if (additionalPolicy == null) {
         throw new IllegalArgumentException("Additional purchase policy cannot be null");

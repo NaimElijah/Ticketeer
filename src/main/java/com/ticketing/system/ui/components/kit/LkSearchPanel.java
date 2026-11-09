@@ -16,7 +16,7 @@ import java.util.function.Function;
  * <ul>
  *   <li>the original <b>static</b> {@code (recents, groups)} constructor + {@link #defaults()},
  *       a render-only reference panel; and</li>
- *   <li>the <b>live</b> {@code (recents, searchFn)} constructor (V2-SEARCH-01 / #281) — a debounced
+ *   <li>the <b>live</b> {@code (recents, searchFn)} constructor (V2-SEARCH-01 / upstream#281) — a debounced
  *       {@link TextField} that calls {@code searchFn} and renders typed rows, an empty state, and a
  *       zero-results state. The kit stays framework-pure: callers inject a
  *       {@code Function<String, List<Row>>} and each {@link Row} carries its own navigation
@@ -25,13 +25,42 @@ import java.util.function.Function;
  */
 public class LkSearchPanel extends Div {
 
+    /**
+     * One row of a static group.
+     *
+     * @param title  the row's main text
+     * @param detail the line under it
+     */
     public record Result(String title, String detail) { }
+
+    /**
+     * One group of a static panel.
+     *
+     * @param label    the group's heading
+     * @param iconName the {@link LkIcon} glyph name every row of the group shows
+     * @param items    the group's rows
+     */
     public record Group(String label, String iconName, List<Result> items) { }
 
-    /** A live result row: {@code type} drives grouping/icon; {@code onPick} runs on click. */
+    /**
+     * A live result row: {@code type} drives grouping/icon; {@code onPick} runs on click.
+     *
+     * @param type     {@code "EVENT"}, {@code "ARTIST"} or {@code "VENUE"}; a row of any other type is
+     *                 not shown
+     * @param title    the row's main text
+     * @param subtitle the line under it
+     * @param onPick   runs when the row is clicked; {@code null} makes the row do nothing
+     */
     public record Row(String type, String title, String subtitle, Runnable onPick) { }
 
     // ---- static reference panel (render-only) ----
+    /**
+     * A fixed panel: the recent searches and the result groups are shown as given and do nothing when
+     * clicked.
+     *
+     * @param recents the recent search texts
+     * @param groups  the result groups
+     */
     public LkSearchPanel(List<String> recents, List<Group> groups) {
         addClassName("lk-searchpop");
 
@@ -74,7 +103,18 @@ public class LkSearchPanel extends Div {
         }
     }
 
-    // ---- live, backend-driven panel (#281) ----
+    // ---- live, backend-driven panel (upstream#281) ----
+    /**
+     * A live panel: a search field that calls {@code searchFn} 200 ms after the user stops typing.
+     * While the field is empty it shows the recent searches, or a hint when there are none;
+     * clicking a recent search fills the field with it.
+     *
+     * @param recents  the recent search texts; {@code null} or empty shows a hint instead
+     * @param searchFn maps the trimmed, non-empty search text to rows; it runs in the request that
+     *                 delivers the typed text, so a slow search delays the page. {@code null} or empty
+     *                 means no matches. The panel shows the rows grouped by type, in the order events,
+     *                 artists, venues.
+     */
     public LkSearchPanel(List<String> recents, Function<String, List<Row>> searchFn) {
         addClassName("lk-searchpop");
 
@@ -173,6 +213,7 @@ public class LkSearchPanel extends Div {
         return empty;
     }
 
+    /** A static panel of fixed sample searches and results that belong to no real event. */
     public static LkSearchPanel defaults() {
         return new LkSearchPanel(
             List.of("Coldplay", "Hapoel TLV", "Jazz festival"),

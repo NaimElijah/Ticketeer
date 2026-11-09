@@ -8,9 +8,9 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.router.RouterLink;
 
 /**
- * Centered card shell used by sign-in and register screens. Ports the
- * React {@code AuthShell + auth-card + auth-brand + auth-title +
- * auth-sub} structure (see {@code docs/tickethub-ui/screens-auth.jsx}).
+ * Centered card shell used by sign-in and register screens: brand line,
+ * title and optional subtitle, in the {@code auth-card},
+ * {@code auth-brand}, {@code auth-title} and {@code auth-sub} classes.
  *
  * <p>Root element is the {@code .auth-wrap} centering container; the
  * inner {@code .auth-card} holds the brand line + title + subtitle and
@@ -23,6 +23,10 @@ public class LkAuthCard extends Div {
 
     private final Div card = new Div();
 
+    /**
+     * @param title    the card's title, which is the page's {@code h1}
+     * @param subtitle the line under the title; {@code null} or empty shows none
+     */
     public LkAuthCard(String title, String subtitle) {
         addClassName("auth-wrap");
         card.addClassName("auth-card");
@@ -67,7 +71,13 @@ public class LkAuthCard extends Div {
         return this;
     }
 
-    /** Footer paragraph with an optional trailing {@link RouterLink}, which the card ends with an arrow. */
+    /**
+     * Footer paragraph with an optional trailing {@link RouterLink}, which the card ends with an arrow.
+     *
+     * @param text       the footer text
+     * @param linkLabel  the link's text; the link is left out when this or {@code linkTarget} is {@code null}
+     * @param linkTarget the view the link opens
+     */
     public LkAuthCard foot(String text, String linkLabel, Class<? extends Component> linkTarget) {
         Paragraph foot = new Paragraph();
         foot.addClassName("auth-foot");

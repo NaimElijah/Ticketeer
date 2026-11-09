@@ -9,7 +9,7 @@ import com.ticketing.system.ui.presenters.ListOutcome;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * Read-only presenter for {@code BrowseEventsView} (#271). Runs the public catalog search
+ * Read-only presenter for {@code BrowseEventsView} (upstream#271). Runs the public catalog search
  * server-side via {@link CatalogService#searchGlobal}: the view builds a
  * {@link CatalogSearchFiltersDTO} from its filter chips/selects and re-queries on every change
  * (an empty filter is the unfiltered catalog).
@@ -22,6 +22,7 @@ public class BrowseEventsPresenter {
 
     private final CatalogService catalogService;
 
+    /** Creates the presenter over the catalog service. */
     public BrowseEventsPresenter(CatalogService catalogService) {
         this.catalogService = catalogService;
     }

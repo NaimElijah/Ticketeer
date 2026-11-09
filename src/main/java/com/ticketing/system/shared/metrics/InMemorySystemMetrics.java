@@ -17,14 +17,15 @@ import com.ticketing.system.shared.metrics.MetricType;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * In-memory {@link ISystemMetrics} adapter (V1/V2). Each {@link MetricType}
+ * In-memory {@link ISystemMetrics} adapter. Each {@link MetricType}
  * keeps a time-ordered deque of event instants (for windowed rate / throughput
- * queries) plus a cumulative counter. Instants older than {@link #RETENTION}
- * are pruned from the head on write so the deques stay bounded.
+ * queries) plus a cumulative counter. Instants older than
+ * {@link ISystemMetrics#MAX_WINDOW_MINUTES} minutes are pruned from the head on write so the
+ * deques stay bounded.
  *
  * <p>Thread-safe: the per-type deques are {@link ConcurrentLinkedDeque} and the
- * totals are {@link AtomicLong}. Counters reset on restart — acceptable for the
- * in-memory runtime; the port boundary keeps a durable adapter a drop-in for V3.
+ * totals are {@link AtomicLong}. Counters reset on restart; the port boundary lets a durable
+ * adapter replace this one.
  */
 @Component
 @Slf4j
@@ -40,6 +41,11 @@ public class InMemorySystemMetrics implements ISystemMetrics {
     private final Map<MetricType, ConcurrentLinkedDeque<Instant>> events = new EnumMap<>(MetricType.class);
     private final Map<MetricType, AtomicLong> totals = new EnumMap<>(MetricType.class);
 
+    /**
+     * Creates the counters, all empty.
+     *
+     * @param clock the clock that stamps each event and sets the start of a window
+     */
     public InMemorySystemMetrics(Clock clock) {
         this.clock = clock;
         for (MetricType type : MetricType.values()) {

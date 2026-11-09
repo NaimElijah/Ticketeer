@@ -40,6 +40,10 @@ public class SignOutFlow {
     private final AuthenticationService authenticationService;
     private final FreshGuestSession freshGuestSession;
 
+    /**
+     * @param authenticationService revokes the visitor's token
+     * @param freshGuestSession     clears the Vaadin-side state and pins a new guest session
+     */
     public SignOutFlow(AuthenticationService authenticationService, FreshGuestSession freshGuestSession) {
         this.authenticationService = authenticationService;
         this.freshGuestSession = freshGuestSession;

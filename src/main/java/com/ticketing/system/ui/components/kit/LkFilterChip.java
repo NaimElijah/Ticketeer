@@ -37,10 +37,17 @@ public class LkFilterChip extends Div {
     private LkMenu.Label headerLabel;
     private Runnable onApply = () -> { };
 
+    /** A multi-select chip with nothing ticked. */
     public LkFilterChip(String label, List<String> options) {
         this(label, options, false, List.of());
     }
 
+    /**
+     * @param label   the chip's text and the popup's heading; the chip appends the number ticked
+     * @param options the choices, in the order shown
+     * @param single  whether at most one option can be ticked
+     * @param applied the options ticked at the start; not {@code null}
+     */
     public LkFilterChip(String label, List<String> options, boolean single, List<String> applied) {
         this.label = label;
         this.options = options;
@@ -130,6 +137,10 @@ public class LkFilterChip extends Div {
         menu.add(apply);
     }
 
+    /**
+     * The options ticked now, which change as the user ticks them, even before Apply is pressed.
+     * It is the chip's own set, not a copy.
+     */
     public Set<String> getSelected() { return selected; }
 
     /** Run a callback when the chip's Apply button is pressed (e.g. re-query). */

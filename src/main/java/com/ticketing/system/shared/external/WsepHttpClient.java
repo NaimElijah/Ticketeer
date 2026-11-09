@@ -49,6 +49,12 @@ public class WsepHttpClient {
     private final long handshakeBackoffMs;
     private final HttpClient http;
 
+    /**
+     * Creates the client from the bound WSEP settings. Connecting times out after 10 seconds, separately
+     * from the per-request timeout.
+     *
+     * @param properties the endpoint URL, the request timeout and the handshake retry settings
+     */
     public WsepHttpClient(WsepProperties properties) {
         this.baseUrl = properties.baseUrl();
         this.requestTimeoutSeconds = properties.requestTimeoutSeconds();
@@ -68,6 +74,13 @@ public class WsepHttpClient {
     public static final class Form {
         private final Map<String, String> fields = new LinkedHashMap<>();
 
+        /**
+         * Sets a field, replacing an earlier value of the same key without moving it.
+         *
+         * @param key the field name
+         * @param value the field value, as {@code String.valueOf}; {@code null} becomes the empty string
+         * @return this form
+         */
         public Form add(String key, Object value) {
             fields.put(key, value == null ? "" : String.valueOf(value));
             return this;
@@ -141,7 +154,7 @@ public class WsepHttpClient {
      * {@code issue_ticket} / {@code refund}: those are non-idempotent and a blind retry could
      * double-charge or double-issue. The retry lets a cold-starting WSEP endpoint (a free-tier host
      * that sleeps when idle) wake on an early attempt and answer on a later one, instead of failing
-     * the market open at boot (#455 / #365).
+     * the market open at boot (upstream#455 / upstream#365).
      */
     public String postWithRetry(Form form) {
         return withRetry(() -> post(form));

@@ -13,8 +13,8 @@ import org.springframework.core.env.Environment;
  * Reports a database the application cannot connect or sign in to at startup as such, instead of a
  * raw stack trace or Hibernate's dialect error.
  *
- * <p>Every run uses the JPA repositories (ADR-005), so a database that cannot be reached stops the
- * boot. The first component to connect raises the failure:
+ * <p>Every run except the test suite's in-memory one uses the JPA repositories (ADR-005), so a
+ * database that cannot be reached stops the boot. The first component to connect raises the failure:
  * <ul>
  *   <li><b>Flyway</b>, which migrates before Hibernate starts (ADR-007), fails with the driver's
  *       {@link SQLException} in its cause chain. Its SQLState class says what went wrong: {@code 08}

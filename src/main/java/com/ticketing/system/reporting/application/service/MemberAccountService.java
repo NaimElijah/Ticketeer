@@ -17,25 +17,33 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
-// Read-side service for member-facing personal account queries.
-// Owns UC-16 (View Personal Purchase History).
-// Reserved for additional member-side reads (UC-15 if it returns from Cancelled, profile views, etc.).
-// Separated from AuthenticationService (which is auth-flow only) so personal-data reads don't
-// stretch the auth boundary — see design_walkthrough_summary.md §6.
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Read side for a signed-in member's own account data: their purchase history and single receipts
+ * (UC-16).
+ *
+ * <p>Separate from {@code AuthenticationService}, which handles the authentication flow only, so
+ * personal-data reads do not stretch that boundary. Every read authenticates the caller from the
+ * session token and returns only that member's data.
+ */
 @Service
 @Slf4j
 @Transactional(readOnly = true)
 public class MemberAccountService {
 
-    private final AuthenticationService authenticationService; // For user identity verification, if needed for future
-                                                               // methods.
+    private final AuthenticationService authenticationService;
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketRepository ticketRepository;
     private final CatalogEventDisplayPort eventDisplayPort; // For event/zone name lookups in history records.
 
+    /**
+     * Creates the service over the identity, receipt, ticket and catalog-display collaborators.
+     *
+     * @param authenticationService validates a member's token and names the member it belongs to
+     * @param eventDisplayPort      resolves event and zone names for the history records
+     */
     public MemberAccountService(
             AuthenticationService authenticationService,
             OrderReceiptRepository orderReceiptRepository,
@@ -79,9 +87,20 @@ public class MemberAccountService {
         return new PurchaseHistoryDTO(purchaseRecords);
     }
 
-    // UC-16 (single receipt): one member-owned order, enriched for the receipt page (#276). It
-    // throws, as viewMyHistory does, so the presenter can tell apart an auth failure, a missing
-    // receipt, and a receipt that isn't the caller's (403).
+    /**
+     * UC-16 (single receipt): one of the signed-in member's own orders, enriched for the receipt page
+     * (upstream#276). It throws distinct exceptions, as {@link #viewMyHistory} does. {@code ReceiptPresenter}
+     * shows a missing receipt and another member's the same way, so receipt ids on other accounts
+     * stay hidden.
+     *
+     * @param token     the member's session token
+     * @param receiptId the id of the order receipt to show
+     * @return the order record for that receipt
+     * @throws InvalidTokenException if the token is missing or blank, or the session manager rejects it
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException if the session has expired
+     * @throws EntityNotFoundException if no receipt has that id
+     * @throws UnauthorizedActionException if the receipt is not held by the member the token names
+     */
     public PurchaseRecordDTO viewMyReceipt(String token, int receiptId) {
         log.info("Received request to view receipt {} for the authenticated member", receiptId);
         if (!authenticationService.validateToken(token)) {
@@ -98,10 +117,8 @@ public class MemberAccountService {
             throw new UnauthorizedActionException("view receipt " + receiptId, userId);
         }
 
-        // Buyer is the member themselves and company isn't shown on the receipt, so
-        // pass null for
-        // those repos (the mapper yields null for the unresolved names — see
-        // OrderReceiptMapper).
+        // Buyer is the member themselves and company isn't shown on the receipt, so pass null for
+        // those repos (the mapper yields null for the unresolved names — see OrderReceiptMapper).
         return new OrderReceiptMapper().toPurchaseRecordDTO(
                 receipt, ticketRepository, eventDisplayPort, null, null);
     }

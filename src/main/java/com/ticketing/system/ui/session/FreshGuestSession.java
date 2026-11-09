@@ -31,6 +31,10 @@ public class FreshGuestSession {
     private final AuthenticationService authenticationService;
     private final UnreadAlertsSendBack unreadAlertsSendBack;
 
+    /**
+     * @param authenticationService starts the new guest sessions
+     * @param unreadAlertsSendBack  returns the leaving member's unread alerts to pending
+     */
     public FreshGuestSession(AuthenticationService authenticationService,
             UnreadAlertsSendBack unreadAlertsSendBack) {
         this.authenticationService = authenticationService;

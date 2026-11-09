@@ -34,6 +34,12 @@ public class AdminSendMessagesPresenter {
     private final MessagingService messagingService;
     private final MemberQueryService memberQueryService;
 
+    /**
+     * Creates the presenter.
+     *
+     * @param messagingService   sends the outreach and reads the sent history
+     * @param memberQueryService searches members for the recipient picker
+     */
     @Autowired
     public AdminSendMessagesPresenter(MessagingService messagingService,
                                       MemberQueryService memberQueryService) {
@@ -55,7 +61,15 @@ public class AdminSendMessagesPresenter {
         }
     }
 
-    /** Sends outreach to the resolved recipients; returns the recipient count on success. */
+    /**
+     * Sends outreach to the resolved recipients; returns the recipient count on success.
+     *
+     * @param token              the admin's token; {@code null} gives {@link ActionOutcome.NotAuthenticated}
+     * @param recipientMemberIds the members to write to; used only when neither {@code allMembers} nor
+     *     {@code allProducers} is set
+     * @param allMembers         {@code true} to write to every member
+     * @param allProducers       {@code true} to write to the owners of every active company
+     */
     public ActionOutcome send(String token, String subject, String body,
                               List<Integer> recipientMemberIds, boolean allMembers, boolean allProducers) {
         if (token == null) {
@@ -122,27 +136,74 @@ public class AdminSendMessagesPresenter {
         }
     }
 
-    /** One logical send row for the sent-history grid. */
+    /**
+     * One logical send row for the sent-history grid: the conversations that share an initiator,
+     * subject and first message.
+     *
+     * @param sentAt         the earliest creation time among those conversations, or {@code null} when
+     *     none carries one
+     * @param subject        the shared subject
+     * @param recipientCount how many conversations the send opened
+     */
     public record SentOutreach(LocalDateTime sentAt, String subject, int recipientCount) { }
 
     /** Sealed outcome the view switches on to render the history grid or an empty/error state. */
     public sealed interface Outcome {
+        /**
+         * The history loaded.
+         *
+         * @param history the logical sends, possibly none
+         */
         record Success(List<SentOutreach> history) implements Outcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements Outcome { }
+
+        /**
+         * The service refused the read or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements Outcome { }
     }
 
     /** Result of a send the view reacts to (carries the recipient count for the confirmation). */
     public sealed interface ActionOutcome {
+        /**
+         * The service sent the outreach.
+         *
+         * @param recipientCount how many recipients the send reached
+         */
         record Success(int recipientCount) implements ActionOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements ActionOutcome { }
+
+        /**
+         * The service refused the send, for example for a send that matches no recipient, or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements ActionOutcome { }
     }
 
     /** Sealed outcome for the recipient search box. */
     public sealed interface SearchOutcome {
+        /**
+         * The search ran.
+         *
+         * @param results the members whose username contains the query, possibly none
+         */
         record Success(List<MemberSearchResultDTO> results) implements SearchOutcome { }
+
+        /** There is no token, or the service rejected it as invalid. */
         record NotAuthenticated() implements SearchOutcome { }
+
+        /**
+         * The service refused the search or failed.
+         *
+         * @param reason the text the user may read, from {@code ServiceErrors.userMessage}
+         */
         record Failure(String reason) implements SearchOutcome { }
     }
 }

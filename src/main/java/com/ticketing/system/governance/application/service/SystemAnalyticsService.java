@@ -29,7 +29,7 @@ import com.ticketing.system.sales.domain.OrderReceipt;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Read-side aggregator for the System Analytics dashboard (UC-46 / #43, #279).
+ * Read-side aggregator for the System Analytics dashboard (UC-46 / upstream#43, upstream#279).
  *
  * <p>Pure query service. Visitor / registration / reservation activity comes
  * from the live {@link ISystemMetrics} counters; purchases are derived from the
@@ -58,6 +58,14 @@ public class SystemAnalyticsService {
     private final Clock clock;
     private final int windowMinutes;
 
+    /**
+     * Creates the service over the metrics and the read ports it aggregates.
+     *
+     * @param clock               ends the trailing windows computed over receipts: the purchase rate,
+     *                            the purchase throughput and the 30-day revenue
+     * @param analyticsProperties supplies the length, in minutes, of the window the per-minute rates
+     *                            are computed over
+     */
     public SystemAnalyticsService(
             ISystemMetrics metrics,
             OrderReceiptRepository orderReceiptRepository,
@@ -81,6 +89,9 @@ public class SystemAnalyticsService {
      * Builds the live analytics snapshot: rates over the trailing window, throughput over the hour.
      *
      * @param adminToken the caller's admin token
+     * @return the snapshot; its rates are per minute over the configured window, which it also
+     *         reports, and its throughput figures cover the last hour. Active visitors are never
+     *         negative
      * @throws UnauthorizedActionException if the token is missing
      * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
      * @throws SessionExpiredException     if the token's session has expired
@@ -136,11 +147,12 @@ public class SystemAnalyticsService {
     }
 
     /**
-     * Headline counters for the admin workspace landing page (#279): active companies, live
+     * Headline counters for the admin workspace landing page (upstream#279): active companies, live
      * (ON_SALE) events, open (non-closed) complaints, and non-refunded revenue over the trailing
      * 30 days.
      *
      * @param adminToken the caller's admin token
+     * @return the headline counters
      * @throws UnauthorizedActionException if the token is missing
      * @throws InvalidTokenException       if the token is malformed, revoked or not an admin token
      * @throws SessionExpiredException     if the token's session has expired

@@ -9,13 +9,6 @@ import com.ticketing.system.notifications.application.port.out.NotificationRepos
 import com.ticketing.system.notifications.domain.Notification;
 import com.ticketing.system.notifications.domain.NotificationStatus;
 
-// Owns the entire notification subsystem (UC-35, UC-36, UC-37).
-// - UC-35: dispatch on domain event → check online → push live or hand off to UC-36
-// - UC-36: persist as PENDING for offline recipients
-// - UC-37: deliver pending on MemberLoggedIn event (PENDING → DELIVERED)
-//
-// The Domain-Events pattern was committed at UC-35 (see design_walkthrough_summary.md §6).
-// Listener wiring (which domain events trigger dispatchFromEvent) lives in code, off-diagram.
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -23,6 +16,16 @@ import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Stores notifications and delivers them to members (UC-35, UC-36, UC-37).
+ *
+ * <p>{@link #dispatch} stores every notification as PENDING (UC-36). {@link #deliverPending} later
+ * pushes a member's PENDING notifications and marks them SENT (UC-37); identity's
+ * {@code AuthenticationService} calls it at login, and bootstrap's {@code NotificationPollingScheduler}
+ * calls it on every poll. Nothing is pushed at dispatch time, whether or not the recipient is signed in.
+ * {@link #dispatchFromEvent}, UC-35's event-driven entry point, is not implemented: notices reach
+ * notifications through {@code NotificationEventListener} and {@code NotificationService}.
+ */
 @Service
 @Slf4j
 public class NotificationDispatchService {
@@ -30,6 +33,12 @@ public class NotificationDispatchService {
     private final NotificationRepository notificationRepository;
     private final PushNotificationService pushService; // low-level push channel (used by deliverPending)
 
+    /**
+     * Wires the service to the notification store and the push channel.
+     *
+     * @param notificationRepository where notifications are stored and read
+     * @param pushService            the channel {@link #deliverPending} pushes through
+     */
     public NotificationDispatchService(
             NotificationRepository notificationRepository,
             PushNotificationService pushService) {
@@ -40,8 +49,18 @@ public class NotificationDispatchService {
     /**
      * Central dispatch point for all notifications.
      * Persists the notification as PENDING; the polling scheduler delivers it
-     * to the bell on the next tick. Live WebSocket/SSE push (#225) will replace
-     * the scheduler path when implemented.
+     * to the bell on the next tick, or a login does (see {@link #deliverPending}). Live WebSocket/SSE
+     * push (#61) will replace the scheduler path when implemented.
+     *
+     * <p>Joins the caller's transaction when there is one, and otherwise stores the notification in its
+     * own.
+     *
+     * @param notification the notification to store; its status must be PENDING
+     * @throws IllegalArgumentException if the notification is not PENDING; nothing is stored
+     * @throws org.springframework.dao.DataAccessException if the store fails
+     * @throws TransactionException if the transaction this call opens (none when it joins its caller's)
+     *         gets no connection ({@code CannotCreateTransactionException}) or fails to commit
+     *         ({@code TransactionSystemException}); nothing is stored
      */
     @Transactional
     public void dispatch(Notification notification) {
@@ -56,15 +75,24 @@ public class NotificationDispatchService {
         notificationRepository.save(notification);
     }
 
-    // UC-35: triggered from a domain event.
+    /**
+     * UC-35: the entry point meant to turn a domain event into a notification. Not implemented; notices
+     * reach notifications through {@code NotificationEventListener} instead.
+     *
+     * @param domainEvent the event that would trigger a notification
+     * @throws UnsupportedOperationException always
+     */
     public void dispatchFromEvent(Object domainEvent) {
-        // This will eventually resolve the notification details from the event 
-        // and call dispatch(Notification).
         throw new UnsupportedOperationException("UC-35: not implemented");
     }
 
-    // UC-36: store an offline notification in PENDING state.
-    // Deprecated: logic now moved into dispatch()
+    /**
+     * UC-36: stores a notification in PENDING state.
+     *
+     * @param notification the notification to store; its status must be PENDING
+     * @throws IllegalArgumentException if the notification is not PENDING
+     * @deprecated the logic moved into {@link #dispatch}; call that instead
+     */
     @Deprecated
     public void storePending(Notification notification) {
         dispatch(notification);
@@ -77,7 +105,7 @@ public class NotificationDispatchService {
      * <p>Deliberately NOT part of a surrounding transaction: NOT_SUPPORTED suspends any caller's tx, so
      * each pending notification is delivered + persisted on its own repository transaction. One failed
      * push — or a mid-flush error — can't roll back the others. Login calls this only after its own
-     * TransactionTemplate commits. Per-item by design (Eval 5 acceptance #1's documented exception).
+     * TransactionTemplate commits. Per-item by design (Eval 5 acceptance item 1's documented exception).
      *
      * <p>Two callers can deliver the same row at once, such as a poll on one device and a login on
      * another, or a click can mark it read meanwhile. A save that loses that {@code @Version} race is
@@ -93,10 +121,9 @@ public class NotificationDispatchService {
      *
      * @param userId the member whose notifications are delivered
      * @return the notifications this call delivered, as shown to the member; empty when none
-     * @throws DataAccessException  if the store fails reading the pending notifications
-     * @throws TransactionException if that read's transaction fails: no connection can be had for it
-     *                              ({@code CannotCreateTransactionException}), or it fails to commit
-     *                              ({@code TransactionSystemException})
+     * @throws DataAccessException if the store fails reading the pending notifications; the JPA
+     *                             adapter reads with no transaction of its own, so a lost connection
+     *                             surfaces here
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<NotificationDTO> deliverPending(int userId) {

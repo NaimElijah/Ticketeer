@@ -11,8 +11,16 @@ import com.ticketing.system.catalog.domain.VenueMap;
 
 import java.util.List;
 
+/** Maps a {@link VenueMap} to the {@code VenueMapDTO} buyers see, with per-zone and per-seat availability. */
 public class VenueMapMapper {
 
+    /**
+     * Converts a venue map to its DTO. A seated zone lists its seats with their status names; a standing
+     * zone lists none. A zone with no grid placement has a {@code null} placement.
+     *
+     * @param venueMap the map; it must have a location
+     * @return the DTO
+     */
     public VenueMapDTO venueMapToVenueMapDTO(VenueMap venueMap) {
         List<InventoryZoneDTO> inventoryZoneDTOs = venueMap.getInventoryZones()
                 .stream()

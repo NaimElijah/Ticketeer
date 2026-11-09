@@ -31,8 +31,8 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Site root — marketing landing. Hero CTA → Browse, category quick
- * links, featured posters, "Why TicketHub" feature row. Reached at
+ * Site root — marketing landing. A decorative hero banner, category quick links into Browse,
+ * featured and upcoming event posters, and a "Why TicketHub" feature row. Reached at
  * {@code /} or by clicking the brand in the top bar.
  */
 @Route(value = "", layout = MainLayout.class)
@@ -50,6 +50,9 @@ public class LandingView extends LkPage {
 
     private final LandingPresenter presenter;
 
+    /**
+     * Creates the page and loads the featured and upcoming events.
+     */
     public LandingView(LandingPresenter presenter) {
         this.presenter = presenter;
 

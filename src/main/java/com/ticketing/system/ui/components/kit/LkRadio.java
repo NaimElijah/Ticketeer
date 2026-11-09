@@ -17,6 +17,7 @@ public class LkRadio extends NativeLabel {
     private final Div group = new Div();
     private boolean hasLabel;
 
+    /** An empty group; give it a label with {@link #label} and its options with {@link #options}. */
     public LkRadio() {
         addClassName("lk-field");
         labelSpan.addClassName("lk-label");
@@ -24,6 +25,7 @@ public class LkRadio extends NativeLabel {
         add(group);
     }
 
+    /** Sets the label shown above the options. */
     public LkRadio label(String t) {
         labelSpan.setText(t);
         if (!hasLabel) {
@@ -33,6 +35,13 @@ public class LkRadio extends NativeLabel {
         return this;
     }
 
+    /**
+     * Replaces the options.
+     *
+     * @param selected the text of the option drawn as chosen; {@code null} or text matching none
+     *                 draws none as chosen
+     * @param options  the options' texts, in order
+     */
     public LkRadio options(String selected, String... options) {
         group.removeAll();
         for (String opt : options) {

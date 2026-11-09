@@ -26,7 +26,7 @@ import com.ticketing.system.shared.exception.AppointmentNotFoundException;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 
 /**
- * Appointment-lifecycle coverage relocated from the old {@code UserTest} (task #20). These cases used
+ * Appointment-lifecycle coverage relocated from the old {@code UserTest}. These cases used
  * to exercise {@code User}'s ~17 appointment methods; they now drive {@link CompanyMembershipService}
  * (backed by an in-memory {@link MemoryCompanyAppointmentRepository}) since that behaviour was promoted
  * off the {@code User} aggregate. Same scenarios, same invariants — just keyed on {@code userId}.

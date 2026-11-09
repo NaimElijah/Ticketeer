@@ -2,11 +2,20 @@ package com.ticketing.system.notifications.application.port.in;
 
 import java.util.List;
 
-// High-level, application-facing notification facade. Each notifyXxx method translates a
-// business event into a Notification domain object and delegates to NotificationDispatchService,
-// which persists it and routes delivery. The low-level push channel (WebSocket / SSE / email)
-// is a separate port, PushNotificationService.
-// V1 implementation is NotificationService.
+/**
+ * High-level, application-facing notification facade. Each {@code notifyXxx} method translates a
+ * business event into a {@code Notification} domain object and delegates to
+ * {@code NotificationDispatchService}, which stores it as PENDING; its {@code deliverPending} pushes it
+ * later. The low-level push channel (WebSocket / SSE / email) is a separate port,
+ * {@code PushNotificationService}. {@code markRead} and {@code revertSentToPending} move stored
+ * notifications along their lifecycle. {@code NotificationService} implements it.
+ *
+ * <p>The name keeps its legacy prefix, because dropping it would collide with the implementation (see
+ * the package documentation).
+ *
+ * <p>Each {@code notifyXxx} method fails with {@link IllegalStateException} for a non-positive
+ * {@code userId} (or {@code recipientUserId}), since the {@code Notification} it builds refuses one.
+ */
 public interface INotificationService {
 
     /**
@@ -19,6 +28,12 @@ public interface INotificationService {
      */
     void notifyPurchaseCompleted(int userId, double totalPrice, List<Integer> ticketIds);
 
+    /**
+     * Tells a member their purchase failed.
+     *
+     * @param userId  the buyer
+     * @param string why it failed; becomes the notification's text as given
+     */
     void notifyPurchaseFailed(int userId, String string);
 
     /**
@@ -63,10 +78,34 @@ public interface INotificationService {
      */
     void notifyRemoveTicketReservationSuccess(int userId, int eventId, int zoneId, int quantity);
 
+    /**
+     * Tells a member an event they hold tickets for was cancelled. The text names the event and shows
+     * no id; the id stays in the notification's data payload.
+     *
+     * @param userId    the ticket holder
+     * @param eventId   the cancelled event
+     * @param eventName the event's name, shown in the text; not null
+     */
     void notifyEventCancelled(int userId, int eventId, String eventName);
 
+    /**
+     * Tells a member their appointment in a company was revoked. The text says manager role, whether
+     * the revoked appointment was a manager's or a co-owner's.
+     *
+     * @param userId      the member whose appointment was revoked, a manager or a co-owner
+     * @param companyId   the company
+     * @param companyName the company's name, shown in the text; not null
+     */
     void notifyManagerRevoked(int userId, int companyId, String companyName);
 
+    /**
+     * Tells a member they hold a pending owner appointment in a company, which they must accept or
+     * reject.
+     *
+     * @param userId      the invited member
+     * @param companyId   the company the appointment is in
+     * @param companyName the company's name, shown in the text; not null
+     */
     void notifyOwnerAppointmentPending(int userId, int companyId, String companyName);
 
     /**
@@ -75,17 +114,37 @@ public interface INotificationService {
      *
      * @param userId      the invited member
      * @param companyId   the company the appointment is in
-     * @param companyName the company's name, shown in the notification
+     * @param companyName the company's name, shown in the notification; not null
      */
     void notifyManagerAppointmentPending(int userId, int companyId, String companyName);
 
+    /**
+     * Tells a member their role in a company was updated: they accepted an appointment, or an owner
+     * edited their permissions.
+     *
+     * @param userId      the member whose role changed or whose permissions were edited
+     * @param companyId   the company
+     * @param companyName the company's name, shown in the text; not null
+     * @param newRole     the text shown after "updated to": the role's name, or the
+     *                    permissions-updated label when a manager's permissions were edited; not null
+     */
     void notifyRoleChanged(int userId, int companyId, String companyName, String newRole);
 
     /**
      * Messaging → notification bridge. Fired when a new message/inquiry arrives for a
-     * recipient (member or company owner) so they get a real-time DIRECT_MESSAGE notification.
-     * {@code conversationId} lets the UI deep-link to the thread; {@code senderLabel} is a
-     * human-readable origin (e.g. "a system admin", "a production company").
+     * recipient (member or company owner) so they get a DIRECT_MESSAGE notification, stored PENDING
+     * and shown on their next poll or login.
+     * {@code conversationId} is kept in the notification's data payload, which nothing reads yet, so
+     * the alert does not link to the thread; {@code senderLabel} is a human-readable origin (e.g. "a
+     * system admin", "a production company").
+     *
+     * @param recipientUserId the member who receives the alert
+     * @param conversationId  the conversation the message belongs to; kept in the data payload, not
+     *                        shown in the text; not null
+     * @param senderLabel     the origin shown in the text; not null
+     * @param subject         the conversation's subject, shown in the text; null reads as empty
+     * @param snippet         a short preview of the message body; kept in the data payload, not shown
+     *                        in the text; null reads as empty
      */
     void notifyNewMessage(int recipientUserId, String conversationId, String senderLabel,
             String subject, String snippet);
@@ -97,9 +156,10 @@ public interface INotificationService {
      * the notifications already stored stay, and the rest are not stored.
      *
      * @param recipients  every recipient and the conversation opened for them, at least one
-     * @param senderLabel human-readable origin, e.g. "a system admin"
+     * @param senderLabel human-readable origin, e.g. "a system admin"; not null
      * @param subject     the conversations' shared subject; null reads as empty
-     * @param snippet     a short preview of the message body; null reads as empty
+     * @param snippet     a short preview of the message body; not shown in the text; null reads as
+     *                    empty
      * @throws IllegalArgumentException if {@code recipients} is null or empty; nothing is stored
      */
     void notifyOutreach(List<OutreachRecipient> recipients, String senderLabel, String subject,
@@ -111,7 +171,7 @@ public interface INotificationService {
      * session's bell still shows them.
      * Nothing changes when the id is unknown, belongs to another member, or is already READ.
      *
-     * @param userId         the member who clicked the notification
+     * @param userId         the member who clicked the notification, or used Mark All Read
      * @param notificationId the notification's id
      * @throws org.springframework.dao.DataAccessException if the store fails to read or save it; the
      *         notification then stays as it was

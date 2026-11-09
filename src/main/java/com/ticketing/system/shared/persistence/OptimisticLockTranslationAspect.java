@@ -46,12 +46,20 @@ public class OptimisticLockTranslationAspect {
             "Someone else changed this at the same moment — please retry.";
 
     /** Every public application-service method — the same surface {@code LoggingAspect} traces:
-     *  {@code com.ticketing.system.<context>.application.service}. The legacy Core.Application.services
-     *  clause was dropped once that package was emptied (Step 8). */
+     *  {@code com.ticketing.system.<context>.application.service}. */
     @Pointcut("execution(public * com.ticketing.system..application.service..*(..))")
     public void applicationService() {
     }
 
+    /**
+     * Runs the advised call and re-types an optimistic-lock conflict, logging the advised signature at WARN.
+     *
+     * @param joinPoint the advised call
+     * @return what the advised method returned
+     * @throws ConcurrentReservationException if the call fails with an {@link OptimisticLockingFailureException};
+     *         the original is its cause
+     * @throws Throwable any other failure of the advised method, rethrown as it was
+     */
     @Around("applicationService()")
     public Object translateOptimisticLock(ProceedingJoinPoint joinPoint) throws Throwable {
         try {

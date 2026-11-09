@@ -14,7 +14,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * Presenter for the member "Request refund" action (#284), shared by {@code ReceiptView} and
+ * Presenter for the member "Request refund" action (upstream#284), shared by {@code ReceiptView} and
  * {@code MyAccountView}. Vaadin-free; calls {@link RefundService} and returns a sealed
  * {@link Outcome} the view switches on. The view passes the member token
  * ({@code SessionIdentity.memberToken()}). An order that belongs to another account gives the same
@@ -31,10 +31,22 @@ public class RefundPresenter {
 
     private final RefundService refundService;
 
+    /** Creates the presenter over the refund service. */
     public RefundPresenter(RefundService refundService) {
         this.refundService = refundService;
     }
 
+    /**
+     * Requests a refund of one of the signed-in member's orders.
+     *
+     * @param token   the member's token
+     * @param orderId the order to refund
+     * @param reason  the member's stated reason, passed to the service as given
+     * @return {@link Outcome.NotEligible} when the service refuses the order as ineligible;
+     *     {@link Outcome.NotFound} when no such order exists for this member; {@link Outcome.Failure}
+     *     with fixed text when the token is rejected or the refund fails, and with
+     *     {@code ServiceErrors}' text for any other failure
+     */
     public Outcome requestRefund(String token, int orderId, String reason) {
         try {
             RefundResultDTO result = refundService.requestRefund(token, orderId, reason);
@@ -59,9 +71,33 @@ public class RefundPresenter {
 
     /** Sealed outcome the view switches on after a refund attempt. */
     public sealed interface Outcome {
+        /**
+         * The service accepted the request.
+         *
+         * @param reference the refund's transaction id, as the service returned it
+         * @param amount    the total refunded, as the service returned it
+         */
         record Success(String reference, double amount) implements Outcome { }
+
+        /**
+         * The service refused the order as ineligible ({@code BusinessRuleViolationException}).
+         *
+         * @param message fixed text for the user
+         */
         record NotEligible(String message) implements Outcome { }
+
+        /**
+         * No such order exists for this member.
+         *
+         * @param message fixed text for the user
+         */
         record NotFound(String message)    implements Outcome { }
+
+        /**
+         * The member has to sign in, the refund failed, or the call failed in some other way.
+         *
+         * @param message the text the user may read
+         */
         record Failure(String message)     implements Outcome { }
     }
 }

@@ -30,16 +30,18 @@ public interface SpringDataOrderReceiptRepository
 
     /**
      * Pessimistic-write fetch (SELECT … FOR UPDATE) of a receipt by id — backs the refund critical
-     * section's row lock (#410). The lock is held until the surrounding transaction commits, so
+     * section's row lock (upstream#410). The lock is held until the surrounding transaction commits, so
      * concurrent refunds of the same receipt serialise and only one reaches {@code paymentGateway.refund()}.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from OrderReceipt r where r.receiptId = :id")
     Optional<OrderReceipt> findByIdForUpdate(@Param("id") int id);
 
+    /** Receipts with at least one line for the event, each once. */
     @Query("select distinct r from OrderReceipt r join r.receiptLines l where l.eventid = :eventId")
     List<OrderReceipt> findByEventId(@Param("eventId") int eventId);
 
+    /** Receipts with at least one line for any of the events, each once; {@code eventIds} must not be empty. */
     @Query("select distinct r from OrderReceipt r join r.receiptLines l where l.eventid in :eventIds")
     List<OrderReceipt> findByEventIds(@Param("eventIds") List<Integer> eventIds);
 

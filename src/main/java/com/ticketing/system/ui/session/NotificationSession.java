@@ -13,9 +13,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Session-scoped holder for the notification inbox delivered on login (UC-37).
- * Populated by LoginPresenter immediately after a successful login, read by
- * MainLayout to build the bell panel and badge count.
+ * Session-scoped holder for the notification inbox (UC-37). {@code LoginView} fills it with the
+ * notifications delivered on a successful login, the polling scheduler {@linkplain #merge merges}
+ * later ones in, and {@link NotificationBellComponent} reads it to build the bell panel and badge count.
  *
  * <p>The inbox belongs to the Vaadin session, but each bell to its {@link UI}: every browser tab of
  * one session is its own UI with its own bell, so a bell is kept on its UI, never on the session.
@@ -28,9 +28,10 @@ public final class NotificationSession {
 
     /**
      * Store the pending notifications delivered on login. Replaces any previous list.
-     * TODO(I.5 / #225): this is a login-only snapshot — notifications generated mid-session
-     *  (PURCHASE_CONFIRMED, CART_EXPIRING, etc.) won't appear in the bell until the user
-     *  logs out and back in. Real-time delivery is deferred to Grade ג'.
+     *
+     * <p>Limitation (I.5 / #61): a notification generated mid-session (PURCHASE_CONFIRMED,
+     * CART_EXPIRING, etc.) reaches the bell only when the polling scheduler's next tick merges it in
+     * (every 60 seconds by default), not at once. Real-time delivery is deferred to Grade ג'.
      */
     public static void store(List<NotificationDTO> notifications) {
         VaadinSession s = VaadinSession.getCurrent();
@@ -38,7 +39,11 @@ public final class NotificationSession {
         s.setAttribute(NOTIFICATIONS_KEY, List.copyOf(notifications));
     }
 
-    /** All notifications delivered in this session, oldest-first. Empty list if none. */
+    /**
+     * All notifications delivered in this session: each batch {@link #merge merged} in front of the
+     * earlier ones, the login's batch last, and each batch in the order it was delivered. Empty list
+     * if none.
+     */
     @SuppressWarnings("unchecked")
     public static List<NotificationDTO> getAll() {
         VaadinSession s = VaadinSession.getCurrent();

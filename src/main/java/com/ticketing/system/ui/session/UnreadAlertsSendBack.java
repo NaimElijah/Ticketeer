@@ -16,6 +16,7 @@ public class UnreadAlertsSendBack {
 
     private final INotificationService notificationService;
 
+    /** @param notificationService moves the member's SENT alerts back to PENDING */
     public UnreadAlertsSendBack(INotificationService notificationService) {
         this.notificationService = notificationService;
     }

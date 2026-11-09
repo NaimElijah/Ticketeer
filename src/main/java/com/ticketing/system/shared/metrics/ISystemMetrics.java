@@ -4,7 +4,7 @@ import java.time.Duration;
 
 /**
  * Outbound port for recording and reading the lightweight platform-activity
- * counters that feed the System Analytics dashboard (UC-46 / #43, #279).
+ * counters that feed the System Analytics dashboard (UC-46 / upstream#43, upstream#279).
  *
  * <p>Write side: the auth / reservation slices (and the session sweeper) call
  * {@link #record(MetricType)} as events occur. Read side:

@@ -34,11 +34,21 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.sales.application.port.out.OrderReceiptRepository;
 
 import lombok.extern.slf4j.Slf4j;
-// Owns platform-bootstrap, market-lifecycle, and global admin queries.
-// UC-1 (Initialize), UC-31 (Global History), UC-32 (Open/Close Market).
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Owns the platform lifecycle and market state, and the admin's global purchase history: UC-1
+ * (initialize), UC-31 (global history) and UC-32 (open and close the market).
+ *
+ * <p>The lifecycle is an in-memory state machine, {@code UNINITIALIZED -> READY -> OPEN <-> CLOSED}. It
+ * is not persisted, so every start begins at {@code UNINITIALIZED}. Sales read it through
+ * {@link #isMarketOpen()}. {@link #openMarket}, {@link #closeMarket}, {@link #viewMarketState} and
+ * {@link #viewGlobalHistory} authorize the caller with an admin token on every call.
+ *
+ * <p>The transitions are synchronized and the state is volatile, so readers see the latest state
+ * without waiting. {@link #refreshServiceReachability()} is deliberately not synchronized.
+ */
 @Service
 @Slf4j
 public class SystemAdminService {
@@ -63,7 +73,7 @@ public class SystemAdminService {
     private final String defaultAdminPassword;
     private static final int DEFAULT_ADMIN_ID = 1;
 
-    // Platform lifecycle state (in-memory for V1). openMarket()/closeMarket() (UC-32, #307)
+    // Platform lifecycle state: in memory, not persisted. openMarket()/closeMarket() (UC-32, upstream#307)
     // build on top of this status.
     private enum PlatformStatus { UNINITIALIZED, READY, OPEN, CLOSED }
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
@@ -79,6 +89,17 @@ public class SystemAdminService {
     // Stamps the lifecycle transitions above: UTC wall time (ADR-008).
     private final Clock clock;
 
+    /**
+     * Creates the service in the {@code UNINITIALIZED} state; nothing is probed or stored until
+     * {@link #initializePlatform()} runs.
+     *
+     * @param paymentGateways the payment services probed for reachability; the platform needs at least
+     *                        one of them to answer
+     * @param ticketIssuers   the ticket-issuing services probed for reachability; at least one must
+     *                        answer
+     * @param platformAdmin   the credentials the default System Admin is created with
+     * @param clock           stamps the lifecycle transitions and probes
+     */
     public SystemAdminService(
             SessionManager sessionManager,
             AdminRepository adminRepository,
@@ -112,13 +133,29 @@ public class SystemAdminService {
         this.clock = clock;
     }
 
-    // UC-1 — I.1.1 invariants + I.1.2 payment-gateway check + I.1.3 issuer check + I.1.4 default-admin.
-    // Brings the platform to a healthy, market-openable state. Idempotent: a second call on an
-    // already-initialized platform is a graceful no-op.
+    /**
+     * UC-1: brings the platform from {@code UNINITIALIZED} to {@code READY}, a healthy,
+     * market-openable state. In order, it creates the default System Admin if none exists (I.1.4),
+     * re-asserts that an admin exists and runs {@link SystemIntegrityVerifier} (I.1.1), then requires at
+     * least one reachable payment service and one reachable ticket issuer (I.1.2, I.1.3).
+     *
+     * <p>The fatal checks run before the WSEP check on purpose: a WSEP outage is the only failure
+     * expected to self-heal (ADR-003), so checking it first would hide a missing admin or corrupt data
+     * behind every retry. The probe result is recorded either way; a success also records the
+     * initialization time.
+     *
+     * <p>Idempotent: in any state other than {@code UNINITIALIZED} the call logs and returns without
+     * checking anything. A failed call leaves the state {@code UNINITIALIZED}, so it can be repeated.
+     *
+     * @throws MissingDefaultAdminException if the default admin cannot be created
+     * @throws InitializationIntegrityException if no System Admin exists after that step
+     * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException if the persisted
+     *         state breaks a structural correctness constraint
+     * @throws ExternalServiceUnavailableException if no payment service, or no ticket issuer, answers
+     */
     public synchronized void initializePlatform() {
         log.info("Platform initialization requested.");
 
-        // Re-initializing an already-initialized platform is handled gracefully.
         if (status != PlatformStatus.UNINITIALIZED) {
             log.info("Platform already initialized (status={}); ignoring re-initialization.", status);
             return;
@@ -147,8 +184,9 @@ public class SystemAdminService {
      * UC-1 / I.1.4: creates the default System Admin if no admin exists. A save that loses to another
      * instance creating it first is not a failure (ADR-003).
      *
-     * @throws MissingDefaultAdminException if the admin cannot be created and none exists. Its cause is the
-     *         save failure; a failure of the re-check that follows it is attached as suppressed
+     * @throws MissingDefaultAdminException if creating or saving the admin fails and the re-check that
+     *         follows finds none (its cause is the creation failure; a failure of the re-check is
+     *         attached as suppressed), or if the save returns but no admin exists afterwards (no cause)
      */
     public void createDefaultAdminIfMissing() {
         if (adminRepository.existsAny()) {
@@ -192,11 +230,29 @@ public class SystemAdminService {
         }
     }
 
-    // UC-32 (#9, I.2.1) — open the trading market so transactions can begin.
-    // Admin-only. Re-verifies both external services (I.2.2) and the structural
-    // invariants before flipping to OPEN. Idempotent on an already-open market;
-    // opens from READY or re-opens from CLOSED, never from UNINITIALIZED. Sales
-    // are gated on this state (see isMarketOpen()).
+    /**
+     * UC-32 (upstream#9, I.2.1): opens the trading market so reservations and checkouts are accepted.
+     * Admin-only.
+     *
+     * <p>Re-verifies both external services (I.2.2), then that a System Admin exists, then the
+     * structural integrity ({@link SystemIntegrityVerifier}), before moving to {@code OPEN} and
+     * recording the time. Opens from {@code READY} and re-opens from {@code CLOSED}. Idempotent on an
+     * open market: once the caller is authorized, it returns the current state without re-verifying
+     * the services or the integrity.
+     *
+     * @param request carries the admin token; only its {@code token} is read. A {@code null} request is
+     *                treated as a missing token
+     * @return the market state after the call
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws MarketNotOpenException if the platform is still {@code UNINITIALIZED}
+     * @throws ExternalServiceUnavailableException if no payment service, or no ticket issuer, answers
+     * @throws InitializationIntegrityException if no System Admin exists
+     * @throws com.ticketing.system.shared.exception.SystemIntegrityViolationException if the persisted
+     *         state breaks a structural correctness constraint
+     */
     public synchronized MarketStateDTO openMarket(MarketControlRequestDTO request) {
         requireSystemAdmin(tokenOf(request));
         return doOpenMarket();
@@ -231,7 +287,7 @@ public class SystemAdminService {
     }
 
     /**
-     * System-internal, idempotent recovery hook (#455): brings the market to OPEN if it safely can.
+     * System-internal, idempotent recovery hook (upstream#455): brings the market to OPEN if it safely can.
      * Used by the auto-opener and the self-heal scheduler so a transient external-service blip at boot
      * (e.g. a cold-starting WSEP endpoint) doesn't leave the market closed with no recovery (V3 Req 6).
      * Not admin-gated: the platform acts on itself, not on a user request. Respects an admin's
@@ -278,9 +334,24 @@ public class SystemAdminService {
         probeServices();
     }
 
-    // UC-32 — close the trading market (admin/ops incident control; no dedicated
-    // UC). Admin-only. Idempotent on an already-closed market; rejects a close
-    // when the market was never opened.
+    /**
+     * UC-32: closes the trading market, an admin and operations incident control. Admin-only. While
+     * the market is {@code CLOSED}, reservations and checkouts are refused, and
+     * {@link #ensureMarketOpen()} never reopens it while this process runs; only {@link #openMarket}
+     * does. The state is not persisted, so a restart loses the close and {@code MarketOpener} opens
+     * the market again (NaimElijah/Ticketeer#24). Idempotent on a closed market: it returns the
+     * current state.
+     *
+     * @param request carries the admin token and an optional reason. The reason is only logged, and a
+     *                missing or blank one is logged as {@code unspecified}. A {@code null} request is
+     *                treated as a missing token
+     * @return the market state after the call
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws InvalidStateTransitionException if the market was never opened
+     */
     public synchronized MarketStateDTO closeMarket(MarketControlRequestDTO request) {
         requireSystemAdmin(tokenOf(request));
 
@@ -317,9 +388,13 @@ public class SystemAdminService {
         return buildMarketState();
     }
 
-    // Read boundary for the private status enum: the sales gate
-    // (ReservationService / CheckoutService) blocks transactions while the market
-    // is not OPEN. (I.2.1 / UC-32)
+    /**
+     * Whether the market is {@code OPEN}, the read boundary for the private status that the sales
+     * gate (reservations and checkout) uses to refuse work while the market is not open
+     * (I.2.1 / UC-32). Reads the volatile state, so it never waits for a running probe.
+     *
+     * @return {@code true} only in the {@code OPEN} state
+     */
     public boolean isMarketOpen() {
         return status == PlatformStatus.OPEN;
     }
@@ -377,7 +452,8 @@ public class SystemAdminService {
     }
 
     // *HELPER* — UC-1 step 4 / I.1.1: re-assert that a System Admin exists. The external-service
-    // post-conditions are asserted by requireExternalServicesReachable(), which now runs last.
+    // post-conditions are asserted separately by requireExternalServicesReachable(), which
+    // initializePlatform() runs after this and the integrity scan.
     private void verifyInitializationInvariants() {
         if (!adminRepository.existsAny()) {
             throw new InitializationIntegrityException("no System Admin present");
@@ -416,15 +492,35 @@ public class SystemAdminService {
 
 
 
-    // UC-31 — global purchase history with filters (admin-only RBAC enforced inside).
-    // this function filters by buyer, production company, or specific event, and by date range. All filters are optional and can be combined.
+    /**
+     * UC-31: the purchase history across all buyers, companies and events, narrowed by optional
+     * filters. Admin-only; the check happens inside, before anything is read.
+     *
+     * <p>The filters combine: buyer, company, specific events and a date range. A company filter
+     * stands for that company's events; given together with event ids, it keeps only the ids that
+     * belong to the company and drops the rest without an error. A filter that ends up naming no event
+     * at all, such as a company with no events, matches nothing. A {@code null} {@code filters}, or one
+     * with every field {@code null}, matches every receipt. When an event filter applies, each record
+     * carries only the lines of those events; its total is their sum, and its transactions are still
+     * the whole order's. Both dates are inclusive. A record with no tickets is left out.
+     *
+     * @param token   the caller's admin session token
+     * @param filters the filters; may be {@code null}
+     * @return a list holding exactly one {@link PurchaseHistoryDTO}, whose records are the matches,
+     *         none when nothing matches
+     * @throws UnauthorizedActionException if the token is missing, or names an admin no longer on record
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException for a malformed, revoked or
+     *         member's token
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException for an expired token
+     * @throws IllegalArgumentException if both dates are given and {@code fromDate} is after
+     *         {@code toDate}
+     */
     @Transactional(readOnly = true)
     public List<PurchaseHistoryDTO> viewGlobalHistory(String token, GlobalHistoryFiltersDTO filters) {
         requireSystemAdmin(token);
         // Logged only after the check: the filters can name a buyer.
         log.info("Admin request to view global purchase history with filters: {}", filters);
 
-        // If companyId is provided, we ensure that the eventIds filter (if provided) is a subset of the events for that company, in the normalizeGlobalHistoryFilters() method.
         GlobalHistoryFiltersDTO effectiveFilters = normalizeGlobalHistoryFilters(filters);
         Set<Integer> selectedEventIds = selectedEventIdsOrNull(effectiveFilters);
 
@@ -451,20 +547,18 @@ public class SystemAdminService {
 
 
 
-    // *HELPER METHODS* for viewGlobalHistory() that normalize and validate the filters, and enforce admin RBAC.
-    // this method enforces that the event filter is consistent with the company filter (if provided), and that the date range is valid.
-    // It also logs the filters being applied for audit purposes.
+    // *HELPER METHODS* for viewGlobalHistory() that normalize and validate the filters. The admin check
+    // and the logging stay in viewGlobalHistory().
+    // This method rejects a date range whose start is after its end, and folds the company filter into the
+    // event filter, so the query sees only event ids that belong to that company.
     private GlobalHistoryFiltersDTO normalizeGlobalHistoryFilters(GlobalHistoryFiltersDTO filters) {
-        // If no filters are provided, return a default filter that matches all receipts.
         GlobalHistoryFiltersDTO f = filters == null
                 ? new GlobalHistoryFiltersDTO(null, null, null, null, null)
                 : filters;
-        // Validate that fromDate is not after toDate if both are provided.
         if (f.fromDate() != null && f.toDate() != null && f.fromDate().isAfter(f.toDate())) {
             throw new IllegalArgumentException("fromDate must be before or equal to toDate");
         }
 
-        // If companyId is provided but eventIds is not, we need to fetch the event IDs for that company and use them as the effective filter.
         if (f.companyId() == null) {
             return new GlobalHistoryFiltersDTO(
                     f.buyerUserId(),
@@ -474,25 +568,19 @@ public class SystemAdminService {
                     f.toDate());
         }
 
-        // If companyId is provided, we need to ensure that the eventIds filter (if provided) is a subset of the events for that company.
-        // If eventIds is null, we will use all events for that company.
         List<Integer> companyEventIds = eventRepository.findIdsByCompany(f.companyId());
 
         List<Integer> effectiveEventIds;
 
         if (f.eventIds() == null) {
-            // No event filter provided, use all events for the company.
             effectiveEventIds = companyEventIds;
         } else {
-            // Event filter provided: intersect the requested event IDs with the company's events.
-            // (No exception is thrown; out-of-company eventIds are silently dropped.)
+            // No exception is thrown; out-of-company eventIds are silently dropped.
             Set<Integer> requestedSet = new HashSet<>(f.eventIds());
-            // Retain only the event IDs that are both in the requested set and in the company's events.(Intersection of the two sets)
             effectiveEventIds = companyEventIds.stream()
                     .filter(requestedSet::contains)
                     .toList();
         }
-        // now the company filter is effectively translated into an event filter that is guaranteed to be consistent with the company constraint, and we can proceed with the query.
         return new GlobalHistoryFiltersDTO(
                 f.buyerUserId(),
                 null,
@@ -507,7 +595,6 @@ public class SystemAdminService {
         if (filters.eventIds() == null) {
             return null;
         }
-        // Convert to set for efficient lookup later.
         return filters.eventIds().stream().collect(Collectors.toSet());
     }
 

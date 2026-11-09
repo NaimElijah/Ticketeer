@@ -1,4 +1,4 @@
-package com.ticketing.system.shared.domain.policy; // shared-kernel policy vocabulary (moved here from sales.domain)
+package com.ticketing.system.shared.domain.policy;
 
 import com.ticketing.system.shared.InvariantChecked;
 
@@ -10,6 +10,12 @@ public class MinTicketsPurchasePolicy implements PurchasePolicy, InvariantChecke
 
     private final int minimumTickets;
 
+    /**
+     * Creates the policy.
+     *
+     * @param minimumTickets the fewest tickets a purchase must hold at checkout
+     * @throws IllegalStateException if {@code minimumTickets} is negative
+     */
     public MinTicketsPurchasePolicy(int minimumTickets) {
         this.minimumTickets = minimumTickets;
         checkInvariants();

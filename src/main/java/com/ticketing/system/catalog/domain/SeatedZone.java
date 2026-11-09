@@ -31,8 +31,8 @@ import jakarta.persistence.Transient;
  * between two concurrent buyers picking overlapping seats.
  *
  * <p>Capacity is derived from the seat map size, not a separate field.
- * Adding/removing seats from a SeatedZone after tickets are issued, so after ON_SALE turned on is
- * intentionally not supported — cannot change zones or their internals after event goes ON_SALE.
+ * Seats are added and removed through {@link Event}, which allows it only while the event is DRAFT or
+ * SCHEDULED; {@link #removeSeats} also refuses a seat that is not AVAILABLE.
  */
 @Entity
 @DiscriminatorValue("SEATED")
@@ -55,6 +55,19 @@ public class SeatedZone extends InventoryZone {
     /** For JPA only — do not call from application code. */
     protected SeatedZone() { }
 
+    /**
+     * Creates a zone with the given seats.
+     *
+     * @param id           the zone's id within its map
+     * @param name         the zone's name; non-blank, at most {@code TextLimits.MAX_TEXT_LENGTH} characters
+     * @param price        the price of one seat, from 0 to {@link #MAX_PRICE}
+     * @param initialSeats the zone's seats, with distinct labels; may be empty
+     * @throws com.ticketing.system.shared.exception.BusinessRuleViolationException if the name is too
+     *     long; its message is shown to the user
+     * @throws IllegalArgumentException if {@code initialSeats} is {@code null} or two seats share a label
+     * @throws IllegalStateException    if the name is blank or the price is out of range, or a seat breaks
+     *                                  its own invariants
+     */
     public SeatedZone(int id, String name, double price, List<Seat> initialSeats) {
         super(id, name, price);
         if (initialSeats == null) {
@@ -83,10 +96,13 @@ public class SeatedZone extends InventoryZone {
         return new ArrayList<>(seats.values());
     }
 
-    
-    
-    
-    
+    /**
+     * Returns the status of one seat.
+     *
+     * @param label the seat's label
+     * @return the seat's status
+     * @throws IllegalArgumentException if the label is not known to this zone
+     */
     public SeatStatus getSeatStatus(String label) {
         Seat seat = seats.get(label);
         if (seat == null) {
@@ -99,6 +115,8 @@ public class SeatedZone extends InventoryZone {
      * Returns the {@link Seat} for the given label, allowing callers to inspect
      * hold identity (e.g. {@link Seat#getReservedByOrderKey()}) in Phase 3 of checkout.
      *
+     * @param label the seat's label
+     * @return the live seat, not a copy
      * @throws IllegalArgumentException if the label is not known to this zone
      */
     public Seat getSeatByLabel(String label) {
@@ -142,7 +160,7 @@ public class SeatedZone extends InventoryZone {
         }
 
         List<String> sorted = validateAndSortLabels(selection.getSeatNumbers());
-        // lock the layout for reading while we acquire the individual seat locks. This prevents the layout from being modified (seats added/removed) while we are reserving seats.
+        // Lock the layout for reading while the seat locks are acquired, so no seat is added or removed meanwhile.
         layoutLock.readLock().lock();
         List<ReentrantLock> acquired = new ArrayList<>();
 
@@ -200,7 +218,7 @@ public class SeatedZone extends InventoryZone {
         String orderKey = selection.getOrderKey();
         List<String> sorted = validateAndSortLabels(selection.getSeatNumbers());
 
-        // lock the layout for reading while we acquire the individual seat locks. This prevents the layout from being modified (seats added/removed) while we are reserving seats.
+        // Lock the layout for reading while the seat locks are acquired, so no seat is added or removed meanwhile.
         layoutLock.readLock().lock();
         List<ReentrantLock> acquired = new ArrayList<>();
 
@@ -259,7 +277,7 @@ public class SeatedZone extends InventoryZone {
         String orderKey = selection.getOrderKey();
         List<String> sorted = validateAndSortLabels(selection.getSeatNumbers());
 
-        // lock the layout for reading while we acquire the individual seat locks. This prevents the layout from being modified (seats added/removed) while we are reserving seats.
+        // Lock the layout for reading while the seat locks are acquired, so no seat is added or removed meanwhile.
         layoutLock.readLock().lock();
         List<ReentrantLock> acquired = new ArrayList<>();
 
@@ -380,7 +398,6 @@ public class SeatedZone extends InventoryZone {
 
     @Override
     public boolean checkAvailability(int quantity) {
-        // check if there are at least 'quantity' available seats in this zone
         int available = getAvailableAmount();
         if (available < quantity) {
             throw new IllegalStateException("Only " + available + " seats available, but " + quantity + " requested");
@@ -396,7 +413,17 @@ public class SeatedZone extends InventoryZone {
 
 
 
-    
+    /**
+     * Adds seats to the zone. All are added or none; waits for in-flight reservations, which hold the
+     * layout lock for reading. {@link Event} allows this only while the event is DRAFT or SCHEDULED.
+     *
+     * @param seatsToAdd the new seats; at least one, each AVAILABLE, with distinct labels that the zone
+     *                   does not already have
+     * @throws IllegalArgumentException if {@code seatsToAdd} is {@code null} or empty, holds a
+     *                                  {@code null} or non-AVAILABLE seat, or repeats a label in the list
+     *                                  or the zone
+     * @throws IllegalStateException    if a seat breaks its own invariants
+     */
     public void addSeats(List<Seat> seatsToAdd) {
         if (seatsToAdd == null || seatsToAdd.isEmpty()) {
             throw new IllegalArgumentException("seatsToAdd must be non-empty");
@@ -431,6 +458,15 @@ public class SeatedZone extends InventoryZone {
     
 
 
+    /**
+     * Removes seats from the zone. All are removed or none; waits for in-flight reservations, which hold
+     * the layout lock for reading.
+     *
+     * @param labelsToRemove the labels to remove; at least one, non-blank and distinct
+     * @throws IllegalArgumentException if {@code labelsToRemove} is {@code null} or empty, has a blank or
+     *                                  repeated label, or names a seat the zone does not have
+     * @throws IllegalStateException    if a named seat is not AVAILABLE
+     */
     public void removeSeats(List<String> labelsToRemove) {
         List<String> sorted = validateAndSortLabels(labelsToRemove);
 

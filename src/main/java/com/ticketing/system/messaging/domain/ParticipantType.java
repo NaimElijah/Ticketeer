@@ -1,15 +1,15 @@
 package com.ticketing.system.messaging.domain;
 
-// What kind of entity is sending or receiving in a Conversation.
-//   MEMBER      - a specific User (memberId)
-//   COMPANY     - a specific ProductionCompany (companyId)
-//   ADMIN       - a specific System Admin (adminId)
-//   ADMIN_GROUP - any System Admin (complaint queue)
-//   SYSTEM      - the platform itself (system-generated messages)
+/** The kind of party that sends or receives in a {@link Conversation}. */
 public enum ParticipantType {
+    /** A specific user, by member id. */
     MEMBER,
+    /** A specific production company, by company id. */
     COMPANY,
+    /** A specific system admin, by admin id. */
     ADMIN,
+    /** Any system admin; the complaint queue. */
     ADMIN_GROUP,
+    /** Reserved for system-generated messages; nothing creates one yet. */
     SYSTEM
 }

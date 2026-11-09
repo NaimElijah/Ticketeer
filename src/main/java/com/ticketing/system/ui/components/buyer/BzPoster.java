@@ -13,9 +13,7 @@ import com.ticketing.system.ui.support.DisplayLocale;
 /**
  * Event poster card — gradient image-block (color-keyed to a colour family)
  * with a category chip overlay, title, venue / date meta, and price.
- * Ports the React {@code Poster} component from
- * {@code screens-buyer.jsx}. Used on the landing page's "Featured This Week"
- * and "On Sale Soon" rows.
+ * Used on the landing page's "Featured This Week" and "On Sale Soon" rows.
  *
  * <p>The poster is a link to its event, named by its content, so a keyboard reaches it and a
  * screen reader reads it as one (#188; WCAG 2.1.1, 4.1.2; {@code ClickOnlyControlsTest}).

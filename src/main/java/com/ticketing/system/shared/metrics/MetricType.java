@@ -8,8 +8,12 @@ package com.ticketing.system.shared.metrics;
  * @see ISystemMetrics
  */
 public enum MetricType {
+    /** A visitor starts a guest session. */
     VISITOR_ENTRY,
+    /** A guest session ends. Expiry is the only path in use today. */
     VISITOR_EXIT,
+    /** A member registers an account. */
     REGISTRATION,
+    /** A member or guest reserves tickets. */
     RESERVATION
 }

@@ -45,7 +45,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Boots the system from an editable scenario file (#366). Reads {@code seed.scenario}, parses it, and
+ * Boots the system from an editable scenario file (upstream#366). Reads {@code seed.scenario}, parses it, and
  * runs each line through the real application services via {@link ScenarioOps}, classifying every step
  * in a {@link SeedReport}. Because each line is a real service call, the run doubles as a smoke test.
  *
@@ -61,7 +61,7 @@ import java.util.Optional;
  *       {@code username=}); if one already exists, the scenario has run against this database before, so
  *       no step runs, a WARN points at {@code reset}, and the boot goes on. Users the scenario does not
  *       register, such as {@code DevUserSeeder}'s, do not count.</li>
- *   <li>{@code wipe} — delete all business data, then stop.</li>
+ *   <li>{@code wipe} — delete all business data and seed nothing; the boot goes on.</li>
  *   <li>{@code reset} — read the scenario, {@code wipe}, then run it. A scenario that cannot be read or
  *       parsed stops the boot before anything is deleted, and the scenario runs even if its users
  *       existed, since the wipe removed them.</li>
@@ -77,7 +77,9 @@ import java.util.Optional;
  * scenario answer that names no committed scenario is asked again; if the console ends after one, the
  * boot stops with the valid choices named.
  * {@code seed.fail-fast=true} (the default outside {@code dev}) stops the scenario at the first unexpected
- * error and fails startup, as does a missing or unreadable scenario file (V3 2.a.ii, ADR-003).
+ * error and fails startup (V3 2.a.ii, ADR-003). Whatever {@code seed.fail-fast} says, a missing or
+ * unreadable scenario file, or one the parser refuses, fails startup in {@code reseed}, and in
+ * {@code reset} once {@code seed.assume-yes} lets it proceed (ADR-021).
  */
 @Component
 @Profile("!test")
@@ -122,6 +124,19 @@ public class ScenarioRunner implements ApplicationRunner {
     // discard input the previous one read-ahead and buffered.
     private BufferedReader consoleReader;
 
+    /**
+     * Creates the runner; it reads {@code seed.*} here but does nothing until {@link #run}.
+     *
+     * @param repoCleaner      deletes the business data in {@code wipe} and {@code reset}
+     * @param devUserSeeder    the dev-only user seeder; empty outside the {@code dev} profile
+     * @param clock            the application clock, read once per scenario run to anchor its dates
+     * @param seed             the bound {@code seed.*} settings
+     * @param platformAdmin    the default admin's credentials, used to open the market and for
+     *                         {@code login-admin <alias>}
+     * @param platformTime     the zone in which seeded show dates are written
+     * @param datasourceUrl    {@code spring.datasource.url}, or {@code unknown} when unset; kept without
+     *                         its query string
+     */
     public ScenarioRunner(
             AuthenticationService authenticationService,
             CompanyManagementService companyManagementService,
@@ -166,6 +181,20 @@ public class ScenarioRunner implements ApplicationRunner {
         this.datasourceUrl = DatasourceUrls.withoutQuery(datasourceUrl);
     }
 
+    /**
+     * Runs the configured {@code seed.mode} against {@code seed.scenario}.
+     *
+     * @param args the application arguments, unused
+     * @throws IllegalStateException when {@code reseed}, or {@code reset} once {@code seed.assume-yes}
+     *         lets it proceed, cannot read the scenario file, or in {@code ask} mode when the console
+     *         ends after an unknown scenario answer
+     * @throws IllegalArgumentException when the parser refuses the scenario file, or when an
+     *         {@code expect-error} line names no operation, which is thrown mid-run whatever
+     *         {@code seed.fail-fast} says
+     * @throws SeedHarness.SeedAbortException when {@code seed.fail-fast} is on and a step fails
+     * @throws RuntimeException a database failure of the wipe or of the existing-user check, propagated
+     *         unchanged
+     */
     @Override
     public void run(ApplicationArguments args) {
         executeMode(seedMode, scenarioLocation);

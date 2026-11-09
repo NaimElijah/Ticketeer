@@ -19,17 +19,25 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
-// V3: mapped to JPA. receiptId is an ASSIGNED @Id (minted by nextId(), never @GeneratedValue);
-// userid is a nullable by-id column (member receipts) and guestEmail/guestSessionId identify guest
-// receipts — the member/guest XOR stays enforced in checkInvariants, not at the DB. @Version drives
-// optimistic locking. receiptLines and transactionRecords are owned value lists, each an
-// @ElementCollection of @Embeddable in its own side-table, loaded eagerly so a detached receipt is
-// fully usable. A protected no-arg ctor lets Hibernate hydrate; the factories still enforce the
-// invariants.
-// Refund state is tracked per line (LineRefundState, ADR-001) so a cancelled event's refund can be
-// claimed, retried and recorded without touching the order's other lines (#20). The order-level
-// is_refunded column mirrors "every line refunded" (#21): it is re-synced on every line change, and
-// readers derive the answer from the lines, so a stale stored value is never trusted.
+/**
+ * The record of one purchase: the lines bought, the payment and issuance transactions behind them, and
+ * the refund state of each line. A receipt belongs to exactly one buyer, a member (user id) or a guest
+ * (email and session id); the factories {@code forMember} and {@code forGuest} create it.
+ *
+ * <p>Refund state is tracked per line ({@link LineRefundState}, ADR-001) so a cancelled event's refund
+ * can be claimed, retried and recorded without touching the order's other lines (#20). The order-level
+ * {@code is_refunded} column mirrors "every line refunded" (#21): it is re-synced on every line change,
+ * and readers derive the answer from the lines, so a stale stored value is never trusted.
+ *
+ * <p>The receipt id is assigned by the application ({@code OrderReceiptRepository.nextId()}), and the
+ * lines and transactions are owned lists loaded with the receipt.
+ */
+// V3: mapped to JPA. receiptId is an ASSIGNED @Id (never @GeneratedValue); userid is a nullable by-id
+// column (member receipts) and guestEmail/guestSessionId identify guest receipts — the member/guest XOR
+// stays enforced in checkInvariants, not at the DB. @Version drives optimistic locking. receiptLines and
+// transactionRecords are each an @ElementCollection of @Embeddable in its own side-table, loaded eagerly so
+// a detached receipt is fully usable. A protected no-arg ctor lets Hibernate hydrate; the factories still
+// enforce the invariants.
 @Entity
 @Table(name = "receipts")
 public class OrderReceipt implements InvariantChecked {
@@ -118,12 +126,35 @@ public class OrderReceipt implements InvariantChecked {
         checkInvariants();
     }
 
-    // purchaseTime: when the purchase completed, as UTC wall time from the injected clock (ADR-008).
+    /**
+     * Creates a member receipt with no transaction records.
+     *
+     * @param receiptId    the receipt id, positive
+     * @param userId       the buyer's user id, positive
+     * @param totalAmount  the total paid, not negative
+     * @param receiptLines the purchased lines, not empty
+     * @param purchaseTime when the purchase completed, as UTC wall time from the injected clock (ADR-008)
+     * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
+     */
     public static OrderReceipt forMember(int receiptId, int userId, double totalAmount, List<ReceiptLine> receiptLines,
             LocalDateTime purchaseTime) {
         return forMember(receiptId, userId, totalAmount, receiptLines, purchaseTime, List.of());
     }
 
+    /**
+     * Creates a member receipt.
+     *
+     * @param receiptId          the receipt id, positive
+     * @param userId             the buyer's user id, positive
+     * @param totalAmount        the total paid, not negative
+     * @param receiptLines       the purchased lines, not empty
+     * @param purchaseTime       when the purchase completed, as UTC wall time (ADR-008)
+     * @param transactionRecords the payment and issuance records to keep on the receipt; may be
+     *     {@code null} for none
+     * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
+     */
     public static OrderReceipt forMember(
             int receiptId,
             int userId,
@@ -144,11 +175,37 @@ public class OrderReceipt implements InvariantChecked {
         );
     }
 
+    /**
+     * Creates a guest receipt with no transaction records.
+     *
+     * @param guestEmail     the buyer's email, not blank
+     * @param guestSessionId the buyer's guest session id, not blank
+     * @param receiptId      the receipt id, positive
+     * @param totalAmount    the total paid, not negative
+     * @param receiptLines   the purchased lines, not empty
+     * @param purchaseTime   when the purchase completed, as UTC wall time (ADR-008)
+     * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
+     */
     public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId, double totalAmount,
             List<ReceiptLine> receiptLines, LocalDateTime purchaseTime) {
         return forGuest(guestEmail, guestSessionId, receiptId, totalAmount, receiptLines, purchaseTime, List.of());
     }
 
+    /**
+     * Creates a guest receipt.
+     *
+     * @param guestEmail         the buyer's email, not blank
+     * @param guestSessionId     the buyer's guest session id, not blank
+     * @param receiptId          the receipt id, positive
+     * @param totalAmount        the total paid, not negative
+     * @param receiptLines       the purchased lines, not empty
+     * @param purchaseTime       when the purchase completed, as UTC wall time (ADR-008)
+     * @param transactionRecords the payment and issuance records to keep on the receipt; may be
+     *     {@code null} for none
+     * @throws IllegalArgumentException if an argument breaks the limits above
+     * @throws IllegalStateException    if {@code purchaseTime} is {@code null}
+     */
     public static OrderReceipt forGuest(String guestEmail, String guestSessionId, int receiptId,
             double totalAmount, List<ReceiptLine> receiptLines, LocalDateTime purchaseTime,
             List<TransactionRecord> transactionRecords) {
@@ -168,19 +225,22 @@ public class OrderReceipt implements InvariantChecked {
         return receiptId;
     }
 
-    // Keep this name because existing tests/code use it.
+    /** Returns the member's user id, or {@code null} for a guest receipt; the same as {@link #getHolderUserId}. */
     public Integer getUserid() {
         return userid;
     }
 
+    /** Returns the member's user id, or {@code null} for a guest receipt. */
     public Integer getHolderUserId() {
         return userid;
     }
 
+    /** Returns the guest's email, or {@code null} for a member receipt. */
     public String getGuestEmail() {
         return guestEmail;
     }
 
+    /** Returns the guest session id the purchase was made under, or {@code null} for a member receipt. */
     public String getGuestSessionId() {
         return guestSessionId;
     }
@@ -193,6 +253,7 @@ public class OrderReceipt implements InvariantChecked {
         return guestEmail != null && guestSessionId != null;
     }
 
+    /** Returns the distinct ids of the events the receipt's lines are for. */
     public List<Integer> getEventIds() {
         return receiptLines.stream()
                 .map(ReceiptLine::getEventId)
@@ -200,19 +261,26 @@ public class OrderReceipt implements InvariantChecked {
                 .toList();
     }
 
+    /** Returns whether any line of the receipt is for the event. */
     public boolean containsEventId(int eventId) {
         return receiptLines.stream()
                 .anyMatch(line -> line.getEventId() == eventId);
     }
 
+    /** Returns when the purchase completed, as UTC wall time (ADR-008). */
     public LocalDateTime getPurchaseTime() {
         return purchaseTime;
     }
 
+    /** Returns the total paid at purchase; refunds do not change it (see {@link #netAmount}). */
     public double getTotalAmount() {
         return totalPrice;
     }
 
+    /**
+     * Returns an unmodifiable copy of the lines. A receipt that was refunded before refund state was kept
+     * per line reads every line as REFUNDED.
+     */
     public List<ReceiptLine> getReceiptLines() {
         if (isRefundedWithoutLineState()) {
             return receiptLines.stream().map(line -> line.withRefundState(LineRefundState.REFUNDED)).toList();
@@ -342,15 +410,17 @@ public class OrderReceipt implements InvariantChecked {
         this.isRefunded = isFullyRefunded();
     }
 
+    /** Returns an unmodifiable copy of the receipt's payment, issuance and refund records. */
     public List<TransactionRecord> getTransactionRecords() {
         return List.copyOf(transactionRecords);
     }
 
 
 
-    // Helper methods to extract specific transaction info from the list of transaction records. These are not strictly necessary but can be convenient for common queries.
-
-    // For simplicity we assume there is at most one payment charge per receipt. In a real system we might want to enforce this or handle multiple charges more robustly.
+    /**
+     * Returns the gateway's transaction id of the receipt's payment charge, or empty if it has none.
+     * Assumes at most one payment charge per receipt and returns the first.
+     */
     public Optional<Integer> getPaymentTransactionId() {
         return transactionRecords.stream()
                 .filter(record -> record.getType() == TransactionRecord.TransactionType.PAYMENT_CHARGE)
@@ -359,7 +429,10 @@ public class OrderReceipt implements InvariantChecked {
                 .findFirst();
     }
 
-    // For simplicity, we assume all payment charges for a receipt use the same currency. In a real system we might want to enforce this or handle multiple currencies more robustly.
+    /**
+     * Returns the currency of the receipt's payment charge: the first charge record that names one, or
+     * {@code "ILS"} when none does. Assumes all payment charges of a receipt use the same currency.
+     */
     public String getPaymentCurrency() {
         return transactionRecords.stream()
                 .filter(record -> record.getType() == TransactionRecord.TransactionType.PAYMENT_CHARGE)
@@ -410,6 +483,13 @@ public class OrderReceipt implements InvariantChecked {
 
 
 
+    /**
+     * Appends a record to the receipt's transactions.
+     *
+     * @param record the record to add, not {@code null}
+     * @throws NullPointerException  if {@code record} is {@code null}
+     * @throws IllegalStateException if the record, or the receipt with it, breaks its invariants
+     */
     public void addTransaction(TransactionRecord record) {
         Objects.requireNonNull(record, "transaction record must not be null");
         record.checkInvariants();

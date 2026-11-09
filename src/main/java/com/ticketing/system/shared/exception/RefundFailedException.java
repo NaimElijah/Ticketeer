@@ -1,12 +1,22 @@
 package com.ticketing.system.shared.exception;
 
-// Thrown when an auto-refund itself fails (gateway down for the refund call).
-// Distinct from PaymentGatewayException: this is the *refund* side, which has
-// elevated SLR.5 fault-tolerance significance — a customer was charged but not refunded.
-// UC-4. Listeners should escalate (logging, admin alert, retry queue).
-// The message names what failed to be refunded: an order (receipt) where a service refunds one, a payment
-// transaction where a gateway refunds by charge id (forPaymentTransaction), so nobody looks for an order by a
-// charge id (NaimElijah/Ticketeer#187).
+/**
+ * Thrown when a refund fails: the gateway rejected it, its result failed validation, the
+ * receipt holds no payment transaction to refund, or a cancelled event's refunds left receipts
+ * unrefunded. UC-4.
+ *
+ * <p>Distinct from {@link PaymentGatewayException}: this is the <em>refund</em> side, which has
+ * elevated SLR.5 fault-tolerance significance, because a customer was charged but not refunded.
+ * {@link RefundGatewayUnreachableException} and {@link RefundOutcomeUnknownException} are the
+ * subtypes for a request that never reached the gateway and for one that may have been processed.
+ *
+ * <p>A gateway refunds by charge id, so {@code forPaymentTransaction} labels its subject a payment
+ * transaction, not an order, and nobody looks for an order by a charge id
+ * (NaimElijah/Ticketeer#187).
+ *
+ * <p>{@code RefundPresenter} shows the member fixed text. A cancel shows its owner the plain summary of
+ * the receipts it could not refund as written, and fixed text for the two subtypes.
+ */
 public class RefundFailedException extends DomainException {
 
     /** What a refund failed for, as its message names it. */
