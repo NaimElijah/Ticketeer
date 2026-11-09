@@ -56,7 +56,8 @@ public interface EventRepository extends IRepository<Event, Integer> {
      * On the in-memory adapter it blocks structural/event-lifecycle writes such as venue editing,
      * policy changes, cancellation, publishing, etc. On the Jpa adapter it is a no-op.
      *
-     * Actual inventory correctness is still protected by StandingZone / SeatedZone locks.
+     * Actual inventory correctness is still protected by the zone locks on the in-memory adapter, and
+     * by the zone's and the seat's {@code @Version} on the Jpa adapter.
      *
      * @param eventId the event
      */
@@ -104,7 +105,9 @@ public interface EventRepository extends IRepository<Event, Integer> {
     List<Event> findByStatus(EventStatus status);
 
     /**
-     * #372: loads every event, for the integrity scan, which re-checks each loaded event's invariants.
+     * #372: loads every event, for the integrity scan, which re-checks each loaded event's invariants
+     * and, in {@code SystemIntegrityVerifier.verifyInventoryWithinCapacity}, that no zone has more sold
+     * and reserved places than its capacity.
      *
      * @return all events, in no particular order
      */

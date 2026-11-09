@@ -36,10 +36,10 @@ import com.ticketing.system.shared.exception.InsufficientInventoryException;
 
 /**
  * Catalog application service that owns all Event/InventoryZone inventory mutation on behalf of the
- * sales context, implementing {@link InventoryCommandPort}. The event lock, load, policy check, domain
- * mutation and save of each reserve, release, confirm and return happen here, so that no sales
- * application service touches a {@code catalog.domain} type. See {@link InventoryCommandPort} for the
- * locking and transaction contract.
+ * sales context, implementing {@link InventoryCommandPort}. The load, domain mutation and save of each
+ * reserve, release, confirm and return happen here, so that no sales application service touches a
+ * {@code catalog.domain} type; reserve also checks the purchase policy. Which methods take the event
+ * lock is per method: see {@link InventoryCommandPort} for the locking and transaction contract.
  */
 @Service
 @Slf4j
@@ -294,8 +294,7 @@ public class InventoryService implements InventoryCommandPort {
                             throw new ConcurrentReservationException(
                                     "Seat " + seatNumber + " is no longer RESERVED — reservation may have expired");
                         }
-                        // Ownership check: this checkout's order must still hold the seat. Skipped when the
-                        // caller passes no order key.
+                        // Ownership check: this checkout's order must still hold the seat.
                         Seat seat = seatedZone.getSeatByLabel(seatNumber);
                         String seatOwner = seat.getReservedByOrderKey();
                         if (orderKey != null && !orderKey.equals(seatOwner)) {

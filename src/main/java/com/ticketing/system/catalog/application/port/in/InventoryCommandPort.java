@@ -179,10 +179,10 @@ public interface InventoryCommandPort {
      * check and the subsequent {@link #confirmSale}.
      *
      * @param lines    the held lines to confirm
-     * @param orderKey the owning order's key; when {@code null}, seat ownership is not checked
+     * @param orderKey the key of the order that holds these lines
      * @throws com.ticketing.system.shared.exception.EventNotFoundException if an event does not exist
-     * @throws com.ticketing.system.shared.exception.InsufficientInventoryException if a line for a seated
-     *     zone has no seat label, a line for a standing zone names a seat, or a standing zone holds fewer
+     * @throws com.ticketing.system.shared.exception.InsufficientInventoryException if no line for a seated
+     *     zone has a seat label, a line for a standing zone names a seat, or a standing zone holds fewer
      *     reserved places than lines
      * @throws com.ticketing.system.shared.exception.ConcurrentReservationException if a seat is no
      *     longer RESERVED or is held by a different order
@@ -196,7 +196,7 @@ public interface InventoryCommandPort {
      * is left behind. CALLER-LOCKED: the caller must hold the event buyer-lock for every affected event.
      *
      * @param lines    the held lines to confirm
-     * @param orderKey the owning order's key; when {@code null}, seat ownership is not checked
+     * @param orderKey the key of the order that holds these lines
      * @throws RuntimeException the failure of the first line that cannot be confirmed, such as
      *     {@code EventNotFoundException} or {@code IllegalStateException} for a place or seat that is not
      *     RESERVED or is held by another order, rethrown after the earlier units are compensated

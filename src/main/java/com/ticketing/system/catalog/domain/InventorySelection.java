@@ -19,14 +19,14 @@ import com.ticketing.system.shared.InvariantChecked;
  * </ol>
  *
  * <p>This class belongs in the domain because Event, VenueMap, InventoryZone,
- * StandingZone, SeatedZone, and ActiveOrder all need to reason about this
+ * StandingZone and SeatedZone all need to reason about this
  * concept as part of business logic.
  */
 public final class InventorySelection implements InvariantChecked {
 
     private final int quantity;                // tickets quantity, For standing zones, this is the only relevant field.
     private final List<String> seatNumbers;    // only non-empty For seated zones, must contain no duplicates.
-    private final String orderKey;             // identifies which ActiveOrder holds this reservation; null means "no ownership check".
+    private final String orderKey;             // identifies which order holds this reservation; null means no owner.
     // When the buyer's hold runs out, as UTC wall time (ADR-008); sales owns the hold duration and passes
     // it in. Null when no hold is recorded (a release, or a test reserving directly on a zone).
     private final LocalDateTime holdUntil;

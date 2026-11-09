@@ -10,7 +10,7 @@ import com.ticketing.system.shared.InvariantChecked;
  * {@code equals} to decide whether the column changed, so without value equality every flush rewrote
  * the event row (#186, see {@link com.ticketing.system.shared.domain.policy.PurchasePolicy}).
  */
-public class DiscountPolicy implements InvariantChecked { //? Note: but not in implementation plan  <------------   <-----------    <---------------
+public class DiscountPolicy implements InvariantChecked {
 
     private final double discountPercentage;  // Discount percentage (0-100)
 

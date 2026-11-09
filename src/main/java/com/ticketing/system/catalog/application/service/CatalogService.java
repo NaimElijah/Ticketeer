@@ -150,7 +150,7 @@ public class CatalogService {
                 .toList();
     }
 
-    // *HELPER METHOD* — per-call memoized company-visibility lookup. Many ON_SALE events share a
+    // Per-call memoized company-visibility lookup. Many ON_SALE events share a
     // company, so caching companyId→visibility avoids re-hitting the company repository once per
     // event (an N+1 under the JPA backend) while keeping the same semantics as a direct lookup.
     private boolean isCompanyPubliclyVisibleCached(int companyId, Map<Integer, Boolean> cache) {
@@ -179,7 +179,7 @@ public class CatalogService {
                 .toList();
     }
 
-    // *HELPER METHOD* — earliest show start for an event, or null if it somehow has no show dates
+    // Earliest show start for an event, or null if it somehow has no show dates
     // (an Event invariant requires >=1, so the null branch only guards against future changes).
     // Compared as instants: events at venues in different zones sort by when they really start.
     private Instant earliestShowStart(Event event) {
@@ -208,15 +208,12 @@ public class CatalogService {
      */
     public List<EventSummaryDTO> searchGlobal(String credential, CatalogSearchFiltersDTO filters) {
         log.debug("Starting global search with filters set: {}", filtersInUse(filters));
-        // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
             log.warn("Invalid credential provided while performing global search with filters set: {}",
                     filtersInUse(filters));
             throw new InvalidTokenException("Invalid credential provided while performing global search");
         }
-        // Normalize and validate the filters, THROWING ---> IllegalArgumentException for invalid ranges or dates.
         CatalogSearchFiltersDTO effectiveFilters = normalizeAndValidateCatalogFilters(filters);
-        // Create an EventMapper to convert Event entities to EventSummaryDTOs.
         EventMapper mapper = new EventMapper();
 
         List<EventSummaryDTO> results = new ArrayList<>();
@@ -227,12 +224,9 @@ public class CatalogService {
                 effectiveFilters.minCompanyRating() != null || effectiveFilters.maxCompanyRating() != null;
         Map<Integer, Double> companyRatingCache = new HashMap<>();
 
-        // Iterate over all events returned by the eventRepository.searchONSALE() method, applying the effective filters.
         for (Event event : eventRepository.searchONSALE(effectiveFilters)) {
-            // Check if the event is associated with an active company and is publicly visible (ON_SALE).
             ProductionCompany company = activeCompanyOrNull(event.getCompanyId());
 
-            // If the event is not publicly visible or the company does not match the company rating filters, skip to the next event.
             if (!isCompanyPubliclyVisible(company)) {
                 continue;
             }
@@ -279,22 +273,20 @@ public class CatalogService {
      * @throws CompanyClosedException   if the company is not ACTIVE
      * @throws IllegalArgumentException if a minimum exceeds its maximum or {@code fromDate} is after
      *                                  {@code toDate}
-     * @throws BusinessRuleViolationException if a text filter is too long; its message is shown to the user
+     * @throws BusinessRuleViolationException if a text filter is too long; its message is written for the
+     *                                  user
      */
     public List<EventSummaryDTO> searchByCompany(String credential, int companyId, CatalogSearchFiltersDTO filters) {
         log.debug("Starting company-scoped search for companyId: {} with filters set: {}",
                 companyId, filtersInUse(filters));
-        // Validate the credential (JWT or sessionId) before proceeding with the search.
         if (!this.sessionManager.validateCredential(credential)) {
             log.warn("Invalid credential provided while performing company-scoped search for companyId: {} with filters set: {}",
                     companyId, filtersInUse(filters));
             throw new InvalidTokenException("Invalid credential provided while performing company-scoped search for companyId: " + companyId);
         }
 
-        // Validate that the specified company exists and is active, throwing CompanyNotFoundException or CompanyClosedException if not.
         requireActiveCompany(companyId);
 
-        // Normalize and validate the filters, THROWING ---> IllegalArgumentException for invalid ranges or dates. 
         // Without company-rating filters since this is a company-scoped search.
         CatalogSearchFiltersDTO effectiveFilters = normalizeAndValidateCatalogFilters(filters).withoutCompanyRating();
         EventMapper mapper = new EventMapper();
@@ -462,7 +454,7 @@ public class CatalogService {
         return CompanyRatings.fromEvents(eventRepository.findByCompanyId(companyId));
     }
 
-    // *HELPER METHOD* — "city, country" label for an event's venue, or null if it has no location.
+    // "city, country" label for an event's venue, or null if it has no location.
     private String venueLabel(Event event) {
         if (event.getVenueMap() == null || event.getVenueMap().getLocation() == null) {
             return null;
@@ -470,7 +462,7 @@ public class CatalogService {
         return event.getVenueMap().getLocation().toString();
     }
 
-    // *HELPER METHOD* — an event's country / city, or null when it has no bound venue/location.
+    // an event's country / city, or null when it has no bound venue/location.
     private String eventCountry(Event event) {
         return (event.getVenueMap() != null && event.getVenueMap().getLocation() != null)
                 ? event.getVenueMap().getLocation().country() : null;
@@ -488,7 +480,7 @@ public class CatalogService {
 
 
 
-    // *HELPER METHOD* to normalize and validate the search filters, throwing IllegalArgumentException for invalid ranges or dates.
+    // Normalizes and validates the search filters, throwing IllegalArgumentException for invalid ranges or dates.
     private CatalogSearchFiltersDTO normalizeAndValidateCatalogFilters(CatalogSearchFiltersDTO filters) {
         CatalogSearchFiltersDTO f = filters == null
                 ? CatalogSearchFiltersDTO.empty()
@@ -513,7 +505,6 @@ public class CatalogService {
         return f;
     }
 
-    // *HELPER METHOD* to validate that a min/max double range is valid, throwing IllegalArgumentException if min > max.
     private void validateDoubleRange(Double min, Double max, String name) {
         // if either min or max is null, we consider it unbounded and therefore valid, so only throw if both are non-null and min > max.
         if (min != null && max != null && min > max) {
@@ -521,7 +512,7 @@ public class CatalogService {
         }
     }
 
-    // *HELPER METHOD* to return the active ProductionCompany for a given companyId, or null if not found or not active.
+    // The active ProductionCompany for a companyId, or null if not found or not active.
     // Any other failure of the lookup propagates: a store that cannot answer is not a company that is not public.
     private ProductionCompany activeCompanyOrNull(int companyId) {
         ProductionCompany company;
@@ -533,7 +524,6 @@ public class CatalogService {
         return company.getStatus() == CompanyStatus.ACTIVE ? company : null;
     }
 
-    // *HELPER METHOD* to require that a ProductionCompany exists and is active, throwing CompanyNotFoundException or CompanyClosedException if not.
     private ProductionCompany requireActiveCompany(int companyId) {
         ProductionCompany company = productionCompanyRepository.getCompanyById(companyId);
 
@@ -544,12 +534,11 @@ public class CatalogService {
         return company;
     }
 
-    // *HELPER METHOD* to check if a ProductionCompany is publicly visible, i.e., ACTIVE.
     private boolean isCompanyPubliclyVisible(ProductionCompany company) {
         return company != null && company.getStatus() == CompanyStatus.ACTIVE;
     }
 
-    // *HELPER METHOD* — does the company's DERIVED rating (mean of its events' ratings) satisfy the
+    // does the company's DERIVED rating (mean of its events' ratings) satisfy the
     // min/max company-rating filters? A null rating (no rated events) fails any active bound.
     private boolean matchesCompanyRating(Double rating, CatalogSearchFiltersDTO filters) {
         if (filters.minCompanyRating() != null && (rating == null || rating < filters.minCompanyRating())) {
@@ -592,7 +581,6 @@ public class CatalogService {
                 throw new InvalidTokenException();
             }
             
-            // see that event exists and has a venue map
             Event event = this.eventRepository.findById(eventId);
 
             // Only a closed company's owners and the system admins may see its information, so on this
@@ -606,7 +594,6 @@ public class CatalogService {
             // The map is part of the event's public page, so it is hidden exactly when the page is.
             requirePubliclyListed(event, "getting venue map");
 
-            // see that event has a venue map
             if (event.getVenueMap() == null) {
                 log.warn("Null venue map for event while getting venue map: {}", eventId);
                 throw new NullVenueMapException(eventId);

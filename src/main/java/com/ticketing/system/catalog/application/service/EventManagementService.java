@@ -62,18 +62,22 @@ import com.ticketing.system.shared.domain.policy.PurchasePolicy;
  * {@link CatalogService}.
  *
  * <p>Every method takes the caller's session token. It must be a live member token, or the method throws
- * {@link InvalidTokenException}. The method then checks that the member holds the permission it needs in
- * the event's company (a missing one throws {@link UnauthorizedActionException}). The permission is
+ * {@link InvalidTokenException}; a token whose member no longer exists throws
+ * {@link UserNotFoundException}. The method then checks that the member holds the permission it needs
+ * in the event's company (a missing one throws {@link UnauthorizedActionException}). The permission is
  * {@code MANAGE_INVENTORY} for event details and lifecycle, {@code CONFIGURE_VENUE} for the venue map
- * and its zones, and {@code EDIT_POLICIES} for purchase policies.
+ * and its zones, and {@code EDIT_POLICIES} for purchase policies. The exceptions are
+ * {@link #listEventsForCompany} and {@link #getEventDetail}, which need only active membership of the
+ * company.
  *
  * <p>A write locks the event with {@code EventRepository.lockForUpdate} for its duration. On the Jpa
- * adapter that lock is a no-op, and a concurrent writer is separated by the event's {@code @Version}.
+ * adapter that lock is a no-op, and a concurrent writer is separated by the {@code @Version} of the row
+ * it changes (the event's, a zone's or a seat's); the loser gets {@code ConcurrentReservationException}.
  * {@link #cancelEventAndRefund} is deliberately not {@code @Transactional}; see there.
  *
- * <p>Event creation and venue-map configuration are separate steps: creation needs no venue-map
- * details, and the map can then be configured, and reconfigured, in later calls before the event
- * goes on sale.
+ * <p>Event creation and venue-map configuration are separate steps: creation needs only the venue's
+ * location, and the zones are configured, and reconfigured, in later calls before the event goes on
+ * sale.
  */
 @Service
 @Slf4j
@@ -145,8 +149,9 @@ public class EventManagementService {
      * @return the new event
      * @throws InvalidTokenException          if {@code token} is not a live member token
      * @throws IllegalArgumentException       if the request has no venue location, checked before the
-     *                                        company lookup; if an artist's name is null or blank; or if a
-     *                                        show starts at or before the clock's instant at the venue
+     *                                        company lookup; if an artist's name is null or blank; if a
+     *                                        show starts at or before the clock's instant at the venue; or
+     *                                        if the purchase policy DTO is malformed
      * @throws CompanyNotFoundException       if the company does not exist
      * @throws UnauthorizedActionException    if the member lacks {@code MANAGE_INVENTORY} in the company
      * @throws BusinessRuleViolationException if the name, description or an artist's name is too long;
@@ -174,10 +179,7 @@ public class EventManagementService {
 
         int newEventId = eventRepository.nextId();
         VenueMap venueMap = new VenueMap(eventRepository.nextVenueMapId(), request.location(), List.of());
-        // ! Note: Discount policy is currently not in the implementation plan so just
-        // put as 0 discount for every event here
-        // not doing discount automatically without the ability to change this from the
-        // outside right now.
+        // No path sets an event's discount yet (OQ-36, #259), so addEvent passes a 0% policy.
         DiscountPolicy discountPolicy = new DiscountPolicy(0);
 
         
@@ -230,7 +232,6 @@ public class EventManagementService {
      * @param filters   the filters to narrow by, with an absent filter meaning no restriction
      * @return the matching events; empty if there are none
      * @throws InvalidTokenException       if {@code token} is not a live member token
-     * @throws UserNotFoundException       if the token's member no longer exists
      * @throws CompanyNotFoundException    if the company does not exist
      * @throws UnauthorizedActionException if the member is not an active member of the company
      */
@@ -265,7 +266,6 @@ public class EventManagementService {
      * @return the event's detail, without its description
      * @throws InvalidTokenException       if {@code token} is not a live member token
      * @throws EventNotFoundException      if there is no such event
-     * @throws UserNotFoundException       if the token's member no longer exists
      * @throws UnauthorizedActionException if the member lacks {@code MANAGE_INVENTORY} in the event's
      *                                     company
      */
@@ -302,7 +302,7 @@ public class EventManagementService {
 
 
     /**
-     * II.4.2.3: reads back an event's current venue layout so the editor reflects real-time inventory.
+     * II.4.2.3: reads back an event's current venue layout, so the editor shows the layout as stored.
      * A standing zone is reported with its capacity. A seated zone is reported as a number of rows and the
      * largest number of seats in any row, where a seat's row is the leading run of non-digit characters
      * in its label, so a label such as {@code AA12} belongs to row {@code AA}.
@@ -311,7 +311,6 @@ public class EventManagementService {
      * @param eventId the event
      * @return the layout; an event with no venue map yields the default grid with no zones
      * @throws InvalidTokenException       if {@code token} is not a live member token
-     * @throws UserNotFoundException       if the token's member no longer exists
      * @throws EventNotFoundException      if there is no such event
      * @throws UnauthorizedActionException if the member lacks {@code CONFIGURE_VENUE} in the event's
      *                                     company
@@ -381,10 +380,14 @@ public class EventManagementService {
      *                                      the event belongs to another company
      * @throws EventNotFoundException       if there is no such event
      * @throws IllegalArgumentException     if {@code config.eventId()} is not an integer, the venue is over
-     *                                      a limit, a standing zone's capacity is not positive, or a
-     *                                      placement runs past the grid; the message is shown to the user
-     * @throws IllegalStateException        if the event has no stored venue location, a placement
-     *                                      overlaps another zone, or {@link Event} refuses the map (see
+     *                                      a limit, a standing zone's capacity is not positive, a seated
+     *                                      zone has no seats or repeats a seat label, two zones share a
+     *                                      name (ignoring case), or a placement runs past the grid; the
+     *                                      message is shown to the user
+     * @throws BusinessRuleViolationException if a zone name is too long
+     * @throws IllegalStateException        if the event has no stored venue location, a zone name is blank
+     *                                      or a price is out of range, a placement overlaps another zone,
+     *                                      or {@link Event} refuses the map (see
      *                                      {@link Event#configureVenueMap})
      */
     @Transactional
@@ -539,7 +542,7 @@ public class EventManagementService {
 
     /**
      * UC-20: adds one zone to an event's venue map, with an optional grid placement. The map must stay
-     * within the {@code catalog.venue-limits} caps and have a free grid cell.
+     * within the {@code catalog.venue-limits} caps and hold no more zones than the grid has cells.
      *
      * @param token      the member's session token
      * @param companyId  the company that owns the event
@@ -553,10 +556,11 @@ public class EventManagementService {
      * @throws EventNotFoundException       if there is no such event
      * @throws IllegalArgumentException     if {@code zoneConfig} is {@code null}, a limit or the grid is
      *                                      exceeded, a standing zone's capacity is not positive, the seats
-     *                                      are missing or repeat a label, or a placement runs past the
-     *                                      grid; the message is shown to the user
-     * @throws IllegalStateException        if the event is past SCHEDULED, or a placement overlaps
-     *                                      another zone
+     *                                      are missing or repeat a label, another zone has the name
+     *                                      (ignoring case), or a placement runs past the grid; the
+     *                                      message is written for the user
+     * @throws IllegalStateException        if the event is past SCHEDULED, the zone name is blank or the
+     *                                      price is out of range, or a placement overlaps another zone
      * @throws BusinessRuleViolationException if the event has no venue map, or the zone name is too long
      */
     @Transactional
@@ -663,7 +667,7 @@ public class EventManagementService {
      * @throws EventNotFoundException       if there is no such event
      * @throws IllegalArgumentException     if the map has no such zone, {@code placesToAdd} is not
      *                                      positive, or the capacity would pass the cap (the message is
-     *                                      shown to the user)
+     *                                      written for the user)
      * @throws IllegalStateException        if the event is past SCHEDULED, or the zone is not standing
      * @throws BusinessRuleViolationException if the event has no venue map
      */
@@ -731,10 +735,11 @@ public class EventManagementService {
      * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
      *                                      the event belongs to another company
      * @throws EventNotFoundException       if there is no such event
-     * @throws IllegalArgumentException     if the map has no such zone, a seat cap would be passed (the
-     *                                      message is shown to the user), the list is empty, or a label
-     *                                      repeats one the zone has
-     * @throws IllegalStateException        if the event is past SCHEDULED
+     * @throws IllegalArgumentException     if the map has no such zone, the zone is not a seated zone, a
+     *                                      seat cap would be passed (the message is written for the user),
+     *                                      the list is empty, or a label repeats one in the list or the
+     *                                      zone
+     * @throws IllegalStateException        if the event is past SCHEDULED, or a label is blank
      * @throws BusinessRuleViolationException if the event has no venue map
      */
     @Transactional
@@ -817,9 +822,10 @@ public class EventManagementService {
      * @throws UnauthorizedActionException  if the member lacks {@code CONFIGURE_VENUE} in the company, or
      *                                      the event belongs to another company
      * @throws EventNotFoundException       if there is no such event
-     * @throws IllegalArgumentException     if the map has no such zone, a seat cap would be passed (the
-     *                                      message is shown to the user), an argument above is out of
-     *                                      range, or a label repeats one the zone has
+     * @throws IllegalArgumentException     if the map has no such zone, the zone is not a seated zone, a
+     *                                      seat cap would be passed (the message is written for the user),
+     *                                      an argument above is out of range, or a label repeats one the
+     *                                      zone has
      * @throws IllegalStateException        if the event is past SCHEDULED
      * @throws BusinessRuleViolationException if the event has no venue map
      */
@@ -899,10 +905,6 @@ public class EventManagementService {
         }
     }
 
-    // getAuthorizedEventForVenueEdit is a helper function that validates the token,
-    // checks user permissions,
-    // and retrieves the event for venue editing. It throws exceptions if any
-    // validation fails.
     private Event getAuthorizedEventForVenueEdit(String token, int companyId, int eventId) {
         int userId = validateTokenAndGetUserId(token);
         User user = userRepository.getUserById(userId);
@@ -931,8 +933,6 @@ public class EventManagementService {
         return event;
     }
 
-    // to-DomainSeats is a helper function to convert a list of SeatConfigDTO
-    // objects to a list of Seat domain objects.
     private List<Seat> toDomainSeats(List<VenueMapConfigDTO.SeatConfigDTO> seatConfigs) {
         if (seatConfigs == null || seatConfigs.isEmpty()) {
             throw new IllegalArgumentException("Seats list must be non-empty");
@@ -1054,10 +1054,6 @@ public class EventManagementService {
         return zoneConfig.seats() == null ? 0 : zoneConfig.seats().size();
     }
 
-    // buildSeatRow is a helper function to create a list of Seat objects for a row
-    // in a seated zone.
-    // It validates the input parameters and constructs the seats based on the
-    // provided starting position and spacing.
     private List<Seat> buildSeatRow(
             String rowLabel,
             int firstSeatNumber,
@@ -1252,6 +1248,8 @@ public class EventManagementService {
      * @throws UnauthorizedActionException if the member lacks {@code MANAGE_INVENTORY} in the event's
      *                                     company
      * @throws IllegalStateException       if the event is COMPLETED
+     * @throws com.ticketing.system.shared.exception.RefundFailedException if a refund fails; the event
+     *     stays CANCELED and calling again resumes
      */
     public void cancelEventAndRefund(String token, int eventId) {
         int ownerId = validateTokenAndGetUserId(token);
@@ -1296,14 +1294,14 @@ public class EventManagementService {
      * discount stays the 0% {@link #addEvent} gives it, and whether it should be settable is
      * NaimElijah/Ticketeer#259.
      *
-     * <p>The event is locked for the update, as every write is.
+     * <p>As for any write to an existing event, the event is locked for the update.
      *
      * @param token  the member's session token
      * @param config the event, its company and the new policy
      * @throws InvalidTokenException        if {@code token} is not a live member token
-     * @throws IllegalArgumentException     if {@code config} is {@code null}
+     * @throws IllegalArgumentException     if {@code config} is {@code null}, or its purchase policy DTO is
+     *                                      malformed
      * @throws CompanyNotFoundException     if the company does not exist
-     * @throws UserNotFoundException        if the token's member no longer exists
      * @throws UnauthorizedActionException  if the member lacks {@code EDIT_POLICIES} in the company, or
      *                                      the event belongs to another company
      * @throws EventNotFoundException       if there is no such event
@@ -1366,7 +1364,6 @@ public class EventManagementService {
      * @return the policy as a DTO
      * @throws InvalidTokenException        if {@code token} is not a live member token
      * @throws CompanyNotFoundException     if the company does not exist
-     * @throws UserNotFoundException        if the token's member no longer exists
      * @throws UnauthorizedActionException  if the member lacks {@code EDIT_POLICIES} in the company, or
      *                                      the event belongs to another company
      * @throws EventNotFoundException       if there is no such event

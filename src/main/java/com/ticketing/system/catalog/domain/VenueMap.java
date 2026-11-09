@@ -482,7 +482,6 @@ public class VenueMap implements InvariantChecked {
 
 
 
-    // getter
     private StandingZone getStandingZoneOrThrow(int zoneId) {
         InventoryZone zone = getZone(zoneId);
         if (zone instanceof StandingZone standingZone) {
@@ -491,7 +490,6 @@ public class VenueMap implements InvariantChecked {
             throw new IllegalStateException("Zone is not a standing zone");
         }
     }
-    // getter
     private SeatedZone getSeatedZoneOrThrow(int zoneId) {
         InventoryZone zone = getZone(zoneId);
         if (zone instanceof SeatedZone seatedZone) {

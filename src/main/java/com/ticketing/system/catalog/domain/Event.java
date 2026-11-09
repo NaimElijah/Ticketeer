@@ -52,8 +52,8 @@ import jakarta.persistence.Version;
  * event-level optimistic lock for structural and lifecycle edits, while {@link Seat} and
  * {@link InventoryZone} carry their own {@code @Version} so independent buyer reservations never
  * false-conflict. Artist names and show dates are element collections; the venue map is an owned
- * {@code @OneToOne} (null while the event is in DRAFT); the policies are stored as JSON. A protected
- * no-arg constructor lets Hibernate hydrate; the public constructors enforce the invariants.
+ * {@code @OneToOne} (the column is nullable, but {@code addEvent} binds an empty map); the policies are
+ * stored as JSON. A protected no-arg constructor lets Hibernate hydrate; the public constructors enforce the invariants.
  */
 @Slf4j
 @Entity
@@ -142,7 +142,7 @@ public class Event implements InvariantChecked {
      * @param category      the event's category
      * @param comapnyid     the id of the owning company; positive
      * @param status        the event's lifecycle status
-     * @param venueMap      the venue map, or {@code null} while the event is in DRAFT
+     * @param venueMap      the venue map, or {@code null} for none; {@code addEvent} binds an empty map
      * @param showDates     at least one show, as wall-clock times at the venue read in {@code timeZone};
      *                      copied
      * @param timeZone      the venue's IANA zone (ADR-008)
@@ -176,8 +176,8 @@ public class Event implements InvariantChecked {
         this.timeZone = timeZone;
         // purchasePolicy defaults to NoPurchasePolicy when not supplied.
         this.purchasePolicy = PurchasePolicy == null ? new NoPurchasePolicy() : PurchasePolicy;
-        // Stored as given; checkInvariants refuses null. Discounts are not in the implementation plan, so
-        // EventManagementService.addEvent passes a 0% policy.
+        // Stored as given; checkInvariants refuses null. No path sets an event's discount yet (OQ-36, #259),
+        // so EventManagementService.addEvent passes a 0% policy.
         this.discountPolicy = discountPolicy;
         checkInvariants();
     }
@@ -441,7 +441,7 @@ public class Event implements InvariantChecked {
      * @return the new zone's id
      * @throws UnauthorizedActionException    if another company asks
      * @throws BusinessRuleViolationException if the event has no venue map, or the name is too long (its
-     *                                        message is shown to the user)
+     *                                        message is written for the user)
      * @throws IllegalArgumentException       if another zone already has the name
      * @throws IllegalStateException          if the event is past SCHEDULED, or the name, capacity or price
      *                                        breaks the zone's invariants
@@ -471,7 +471,7 @@ public class Event implements InvariantChecked {
      * @return the new zone's id
      * @throws UnauthorizedActionException    if another company asks
      * @throws BusinessRuleViolationException if the event has no venue map, or the name is too long (its
-     *                                        message is shown to the user)
+     *                                        message is written for the user)
      * @throws IllegalArgumentException       if {@code seats} is null or empty, two seats share a label, or
      *                                        another zone already has the name
      * @throws IllegalStateException          if the event is past SCHEDULED, or the name or price breaks the
@@ -669,9 +669,9 @@ public class Event implements InvariantChecked {
 
 
     /**
-     * UC-19 / UC-32: moves the event from SCHEDULED to ON_SALE when a company member publishes it
-     * ({@code EventManagementService.publishEvent} or {@code changeEventStatus}). Opening the market does
-     * not call it. Does nothing when the event is already ON_SALE.
+     * UC-19: moves the event from SCHEDULED to ON_SALE when a company member publishes it
+     * ({@code EventManagementService.publishEvent} or {@code changeEventStatus}). Opening the market
+     * (UC-32) does not call it. Does nothing when the event is already ON_SALE.
      *
      * @throws InvalidStateTransitionException if the event has no venue map or the map has no zone, has no
      *                                         show date, or is in any status but SCHEDULED or ON_SALE
@@ -942,12 +942,11 @@ public class Event implements InvariantChecked {
         }
     }
 
-    /** @return the event's venue map, or {@code null} while the event is in DRAFT and none is bound */
+    /** @return the event's venue map, or {@code null} if none is bound; {@code addEvent} binds an empty map */
     public VenueMap getVenueMap() {
         return venueMap;
     }
 
-    // private getter
     private VenueMap getVenueMapOrThrow() {
         if (this.venueMap == null) {
             throw new IllegalStateException("Venue map must be initialized first");
@@ -988,7 +987,7 @@ public class Event implements InvariantChecked {
      *
      * @param context the purchase to check
      * @throws IllegalArgumentException if {@code context} is {@code null}
-     * @throws IllegalStateException    if the policy is not satisfied; its message is shown to the user
+     * @throws IllegalStateException    if the policy is not satisfied; its message is written for the user
      */
     public void validatePurchasePolicy(PurchaseContext context) {
         if (context == null) {
@@ -1006,7 +1005,8 @@ public class Event implements InvariantChecked {
 
     /**
      * Checks a purchase against the effective purchase policy: the supplied company policy AND this
-     * event's policy, composed into one {@link AndPurchasePolicy}. Both must hold.
+     * event's policy, composed into one {@link AndPurchasePolicy}. Both must hold; a rejection's message
+     * names only the rules the context breaks.
      *
      * @param companyPolicy the owning company's policy, or {@code null} for none
      * @param context       the purchase to check
