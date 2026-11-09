@@ -10,8 +10,8 @@ import com.ticketing.system.identity.domain.User;
 /**
  * Spring Data JPA repository for {@link User} — the auto-implemented SQL backing
  * {@link JpaUserRepository}. The application layer never sees this type; it depends only on
- * the {@code UserRepository} domain port. Company appointments are no longer owned by the user
- * (task #20); they persist through the separate {@code SpringDataCompanyAppointmentRepository}.
+ * the {@code UserRepository} domain port. Company appointments are no longer owned by the user;
+ * they persist through the separate {@code SpringDataCompanyAppointmentRepository}.
  */
 public interface SpringDataUserRepository extends JpaRepository<User, Integer> {
 

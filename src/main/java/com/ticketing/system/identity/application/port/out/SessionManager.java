@@ -46,7 +46,7 @@ public interface SessionManager {
     String generateTokenForSession(Session session, String username);
 
     /**
-     * Admin sign-in (#290): saves an Admin session row and issues a JWT for it that carries the
+     * Admin sign-in (upstream#290): saves an Admin session row and issues a JWT for it that carries the
      * ADMIN role claim, so no member reader accepts it and no admin reader accepts a member token.
      */
     String generateAdminToken(int adminId, String username);

@@ -30,7 +30,7 @@ import com.ticketing.system.sales.domain.TransactionRecord;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Member-initiated refund of one owned order (I.3.3 / #64, #284). The owner/admin side of refunds
+ * Member-initiated refund of one owned order (I.3.3 / upstream#64, upstream#284). The owner/admin side of refunds
  * lives elsewhere ({@code EventManagementService#cancelEventAndRefund} in catalog); this is the buyer's
  * "Request refund" path from {@code ReceiptView} / {@code MyAccountView}.
  *
@@ -41,7 +41,7 @@ import lombok.extern.slf4j.Slf4j;
  * with any line already refunded or claimed by an event-cancellation refund is not eligible (#20).
  * It deliberately dispatches <strong>no</strong>
  * notification — real-time notifications (I.5) are a Grade ג' V2 exemption, which also keeps this
- * flow clear of the unimplemented {@code NotificationDispatchService.dispatchFromEvent} (#304).
+ * flow clear of the unimplemented {@code NotificationDispatchService.dispatchFromEvent} (upstream#304).
  *
  * <p>Throws typed domain exceptions; the presenter translates them into UI outcomes.
  */
@@ -57,7 +57,7 @@ public class RefundService {
     private final InventoryCommandPort inventoryPort;
     // Programmatic transaction for the refund critical section: it must hold a real row lock on the
     // receipt (SELECT … FOR UPDATE) across the eligibility check + gateway refund + receipt flip so a
-    // double-click can't refund twice (#410). The gateway-first call runs inside it by design. Always a new
+    // double-click can't refund twice (upstream#410). The gateway-first call runs inside it by design. Always a new
     // transaction: joined to a caller's, that caller's later rollback would undo the receipt's REFUNDED after
     // the gateway has paid the money back, and a retry would refund again.
     private final TransactionTemplate transactionTemplate;
@@ -125,7 +125,7 @@ public class RefundService {
         // row lock on the receipt. orderReceiptRepository.lockForUpdate takes a real SELECT … FOR UPDATE
         // under jpa (and a real lock under the in-memory repo), held until this transaction commits.
         // Without it, two concurrent requests (double-click / retry) could both pass the eligibility check
-        // and both call paymentGateway.refund() — refunding the buyer twice (#410). The loser blocks on the
+        // and both call paymentGateway.refund() — refunding the buyer twice (upstream#410). The loser blocks on the
         // lock, then sees the refunded lines and bails before any second gateway call. The slow WSEP refund
         // runs inside this section by design (gateway-first: never mark refunded while the gateway
         // disagrees); refunds are low-frequency, so holding the row lock across it is acceptable.

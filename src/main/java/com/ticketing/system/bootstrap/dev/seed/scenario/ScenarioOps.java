@@ -378,7 +378,7 @@ public final class ScenarioOps {
         eventService.cancelEventAndRefund(ctx.token(by), ctx.eventId(eventAlias));
     }
 
-    // -- messaging (via #334) --------------------------------------------
+    // -- messaging (via upstream#334) --------------------------------------------
 
     private void contactCompany(ScenarioCommand cmd, ScenarioContext ctx) {
         String from = cmd.requirePos(0, "member alias");

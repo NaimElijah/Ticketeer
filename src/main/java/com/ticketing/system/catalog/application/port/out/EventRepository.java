@@ -105,7 +105,7 @@ public interface EventRepository extends IRepository<Event, Integer> {
     List<Event> findByStatus(EventStatus status);
 
     /**
-     * #372: loads every event, for the integrity scan, which re-checks each loaded event's invariants
+     * upstream#372: loads every event, for the integrity scan, which re-checks each loaded event's invariants
      * and, in {@code SystemIntegrityVerifier.verifyInventoryWithinCapacity}, that no zone has more sold
      * and reserved places than its capacity.
      *

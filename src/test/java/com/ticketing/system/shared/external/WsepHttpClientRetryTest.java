@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import com.ticketing.system.shared.config.WsepProperties;
 
 /**
- * The bounded retry behind the WSEP reachability handshake (#455 / #365): a cold-starting endpoint may
+ * The bounded retry behind the WSEP reachability handshake (upstream#455 / upstream#365): a cold-starting endpoint may
  * miss early attempts but answer a later one. Exercises {@code withRetry} directly (package-private) so
  * no real HTTP is involved; backoff is 0 to keep the tests fast, except where the backoff is under test.
  */

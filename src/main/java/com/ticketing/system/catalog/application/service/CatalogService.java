@@ -75,7 +75,7 @@ public class CatalogService {
 
 
     /**
-     * UC-3: browses the catalog. Takes no credential: browsing is anonymous (auth rework #181 /
+     * UC-3: browses the catalog. Takes no credential: browsing is anonymous (auth rework upstream#181 /
      * Phase 4.3).
      *
      * @return every ON_SALE event of an ACTIVE company; empty if there are none
@@ -193,7 +193,7 @@ public class CatalogService {
 
     /**
      * UC-7: searches the catalog with filters. Open to anyone with an active session, a member or a guest
-     * (UC-3 / UC-7, auth rework #181 / Phase 4.3). When a company-rating filter is set, an event matches
+     * (UC-3 / UC-7, auth rework upstream#181 / Phase 4.3). When a company-rating filter is set, an event matches
      * only if its company's derived rating (see {@link CompanyRatings}) is within it, and a company with
      * no rating fails any such bound.
      *
@@ -316,7 +316,7 @@ public class CatalogService {
 
 
     /**
-     * V2-SEARCH-01 (#281): top-bar search across events, artists and venues. Same audience as browse and
+     * V2-SEARCH-01 (upstream#281): top-bar search across events, artists and venues. Same audience as browse and
      * search: a member or a guest. Matches the query (case-insensitive substring) over publicly visible
      * ON_SALE events from ACTIVE companies and emits typed rows ({@code EVENT}, {@code ARTIST},
      * {@code VENUE}); artists and venues are de-duplicated ignoring case. There are no dedicated artist
@@ -559,7 +559,7 @@ public class CatalogService {
 
     /**
      * UC-8: returns an event's venue map with per-seat and per-zone availability. Open to anyone with an
-     * active session, a member or a guest (UC-3 / UC-8, auth rework #181 / Phase 4.3). The map is part
+     * active session, a member or a guest (UC-3 / UC-8, auth rework upstream#181 / Phase 4.3). The map is part
      * of the event's public page, so it is hidden exactly when the page is.
      *
      * @param credential a member's session token or a guest's session id

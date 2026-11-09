@@ -50,7 +50,7 @@ public class NotificationDispatchService {
      * Central dispatch point for all notifications.
      * Persists the notification as PENDING; the polling scheduler delivers it
      * to the bell on the next tick, or a login does (see {@link #deliverPending}). Live WebSocket/SSE
-     * push (#225) will replace the scheduler path when implemented.
+     * push (#61) will replace the scheduler path when implemented.
      *
      * <p>Joins the caller's transaction when there is one, and otherwise stores the notification in its
      * own.
@@ -105,7 +105,7 @@ public class NotificationDispatchService {
      * <p>Deliberately NOT part of a surrounding transaction: NOT_SUPPORTED suspends any caller's tx, so
      * each pending notification is delivered + persisted on its own repository transaction. One failed
      * push — or a mid-flush error — can't roll back the others. Login calls this only after its own
-     * TransactionTemplate commits. Per-item by design (Eval 5 acceptance #1's documented exception).
+     * TransactionTemplate commits. Per-item by design (Eval 5 acceptance item 1's documented exception).
      *
      * <p>Two callers can deliver the same row at once, such as a poll on one device and a login on
      * another, or a click can mark it read meanwhile. A save that loses that {@code @Version} race is

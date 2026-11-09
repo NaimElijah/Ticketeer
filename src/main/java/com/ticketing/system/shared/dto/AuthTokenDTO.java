@@ -2,7 +2,7 @@ package com.ticketing.system.shared.dto;
 
 /**
  * A signed-in session's token. Carried by {@link LoginDTO} for a member's login (UC-12) and
- * returned by {@code AuthenticationService.signInAsAdmin} for an admin (#290).
+ * returned by {@code AuthenticationService.signInAsAdmin} for an admin (upstream#290).
  *
  * @param token                the session token, which is the session's credential; {@link #toString()}
  *                             leaves it out

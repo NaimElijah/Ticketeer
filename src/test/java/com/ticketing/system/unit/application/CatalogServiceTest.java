@@ -535,7 +535,7 @@ class CatalogServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // #272 / UC-8: getEventDetail (public single-event read for the buyer page)
+    // upstream#272 / UC-8: getEventDetail (public single-event read for the buyer page)
     // -------------------------------------------------------------------------
 
     // getEventDetail returns the full detail (incl. lineup) for an ON_SALE event of
@@ -697,7 +697,7 @@ class CatalogServiceTest {
     // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
-    // V2-SEARCH-01 (#281): top-bar search across events + artists + venues
+    // V2-SEARCH-01 (upstream#281): top-bar search across events + artists + venues
     // -------------------------------------------------------------------------
 
     // A minimal ON_SALE event for search: name, company, artists, and a venue at

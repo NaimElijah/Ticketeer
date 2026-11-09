@@ -154,7 +154,7 @@ public class WsepHttpClient {
      * {@code issue_ticket} / {@code refund}: those are non-idempotent and a blind retry could
      * double-charge or double-issue. The retry lets a cold-starting WSEP endpoint (a free-tier host
      * that sleeps when idle) wake on an early attempt and answer on a later one, instead of failing
-     * the market open at boot (#455 / #365).
+     * the market open at boot (upstream#455 / upstream#365).
      */
     public String postWithRetry(Form form) {
         return withRetry(() -> post(form));

@@ -77,7 +77,7 @@ public class CompanyManagementServiceTest {
         private SessionManager sessionManager;
         private CompanyManagementService companyService;
         // Real membership service over an in-memory appointment repo — appointments were promoted off the
-        // User aggregate (task #20), so seeding and appointment queries go through this instead of User.
+        // User aggregate, so seeding and appointment queries go through this instead of User.
         private CompanyMembershipService membershipService;
         // Outbound port to catalog's active-event count (replaces the former direct EventRepository read).
         private CompanyEventStatsPort companyEventStatsPort;
@@ -1009,7 +1009,7 @@ public class CompanyManagementServiceTest {
                 assertEquals(List.of(Permission.MANAGE_INVENTORY), manager2Node.grantedPermissions());
         }
 
-        // -- #264: roster read queries ---------------------------------------
+        // -- upstream#264: roster read queries ---------------------------------------
 
         @Test
         public void GivenActiveManager_WhenListManagers_ThenManagerAppearsInRoster() {

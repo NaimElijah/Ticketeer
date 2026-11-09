@@ -35,7 +35,7 @@ import com.ticketing.system.sales.domain.ReceiptLine;
 import com.ticketing.system.ui.presenters.company.CompanySalesPresenter;
 
 /**
- * Issue #430 [Eval 9] — after a purchase the sale must appear in the owner's sales report. These
+ * Issue upstream#430 [Eval 9] — after a purchase the sale must appear in the owner's sales report. These
  * tests save receipts straight to the receipt repository, with the owner as the buyer, rather than
  * buying through checkout, and drive the exact path the {@code owner/sales} view uses
  * ({@link CompanySalesPresenter#load}): a receipt saved after one {@code load()} shows up on the

@@ -91,7 +91,7 @@ public class EventManagementService {
     // orphaning sales records — keeps catalog free of any sales import.
     private final EventSalesHistoryPort eventSalesHistoryPort;
     private final UserRepository userRepository;
-    // Company-membership/authorization checks moved off the User aggregate (task #20); catalog already
+    // Company-membership/authorization checks moved off the User aggregate; catalog already
     // depends on organization, so this downward edge is allowed.
     private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context domain/integration events. On cancel it emits an

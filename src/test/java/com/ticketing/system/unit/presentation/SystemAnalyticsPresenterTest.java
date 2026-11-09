@@ -35,7 +35,7 @@ import com.ticketing.system.shared.exception.BusinessRuleViolationException;
 import jakarta.persistence.PersistenceException;
 
 /**
- * Unit tests for {@link SystemAnalyticsPresenter} (UC-46 / #43, #279). Both
+ * Unit tests for {@link SystemAnalyticsPresenter} (UC-46 / upstream#43, upstream#279). Both
  * application services are mocked; the tests assert the sealed-outcome mapping
  * the view switches on, including the null-token and domain-exception paths.
  */

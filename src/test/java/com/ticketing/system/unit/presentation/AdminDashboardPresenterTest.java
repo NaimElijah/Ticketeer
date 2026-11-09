@@ -18,7 +18,7 @@ import com.ticketing.system.ui.session.MapBackedVaadinSession;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * Unit tests for {@link AdminDashboardPresenter} (#279). The analytics service is mocked; the
+ * Unit tests for {@link AdminDashboardPresenter} (upstream#279). The analytics service is mocked; the
  * tests assert the sealed-outcome mapping the admin landing view switches on.
  */
 class AdminDashboardPresenterTest {

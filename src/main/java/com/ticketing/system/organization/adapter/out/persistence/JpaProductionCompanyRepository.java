@@ -23,7 +23,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops (concurrency via {@code @Version}).
  * {@code save}/{@code updateCompany} delegate to {@code data.save} under {@code @Version} and are
- * {@code @Transactional} so the adapter also works outside a service transaction (#359).
+ * {@code @Transactional} so the adapter also works outside a service transaction (upstream#359).
  * {@link #nextId()} keeps the assigned-id design but seeds an in-memory counter
  * from {@code max(companyId)} on first use, so ids survive a restart on a persistent database.
  */

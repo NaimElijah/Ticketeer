@@ -32,7 +32,7 @@ import jakarta.annotation.security.PermitAll;
 import java.time.format.DateTimeFormatter;
 
 /**
- * System Analytics dashboard (UC-46 / #43, #279). Admin-only page reached from
+ * System Analytics dashboard (UC-46 / upstream#43, upstream#279). Admin-only page reached from
  * the "System Analytics" link in the platform-admin navigation. Shows the trading-market
  * status with Open / Close controls, plus live platform performance metrics
  * (visitor entry/exit, registrations, reservation/purchase rate and throughput).

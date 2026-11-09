@@ -14,7 +14,7 @@ import com.ticketing.system.shared.exception.UnauthorizedActionException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * Presenter for the member "Request refund" action (#284), shared by {@code ReceiptView} and
+ * Presenter for the member "Request refund" action (upstream#284), shared by {@code ReceiptView} and
  * {@code MyAccountView}. Vaadin-free; calls {@link RefundService} and returns a sealed
  * {@link Outcome} the view switches on. The view passes the member token
  * ({@code SessionIdentity.memberToken()}). An order that belongs to another account gives the same

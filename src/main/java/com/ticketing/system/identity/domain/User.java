@@ -20,7 +20,7 @@ import jakarta.persistence.Version;
  * invariants.
  *
  * <p>The user holds no company appointments and imports nothing from {@code organization}: those
- * belong to the {@code organization} context's {@code CompanyAppointment} aggregate (task #20).
+ * belong to the {@code organization} context's {@code CompanyAppointment} aggregate.
  */
 @Entity
 @Table(name = "users",

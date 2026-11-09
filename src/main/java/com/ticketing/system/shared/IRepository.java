@@ -57,7 +57,7 @@ package com.ticketing.system.shared;
  *       The exception is {@code JpaOrderReceiptRepository}, whose
  *       {@code lockForUpdate} takes a real pessimistic
  *       {@code SELECT ... FOR UPDATE} row lock so two concurrent refunds of one
- *       receipt cannot both reach the payment gateway (#410).</li>
+ *       receipt cannot both reach the payment gateway (upstream#410).</li>
  * </ul>
  *
  * <p><b>Always pair lockForUpdate with unlock in a try/finally.</b>

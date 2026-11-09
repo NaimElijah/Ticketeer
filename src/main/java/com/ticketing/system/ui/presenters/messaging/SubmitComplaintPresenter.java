@@ -10,7 +10,7 @@ import com.ticketing.system.shared.exception.InvalidTokenException;
 import com.ticketing.system.ui.support.ServiceErrors;
 
 /**
- * MVP presenter for {@code SubmitComplaintView} (#267). Holds no Vaadin imports so
+ * MVP presenter for {@code SubmitComplaintView} (upstream#267). Holds no Vaadin imports so
  * the outcome → UI translation lives in the view and the service-call decision tree
  * is unit-testable in isolation (the view passes {@code AuthSession.token()} in,
  * mirroring {@code MyInvitationsPresenter}).

@@ -11,7 +11,7 @@ import com.ticketing.system.ui.session.RecentSearches;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Presenter for the top-bar search (V2-SEARCH-01 / #281). Vaadin-free; backs the live
+ * Presenter for the top-bar search (V2-SEARCH-01 / upstream#281). Vaadin-free; backs the live
  * {@code LkSearchPanel}. Unlike {@code BrowseEventsPresenter}, which returns a {@code ListOutcome},
  * this returns a plain list and degrades to empty on failure: a debounced live search renders its
  * own empty / zero-results states, so a failed query reads as no results.

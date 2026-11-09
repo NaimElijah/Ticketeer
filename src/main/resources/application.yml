@@ -67,7 +67,7 @@ session:
   member-ttl-minutes: ${SESSION_MEMBER_TTL_MINUTES:1440}
   guest-idle-timeout-minutes: ${SESSION_GUEST_IDLE_TIMEOUT_MINUTES:30}
 
-# Brute-force lock-after-N policy (SLR.2 #148) for member + admin sign-in.
+# Brute-force lock-after-N policy (SLR.2 upstream#148) for member + admin sign-in.
 # max-attempts: 0 disables the lockout entirely.
 auth:
   lockout:
@@ -99,7 +99,7 @@ catalog:
     max-seats-per-map: ${CATALOG_VENUE_MAX_SEATS_PER_MAP:100000}
 
 
-# System Analytics dashboard (UC-46 / #43, #279).
+# System Analytics dashboard (UC-46 / upstream#43, upstream#279).
 #  - rate-window-minutes: trailing window the per-minute rates are computed over;
 #    at most 120, the longest window the metrics answer (ISystemMetrics.MAX_WINDOW_MINUTES).
 #  - refresh-interval-ms: how often the dashboard auto-refreshes its KPIs in the
@@ -149,7 +149,7 @@ wsep:
   base-url: ${WSEP_BASE_URL:https://damp-lynna-wsep-1984852e.koyeb.app/}
   request-timeout-seconds: ${WSEP_REQUEST_TIMEOUT_SECONDS:20}
   # The reachability handshake is retried (idempotent) so a cold-starting WSEP host doesn't leave the
-  # market closed at boot (#455/#365). pay/issue/refund are never retried (non-idempotent).
+  # market closed at boot (upstream#455/upstream#365). pay/issue/refund are never retried (non-idempotent).
   handshake-attempts: ${WSEP_HANDSHAKE_ATTEMPTS:3}
   handshake-backoff-ms: ${WSEP_HANDSHAKE_BACKOFF_MS:1000}
 

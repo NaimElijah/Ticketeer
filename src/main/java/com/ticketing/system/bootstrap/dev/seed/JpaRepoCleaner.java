@@ -19,7 +19,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The database wipe behind {@code seed.mode=wipe}/{@code reset} (#366), active wherever the Jpa
+ * The database wipe behind {@code seed.mode=wipe}/{@code reset} (upstream#366), active wherever the Jpa
  * repository adapters are (dev's H2 and the Supabase Postgres alike).
  *
  * <p>{@code deleteAll()} per aggregate root removes the root rows and cascades to their owned

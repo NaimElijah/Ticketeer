@@ -92,7 +92,7 @@ class JpaOrderReceiptRepositoryContractTest extends IOrderReceiptRepositoryContr
     }
 
     // Unlike every other Jpa adapter's, this lockForUpdate takes a real row lock (SELECT ... FOR UPDATE,
-    // #410) that lasts until the caller's transaction ends, so two refunds of one receipt cannot both reach
+    // upstream#410) that lasts until the caller's transaction ends, so two refunds of one receipt cannot both reach
     // the gateway. Meanwhile another transaction's write of the row waits, and gives up with a
     // QueryTimeoutException: on H2 at its own lock timeout (error 50200, 2 s by default), on PostgreSQL,
     // which sets no lock timeout, when the 1 s statement timeout cancels it (SQL state 57014). Outside

@@ -45,7 +45,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Boots the system from an editable scenario file (#366). Reads {@code seed.scenario}, parses it, and
+ * Boots the system from an editable scenario file (upstream#366). Reads {@code seed.scenario}, parses it, and
  * runs each line through the real application services via {@link ScenarioOps}, classifying every step
  * in a {@link SeedReport}. Because each line is a real service call, the run doubles as a smoke test.
  *

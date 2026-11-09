@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * Vaadin imports; the view debounces input and renders the typed
  * outcome.
  *
- * <p>Mirrors the pattern set by {@code LoginPresenter} (PR #299): a
+ * <p>Mirrors the pattern set by {@code LoginPresenter} (PR upstream#299): a
  * sealed {@link Outcome} hierarchy with one variant per user-facing
  * state. Order of checks matters — empty / format / reserved /
  * existence — so the view always shows the most specific feedback

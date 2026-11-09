@@ -308,7 +308,11 @@ through a pull request. A release is a separate promotion PR from `dev` to `main
 
 Code and Javadoc carry requirement IDs (`UC-10`, `II.2.8`, `SLR.1`). They are defined in
 [requirements.md](docs/requirements/requirements.md), which also names the class and test that
-enforce each requirement. Preserve them when editing.
+enforce each requirement. Preserve them when editing. A `#n` that names a ticket in code or Javadoc
+is an issue in this repository, and a labelled number such as `§1 #8` is a business rule;
+`upstream#n`, like a code such as `V3-INIT-02`, refers to
+[event-ticket-system](https://github.com/AdamSimkinbgu/event-ticket-system), the project this one
+continues.
 
 To boot into a different state, point `seed.scenario` at your own `.scenario` file; the format is
 in [SEED.md](SEED.md#scenario-file-format):
