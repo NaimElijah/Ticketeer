@@ -11,8 +11,7 @@ import com.ticketing.system.organization.application.port.out.CompanyEventStatsP
  * Catalog-side implementation of {@link CompanyEventStatsPort}: answers organization's
  * active-event-count question by reading catalog's own {@link EventRepository}. Living in
  * {@code catalog} keeps the catalog→organization arrow (catalog depends on the organization port),
- * so organization never depends on catalog. Behaviour moved verbatim from
- * {@code CompanyManagementService.countActiveEvents}.
+ * so organization never depends on catalog.
  */
 @Component
 public class CompanyEventStatsAdapter implements CompanyEventStatsPort {
@@ -26,20 +25,20 @@ public class CompanyEventStatsAdapter implements CompanyEventStatsPort {
      * @param eventRepository catalog port used to look up a company's events
      */
     public CompanyEventStatsAdapter(EventRepository eventRepository) {
-        this.eventRepository = eventRepository; // keep the port for the count query below
+        this.eventRepository = eventRepository;
     }
 
     /** {@inheritDoc} */
     @Override
     public int countActiveEvents(int companyId) {
-        int count = 0;                                              // running tally of active events
-        for (Event event : eventRepository.findByCompanyId(companyId)) { // every event owned by the company
-            EventStatus status = event.getStatus();                // its lifecycle status
+        int count = 0;
+        for (Event event : eventRepository.findByCompanyId(companyId)) {
+            EventStatus status = event.getStatus();
             // "Active" = scheduled, currently on sale, or sold out (excludes drafts/cancelled/ended).
             if (status == EventStatus.ON_SALE || status == EventStatus.SCHEDULED || status == EventStatus.SOLD_OUT) {
-                count++;                                            // count this event towards the total
+                count++;
             }
         }
-        return count;                                              // number of active events for the company
+        return count;
     }
 }

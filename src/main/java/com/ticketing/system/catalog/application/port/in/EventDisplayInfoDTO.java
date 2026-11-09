@@ -8,8 +8,9 @@ import java.util.List;
  *
  * <p>Lets read-model mappers in other contexts (e.g. sales' {@code OrderReceiptMapper}) resolve
  * human-readable event, zone, venue, and company references for purchase-history views without ever
- * importing a {@code catalog.domain} type. Every field is a primitive/String/record already flattened
- * at the catalog boundary; a {@code null} field means the underlying value was absent.
+ * importing a {@code catalog.domain} type. Every field is a primitive, String, {@code ZonedDateTime},
+ * list or record already flattened at the catalog boundary; a {@code null} field means the underlying
+ * value was absent.
  *
  * @param eventId       the event id
  * @param eventName     the event's display name, or {@code null} if unknown

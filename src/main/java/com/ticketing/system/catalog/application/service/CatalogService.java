@@ -35,7 +35,7 @@ import com.ticketing.system.catalog.application.port.out.EventRepository;
 // Read-side service for guest- and visitor-facing catalog queries.
 // Owns UC-3 (Browse Events as Guest), UC-7 (Browse + Search Catalogs), UC-8 (View Venue Map + Inventory).
 // Separated from EventManagementService (which is owner-side / write-heavy) so the two audiences
-// don't share an API surface — see design_walkthrough_summary.md §6.
+// don't share an API surface.
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,15 +53,15 @@ public class CatalogService {
             EventRepository eventRepository,
             ProductionCompanyRepository productionCompanyRepository
     ) {
-        this.sessionManager = sessionManager;                                   // read-side session/credential validation
-        this.eventRepository = eventRepository;                                 // catalog event queries
-        this.productionCompanyRepository = productionCompanyRepository;         // company visibility/rating lookups
+        this.sessionManager = sessionManager;
+        this.eventRepository = eventRepository;
+        this.productionCompanyRepository = productionCompanyRepository;
     }
 
 
 
-    //* UC-3: Browse the catalog, returning a list of EventSummaryDTOs. Accepts either a JWT (Member) or a raw sessionId (Guest) — catalog 
-    //* browsing is open to anyone with an active session per UC-3 / UC-7 (auth rework #181 / Phase 4.3).
+    //* UC-3: Browse the catalog, returning a list of EventSummaryDTOs. Takes no credential: browsing is
+    //* anonymous (auth rework #181 / Phase 4.3).
     public List<EventSummaryDTO> browseEventCatalog() {
         EventMapper mapper = new EventMapper();
         // Return all events that are ON_SALE and associated with an ACTIVE company.
@@ -242,7 +242,7 @@ public class CatalogService {
             if (event.getCompanyId() != companyId) {
                 continue;
             }
-            // Check if the event is associated with an active company and is publicly visible (ON_SALE). this check is 
+            // The event's company must still be active for the event to be publicly visible.
             ProductionCompany company = activeCompanyOrNull(event.getCompanyId());
             if (!isCompanyPubliclyVisible(company)) {
                 continue;

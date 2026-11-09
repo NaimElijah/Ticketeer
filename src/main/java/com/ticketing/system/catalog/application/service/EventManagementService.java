@@ -91,17 +91,17 @@ public class EventManagementService {
             ApplicationEventPublisher eventPublisher,
             Clock clock,
             VenueLimitsProperties venueLimits) {
-        this.eventRepository = eventRepository;                 // catalog event persistence/locking
-        this.companyRepository = companyRepository;             // company lookups for auth/ownership
-        this.sessionManager = sessionManager;                   // token validation/user-id extraction
-        this.eventSalesHistoryPort = eventSalesHistoryPort;     // sales-history guard for deleteEvent
-        this.userRepository = userRepository;                   // caller existence checks
-        this.companyMembershipService = companyMembershipService; // company-membership permission checks
-        this.eventPublisher = eventPublisher;                   // cross-context event publishing
-        this.clock = clock;                                     // "now" for the schedule precondition
-        this.venueLimits = venueLimits;                         // venue size caps (OQ-27)
-        this.currentVenueMapIdCounter = 0; // Initialize the venue map ID counter, change the counter to be internal but
-                                           // here for now.
+        this.eventRepository = eventRepository;
+        this.companyRepository = companyRepository;
+        this.sessionManager = sessionManager;
+        this.eventSalesHistoryPort = eventSalesHistoryPort;
+        this.userRepository = userRepository;
+        this.companyMembershipService = companyMembershipService;
+        this.eventPublisher = eventPublisher;
+        this.clock = clock;
+        this.venueLimits = venueLimits;
+        // Not read anywhere: venue map ids come from EventRepository.nextVenueMapId().
+        this.currentVenueMapIdCounter = 0;
     }
 
     // Flow:
@@ -628,13 +628,9 @@ public class EventManagementService {
         }
     }
 
-    // *
-    // * removeSeatRowFromSeatedZone is a helper function that allows the
-    // owner/manager to remove an entire row of seats from a seated zone.
-    // * It takes the row label and constructs the list of seat labels to remove
-    // based on the existing seat layout in the zone.
-    // * This ensures that all seats in the specified row are removed consistently.
-    // */
+    // removeSeatRowFromSeatedZone lets the owner/manager remove a row of seats from a seated zone. The
+    // caller names the row's seat labels; this method does not look them up, and it removes the labels
+    // all or none, as removeSeatsFromSeatedZone does.
     @Transactional
     public void removeSeatRowFromSeatedZone(
             String token,
@@ -953,7 +949,7 @@ public class EventManagementService {
     // call outside them (V3-TX-02, ADR-001). Calling this again on a CANCELED event republishes the
     // event, which resumes the refunds a failure interrupted (#20).
     public void cancelEventAndRefund(String token, int eventId) {
-        int ownerId = validateTokenAndGetUserId(token);                        // authenticate + resolve caller
+        int ownerId = validateTokenAndGetUserId(token);
         // We lock the event for update to prevent concurrent modifications during the
         // cancellation process. This ensures that we have a consistent view of the event's state.
         eventRepository.lockForUpdate(eventId);
@@ -963,13 +959,13 @@ public class EventManagementService {
         // service logs its own refund failures. The presenter shows a DomainException's message unlogged.
         try {
             Event event = eventRepository.findById(eventId); // throws if not found, which is what we want here.
-            User user = userRepository.getUserById(ownerId);                   // load caller for permission check
+            User user = userRepository.getUserById(ownerId);
             companyMembershipService.requirePermissionInCompany(user.getUserId(),event.getCompanyId(), Permission.MANAGE_INVENTORY);
 
             if (event.getStatus() != EventStatus.CANCELED) {
                 // Soft cancel: keep the event for history/reporting while blocking future purchases.
                 event.transitionToCanceled("Event canceled by owner");
-                eventRepository.save(event);                                   // persist the CANCELED state
+                eventRepository.save(event);
             }
 
             // Hand the sales-side work (refunds, ticket voiding, holder notifications) to the sales
@@ -984,7 +980,7 @@ public class EventManagementService {
             log.warn("Event {} not found for cancellation", eventId);
             throw e;
         } finally {
-            eventRepository.unlock(eventId);                                   // always release the lock
+            eventRepository.unlock(eventId);
         }
     }
 

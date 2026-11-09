@@ -31,7 +31,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * lock, which a sale holds so a cancel waits for it (ADR-015); checkout Phase 3 also runs again after
  * a lost race ({@code CheckoutService.runPhase3}).
  *
- * <p>{@code searchAll}/{@code searchONSALE} push the 18-filter catalogue search down into a Criteria
+ * <p>The search methods push the catalogue search's filters down into a Criteria
  * {@link Specification} (see {@link EventSearchSpecification}). {@code nextId}/{@code nextVenueMapId}
  * seed in-memory counters from the current max ids so they survive a restart.
  */

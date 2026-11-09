@@ -36,8 +36,8 @@ public interface EventRepository extends IRepository<Event, Integer> {
      * Shared lifecycle lock for buyer inventory operations.
      *
      * Many buyers may hold this lock for the same event at the same time.
-     * It blocks structural/event-lifecycle writes such as venue editing, policy changes,
-     * cancellation, publishing, etc.
+     * On the in-memory adapter it blocks structural/event-lifecycle writes such as venue editing,
+     * policy changes, cancellation, publishing, etc. On the Jpa adapter it is a no-op.
      *
      * Actual inventory correctness is still protected by StandingZone / SeatedZone locks.
      */
@@ -54,13 +54,14 @@ public interface EventRepository extends IRepository<Event, Integer> {
     // UC-3 / UC-22 — fast id-only projection (avoids loading full Event aggregates).
     List<Integer> findIdsByCompany(int companyId);
 
-    // UC-3 / UC-7 — public catalog uses ON_SALE + active company filter.
+    // UC-3 / UC-7 — a company's ON_SALE events, for the public catalog. Whether the company is active is
+    // the caller's check.
     List<Event> findActiveByCompany(int companyId);
 
     // UC-3 / UC-19 — events grouped by lifecycle state.
     List<Event> findByStatus(EventStatus status);
 
-    // #372 — full enumeration for the boot-time integrity scan (sellable <= inventory).
+    // #372 — full enumeration for the integrity scan, which re-checks each loaded event's invariants.
     List<Event> findAll();
 
     /**

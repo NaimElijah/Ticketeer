@@ -106,8 +106,8 @@ public class Event implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Event() { }
 
-    // Description-less constructor — kept for existing callers/tests. Delegates with a null
-    // description (description is optional and carries no invariant).
+    // Description-less constructor: no production code calls it. Delegates with a null description
+    // (description is optional and carries no invariant).
     public Event(int id, String name, Double rating, List<String> artistsNames, EventCategory category, int comapnyid,
             EventStatus status, VenueMap venueMap, List<ShowDate> showDates, ZoneId timeZone,
             PurchasePolicy PurchasePolicy, DiscountPolicy discountPolicy) {
@@ -141,9 +141,8 @@ public class Event implements InvariantChecked {
         this.timeZone = timeZone;
         // purchasePolicy defaults to NoPurchasePolicy when not supplied.
         this.purchasePolicy = PurchasePolicy == null ? new NoPurchasePolicy() : PurchasePolicy;
-        // Discount Policies are not currently in the implementation plan so in the creation of the event we manually,
-        // without outside intervention, set the discount to 0, not doing any discount automatically without the ability to
-        // change this from the outside right now.
+        // Stored as given; checkInvariants refuses null. Discounts are not in the implementation plan, so
+        // EventManagementService.addEvent passes a 0% policy.
         this.discountPolicy = discountPolicy;
         checkInvariants();
     }
@@ -276,8 +275,8 @@ public class Event implements InvariantChecked {
      * @param incomingCompanyId the company asking
      * @throws UnauthorizedActionException if another company asks
      * @throws IllegalArgumentException    if {@code venueMap} is null
-     * @throws IllegalStateException       if tickets are reserved or sold, or if the event is SCHEDULED and
-     *                                     the new map has no zone
+     * @throws IllegalStateException       if the event is past SCHEDULED, if tickets are reserved or sold, or
+     *                                     if the event is SCHEDULED and the new map has no zone
      */
     public void configureVenueMap(VenueMap venueMap, int incomingCompanyId) {
         if (comapnyid != incomingCompanyId) {
@@ -446,8 +445,9 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-20 — DRAFT -> SCHEDULED once a venue map with inventory is bound (tickets pre-generated).
-    // Auto-fired from configureVenueMap; safe to call directly (idempotent when already SCHEDULED).
+    // UC-20 — DRAFT -> SCHEDULED once a venue map with inventory is bound. Creates no tickets: a ticket
+    // is created at checkout. Auto-fired from configureVenueMap; safe to call directly (idempotent when
+    // already SCHEDULED).
     public void transitionToScheduled() {
         if (status == EventStatus.SCHEDULED) {
             return;
@@ -466,7 +466,8 @@ public class Event implements InvariantChecked {
     }
 
 
-    // UC-19 / UC-32 — SCHEDULED -> ON_SALE when admin opens or owner publishes.
+    // UC-19 / UC-32 — SCHEDULED -> ON_SALE when a company member publishes the event
+    // (EventManagementService.publishEvent or changeEventStatus). Opening the market does not call it.
     public void transitionToOnSale() {
         if (status == EventStatus.ON_SALE) {
             return;
@@ -492,7 +493,9 @@ public class Event implements InvariantChecked {
 
 
 
-    // UC-19 — soft cancel; fires EventCancelled event for UC-4.
+    // UC-19 — soft cancel, idempotent when already CANCELED; refused for a COMPLETED event. It only flips
+    // the status and ignores `reason`: EventManagementService.cancelEventAndRefund publishes the
+    // EventCancelledEvent that starts the refunds (UC-4).
     public void transitionToCanceled(String reason) {
         if (status == EventStatus.CANCELED) {
             return;
@@ -524,7 +527,7 @@ public class Event implements InvariantChecked {
     
 
 
-    // ON_SALE -> SOLD_OUT when no AVAILABLE tickets remain.
+    // ON_SALE -> SOLD_OUT when no AVAILABLE seat or standing place remains.
     // Auto-fired from reserveInventory; safe to call directly (idempotent when already SOLD_OUT).
     public void markSoldOut() {
         // statusLock makes this read-modify-write atomic against concurrent buyer ops; reentrant when

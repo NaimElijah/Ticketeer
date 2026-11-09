@@ -30,12 +30,11 @@ import jakarta.persistence.Version;
  * mediated through {@link #getCapacity()} / {@link #getAvailableAmount()} /
  * {@link #getReservedAmount()}.
  *
- * <p>The legacy counter-based methods ({@code reserve(int)} / {@code release(int)} /
- * {@code checkAvailability(int)} / {@code setCapacity(int)}) are defined here
- * with default throwing implementations so existing callers that hold an
- * {@code InventoryZone} reference continue to work for standing zones.
- * Seated-zone callers must downcast or use the typed
- * {@link SeatedZone#reserveSeats(java.util.List)} / {@link SeatedZone#releaseSeats(java.util.List)} methods.
+ * <p>Every inventory transition ({@link #reserve}, {@link #release}, {@link #confirmSale},
+ * {@link #returnSoldToStock}) takes an {@link InventorySelection}, so a caller holding an
+ * {@code InventoryZone} reference needs no downcast. A subclass throws
+ * {@code IllegalArgumentException} for a selection of the other kind: seat labels for a standing zone,
+ * or a bare quantity for a seated zone.
  */
 // V3: JOINED inheritance — InventoryZone is the parent table, SeatedZone/StandingZone get their own
 // joined tables (keeps their NOT-NULL subclass constraints, which SINGLE_TABLE would forbid). The

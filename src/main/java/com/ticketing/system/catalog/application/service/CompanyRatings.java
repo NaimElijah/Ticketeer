@@ -26,21 +26,22 @@ public final class CompanyRatings {
      * @return the rounded mean rating, or {@code null} when there is nothing rated to average
      */
     public static Double fromEvents(Collection<Event> events) {
-        if (events == null) {                       // no events supplied → no derivable rating
+        if (events == null) {
             return null;
         }
-        double sum = 0;                             // running total of the rated events' ratings
-        int count = 0;                              // how many events actually carried a rating
-        for (Event event : events) {                // walk every event of the company
-            Double rating = event.getRating();      // an event's rating may be null (unrated)
-            if (rating != null) {                   // only rated events contribute to the mean
-                sum += rating;                      // accumulate the rating
-                count++;                            // and count it towards the divisor
+        double sum = 0;
+        int count = 0;
+        for (Event event : events) {
+            Double rating = event.getRating();
+            if (rating != null) {
+                sum += rating;
+                count++;
             }
         }
-        if (count == 0) {                           // nothing was rated → null rather than 0.0
+        // Null rather than 0.0 when nothing is rated, so a company with no rating is not read as rated zero.
+        if (count == 0) {
             return null;
         }
-        return Math.round((sum / count) * 10.0) / 10.0; // mean, rounded to one decimal place
+        return Math.round((sum / count) * 10.0) / 10.0;
     }
 }

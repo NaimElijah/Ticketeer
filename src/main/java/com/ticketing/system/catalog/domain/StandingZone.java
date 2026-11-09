@@ -16,7 +16,7 @@ import jakarta.persistence.Transient;
 /**
  * Counter-based zone — no addressable seats, just "N tickets available".
  *
- * <p>Reservations are now tracked per-order-key so that the 3-phase checkout
+ * <p>Reservations are tracked per order key so that the 3-phase checkout
  * can confirm (or release) only the portion that belongs to a specific
  * {@code ActiveOrder}, even after the event lock is released during
  * the payment/issuance phase.
@@ -203,21 +203,7 @@ public class StandingZone extends InventoryZone {
         }
     }
 
-    //? Note: for riskness reasons, we'll just ignore this and we can just use the addPlaces and removePlaces methods to adjust capacity up or down as needed.
-    // public void setStandingCapacity(int newCapacity) {
-    //     synchronized (inventoryLock) {
-    //         if (newCapacity < 0) {
-    //             throw new IllegalArgumentException("Capacity cannot be negative");
-    //         }
-
-    //         if (newCapacity < reservedAmount + soldAmount) {
-    //             throw new IllegalArgumentException("New capacity cannot be less than reserved + sold tickets");
-    //         }
-
-    //         this.capacity = newCapacity;
-    //     }
-    // }
-
+    // There is deliberately no capacity setter: capacity changes only through addPlaces and removePlaces.
     public void addPlaces(int amountToAdd) {
         // can add places without really checking, not harmful
         synchronized (inventoryLock) {

@@ -19,7 +19,7 @@ import com.ticketing.system.catalog.domain.EventStatus;
  * {@link JpaEventRepository}. The application layer never sees this type; it depends only on the
  * {@code EventRepository} domain port. The owned VenueMap / zone hierarchy / seats / element
  * collections persist by cascade with the event. {@link JpaSpecificationExecutor} backs the
- * 18-filter catalogue search (pushed down as a Criteria {@code Specification}).
+ * catalogue search (pushed down as a Criteria {@code Specification}).
  *
  * <p>The company-scoped queries reference {@code e.comapnyid} (the field name, a domain typo) via
  * explicit JPQL rather than a derived name.

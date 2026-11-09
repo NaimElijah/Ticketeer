@@ -18,7 +18,7 @@ public class EventMapper {
                 : 0;
     }
 
-    // HELPER METHOD to convert Event --> EventSummaryDTO; used in both search methods above.
+    // Converts an Event to an EventSummaryDTO, for CatalogService's browse, featured, upcoming and search results.
     public EventSummaryDTO convertEventToEventSummaryDTO(Event event, ProductionCompanyRepository productionCompanyRepository) {
         double minPrice = minZonePrice(event);
         double maxPrice = (event.getVenueMap() != null && !event.getVenueMap().getInventoryZones().isEmpty())

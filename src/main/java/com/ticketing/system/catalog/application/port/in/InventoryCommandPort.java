@@ -18,8 +18,8 @@ import com.ticketing.system.catalog.application.dto.InventorySelectionDTO;
  * buyers may hold at once and that blocks only structural/lifecycle edits. On the Jpa adapters
  * these locks are no-ops and correctness comes from JPA {@code @Version} optimistic locking, except for
  * the event row lock that {@link #validateEventsOnSale} takes for a sale (ADR-015); on the
- * in-memory adapters (test suite only) they are real reentrant read/write locks. Methods here fall into two
- * groups, and each method's Javadoc states which it is:
+ * in-memory adapters (test suite only) they are real reentrant read/write locks. Methods here fall into
+ * three groups, and each method's Javadoc states which it is:
  * <ul>
  *   <li><b>Self-locking</b> ({@link #reserve}, {@link #release}, {@link #restore},
  *       {@link #returnSoldToStock}) — the port acquires and releases the event buyer-lock internally.

@@ -1,11 +1,12 @@
 package com.ticketing.system.catalog.domain;
 
-// Lifecycle states for an Event (UC-4 / UC-19 / UC-32 design walkthrough).
+// Lifecycle states for an Event (UC-4 / UC-19 / UC-32).
 // The transitions are:
-//   DRAFT      → SCHEDULED  (UC-20: VenueMap bound, tickets pre-generated)
-//   SCHEDULED  → ON_SALE    (UC-32: market opened or per-event publish)
-//   ON_SALE    → SOLD_OUT   (no AVAILABLE tickets remain)
-//   *          → CANCELED   (UC-4 trigger for refunds)
+//   DRAFT      → SCHEDULED  (UC-20: a VenueMap with at least one zone is bound)
+//   SCHEDULED  → ON_SALE    (UC-19: the event is published; opening the market does not do it)
+//   ON_SALE    → SOLD_OUT   (no AVAILABLE seat or standing place remains)
+//   SOLD_OUT   → ON_SALE    (a seat or place frees up)
+//   any but COMPLETED → CANCELED  (UC-4 trigger for refunds)
 //   ON_SALE / SOLD_OUT → COMPLETED  (last show date passed)
 public enum EventStatus {
     DRAFT,

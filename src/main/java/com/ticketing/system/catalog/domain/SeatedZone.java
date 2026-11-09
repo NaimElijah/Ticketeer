@@ -31,8 +31,8 @@ import jakarta.persistence.Transient;
  * between two concurrent buyers picking overlapping seats.
  *
  * <p>Capacity is derived from the seat map size, not a separate field.
- * Adding/removing seats from a SeatedZone after tickets are issued, so after ON_SALE turned on is
- * intentionally not supported — cannot change zones or their internals after event goes ON_SALE.
+ * Seats are added and removed through {@link Event}, which allows it only while the event is DRAFT or
+ * SCHEDULED; {@link #removeSeats} also refuses a seat that is not AVAILABLE.
  */
 @Entity
 @DiscriminatorValue("SEATED")
@@ -142,7 +142,7 @@ public class SeatedZone extends InventoryZone {
         }
 
         List<String> sorted = validateAndSortLabels(selection.getSeatNumbers());
-        // lock the layout for reading while we acquire the individual seat locks. This prevents the layout from being modified (seats added/removed) while we are reserving seats.
+        // Lock the layout for reading while the seat locks are acquired, so no seat is added or removed meanwhile.
         layoutLock.readLock().lock();
         List<ReentrantLock> acquired = new ArrayList<>();
 
@@ -200,7 +200,7 @@ public class SeatedZone extends InventoryZone {
         String orderKey = selection.getOrderKey();
         List<String> sorted = validateAndSortLabels(selection.getSeatNumbers());
 
-        // lock the layout for reading while we acquire the individual seat locks. This prevents the layout from being modified (seats added/removed) while we are reserving seats.
+        // Lock the layout for reading while the seat locks are acquired, so no seat is added or removed meanwhile.
         layoutLock.readLock().lock();
         List<ReentrantLock> acquired = new ArrayList<>();
 
@@ -259,7 +259,7 @@ public class SeatedZone extends InventoryZone {
         String orderKey = selection.getOrderKey();
         List<String> sorted = validateAndSortLabels(selection.getSeatNumbers());
 
-        // lock the layout for reading while we acquire the individual seat locks. This prevents the layout from being modified (seats added/removed) while we are reserving seats.
+        // Lock the layout for reading while the seat locks are acquired, so no seat is added or removed meanwhile.
         layoutLock.readLock().lock();
         List<ReentrantLock> acquired = new ArrayList<>();
 
