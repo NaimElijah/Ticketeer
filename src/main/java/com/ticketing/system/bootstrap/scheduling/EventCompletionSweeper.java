@@ -33,11 +33,18 @@ public class EventCompletionSweeper {
     private final EventRepository eventRepository;
     private final Clock clock;
 
+    /**
+     * @param clock the application clock, read once per tick (ADR-008)
+     */
     public EventCompletionSweeper(EventRepository eventRepository, Clock clock) {
         this.eventRepository = eventRepository;
         this.clock = clock;
     }
 
+    /**
+     * One scheduled tick: completes the finished events as of the clock's now and logs how many it
+     * completed, when any.
+     */
     @Scheduled(fixedDelayString = "${event-completion.fixed-delay-ms:60000}")
     public void sweep() {
         int completed = completeFinishedEvents(clock.instant());

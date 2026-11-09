@@ -33,10 +33,21 @@ public class MarketOpener implements ApplicationRunner {
 
     private final SystemAdminService systemAdminService;
 
+    /**
+     * Creates the runner over the service that owns the market state.
+     *
+     * @param systemAdminService the service whose {@code ensureMarketOpen()} this runner calls
+     */
     public MarketOpener(SystemAdminService systemAdminService) {
         this.systemAdminService = systemAdminService;
     }
 
+    /**
+     * Asks the service to open the market and logs whether it did. Never stops the boot:
+     * {@code ensureMarketOpen} logs a failure and {@link MarketSelfHealScheduler} retries.
+     *
+     * @param args the application arguments, unused
+     */
     @Override
     public void run(ApplicationArguments args) {
         systemAdminService.ensureMarketOpen();

@@ -30,11 +30,11 @@ quoted and on one line, so they work in both shells.
 
 UI at `http://localhost:8080`. Dev logins: `SEED.md`, section Credentials.
 
-`seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default; runs no step when a user the scenario registers already exists, with a WARN pointing at `reset`) · `wipe` (delete, then stop) ·
+`seed.mode` (env `SEED_MODE`): `off` (default) · `reseed` (dev default; runs no step when a user the scenario registers already exists, with a WARN pointing at `reset`) · `wipe` (delete, seed nothing; the boot goes on) ·
 `reset` (wipe + reseed) · `ask`; any other value stops the boot. `wipe`/`reset` refuse unless `--seed.assume-yes=true`, and only matter
 on a persistent DB; dev's H2 is in memory, already empty on every boot. A scenario file that is missing,
 unreadable or refused by the parser (a bare `expect-error`, for one) stops the boot in every profile, before any step runs (ADR-003, [ADR-021](../docs/ADRs/ADR-021-boot-ends-admin-sessions-and-refuses-invalid-scenarios.md)). A failing scenario step stops it only while
-`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003). Outside `dev`, running a committed scenario logs a WARN that its accounts' passwords are published; nothing refuses it (#78). Full reference: `SEED.md`.
+`seed.fail-fast` (env `SEED_FAIL_FAST`) is `true`, the default outside dev (ADR-003); an `expect-error` naming no operation stops it regardless. Outside `dev`, running a committed scenario logs a WARN that its accounts' passwords are published; nothing refuses it (#78). Full reference: `SEED.md`.
 
 ## Tests and CI
 

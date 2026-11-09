@@ -28,6 +28,7 @@ public class ActiveUiRegistry implements VaadinServiceInitListener {
         });
     }
 
+    /** A snapshot of the UIs that are attached now; a UI that attaches or detaches later is not reflected. */
     public Set<UI> getActiveUIs() {
         return Set.copyOf(activeUIs);
     }

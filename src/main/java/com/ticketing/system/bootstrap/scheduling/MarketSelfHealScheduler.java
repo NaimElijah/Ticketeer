@@ -29,6 +29,11 @@ public class MarketSelfHealScheduler {
 
     private final SystemAdminService systemAdminService;
 
+    /**
+     * Creates the scheduler over the service that owns the market state.
+     *
+     * @param systemAdminService the service this scheduler asks to open the market and to probe WSEP
+     */
     public MarketSelfHealScheduler(SystemAdminService systemAdminService) {
         this.systemAdminService = systemAdminService;
     }

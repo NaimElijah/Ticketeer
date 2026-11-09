@@ -7,7 +7,7 @@ import java.util.Map;
 
 /**
  * Accumulates the outcome of every seeding step so {@code ScenarioRunner}
- * can print one classified summary at the end of a run. That summary is the
+ * can log one classified summary at the end of a run. That summary is the
  * whole point of the smoke-seed: it tells you, in a single place, which
  * real-service paths passed, which were skipped because the feature is a
  * known not-yet-built stub, and which FAILED — i.e. surfaced a real bug.
@@ -17,24 +17,47 @@ import java.util.Map;
  */
 public final class SeedReport {
 
-    public enum Status { PASS, SKIPPED, FAIL, BLOCKED }
+    /** How a seeding step ended; {@code SeedHarness} documents each case. */
+    public enum Status {
+        /** The step ran and succeeded. */
+        PASS,
+        /** The step threw {@link UnsupportedOperationException}: a known, not-yet-built feature. */
+        SKIPPED,
+        /** The step threw any other exception, or a negative assertion did not hold. */
+        FAIL,
+        /** The step was not attempted because a prerequisite failed. */
+        BLOCKED
+    }
 
+    /**
+     * One recorded step.
+     *
+     * @param stage  the report group the step belongs to
+     * @param name   the step's label
+     * @param status how the step ended
+     * @param detail why the step ended as it did; {@code ok} for a plain step's PASS, the rejected
+     *               type for a negative assertion's
+     */
     public record Entry(String stage, String name, Status status, String detail) {}
 
     private final List<Entry> entries = new ArrayList<>();
 
+    /** Appends one step's outcome. Not thread-safe: a report belongs to one seed pass. */
     public void record(String stage, String name, Status status, String detail) {
         entries.add(new Entry(stage, name, status, detail));
     }
 
+    /** The number of recorded steps that ended with {@code status}. */
     public long count(Status status) {
         return entries.stream().filter(e -> e.status() == status).count();
     }
 
+    /** Whether any recorded step is a FAIL; SKIPPED and BLOCKED steps do not count. */
     public boolean hasFailures() {
         return count(Status.FAIL) > 0;
     }
 
+    /** A snapshot of the recorded steps in recording order; later records do not change it. */
     public List<Entry> entries() {
         return List.copyOf(entries);
     }

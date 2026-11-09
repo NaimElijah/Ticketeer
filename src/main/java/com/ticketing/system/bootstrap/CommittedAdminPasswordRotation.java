@@ -17,8 +17,9 @@ import com.ticketing.system.identity.domain.Admin;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Takes the committed default password off every stored System Admin at boot, outside the {@code dev}
- * and {@code test} profiles (ADR-014).
+ * At boot, outside the {@code dev} and {@code test} profiles, replaces the committed default password
+ * of the stored default System Admin with the configured one, and stops the boot for any other admin
+ * still stored with it (ADR-014).
  *
  * <p>{@link CommittedDefaultSecretsGuard} refuses a configured {@code platform.admin.password} equal to
  * the committed default, but the default admin is created only when no admin exists. A database first
