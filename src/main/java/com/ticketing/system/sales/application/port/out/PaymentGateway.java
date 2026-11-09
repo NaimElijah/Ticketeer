@@ -4,9 +4,14 @@ import com.ticketing.system.shared.dto.PaymentRequestDTO;
 import com.ticketing.system.shared.dto.PaymentResultDTO;
 import com.ticketing.system.shared.dto.RefundResultDTO;
 
-// Port for external payment processing. Multi-provider support (I.3.2) is realized
-// in Infrastructure by injecting List<PaymentGateway>; this interface stays single.
-// Implementations live in Infrastructure/external/.
+/**
+ * Port for external payment processing. Implementations live in {@code sales.adapter.out.wsep}: the
+ * WSEP gateway outside the {@code test} profile, a stub under it.
+ *
+ * <p>Multi-provider support (I.3.2): this interface stays single, so a provider is one more bean.
+ * Governance's reachability probe takes every {@code PaymentGateway} bean; checkout and both refund
+ * paths take a single one.
+ */
 public interface PaymentGateway {
 
     // Identifies the gateway implementation (e.g. "stripe", "paypal").

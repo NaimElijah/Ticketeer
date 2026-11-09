@@ -1,7 +1,7 @@
 package com.ticketing.system.sales.adapter.out.wsep;
-import com.ticketing.system.shared.external.SensitiveDataMasker; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepCommunicationException; // transitional: shared-technical (stays in external until the Step 10 sweep)
-import com.ticketing.system.shared.external.WsepHttpClient; // transitional: shared-technical WSEP client (stays in external until the Step 10 sweep)
+import com.ticketing.system.shared.external.SensitiveDataMasker;
+import com.ticketing.system.shared.external.WsepCommunicationException;
+import com.ticketing.system.shared.external.WsepHttpClient;
 
 import java.time.Clock;
 import java.time.LocalDateTime;

@@ -25,7 +25,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 @Profile("test")
 public class StubPaymentGateway implements PaymentGateway {
-    //*Note: changed from not implemented to what's below here, can change however wanted though, it's a stub for our needs */
     private static final String GATEWAY_ID = "stub-payment-gateway";
 
     private final AtomicInteger transactionIds = new AtomicInteger(1);
@@ -44,7 +43,7 @@ public class StubPaymentGateway implements PaymentGateway {
     }
 
     // Toggleable for UC-1/UC-32 tests: lets a test simulate an unreachable provider so the
-    // initialize / open-market failure paths can be exercised. Production default: reachable.
+    // initialize / open-market failure paths can be exercised. Default: reachable.
     private volatile boolean reachable = true;
 
     public void setReachable(boolean reachable) {
@@ -118,13 +117,6 @@ public class StubPaymentGateway implements PaymentGateway {
 
     
 
-
-
-    // #################################################################################
-    //
-    // Helper methods for validating requests and comparing them for idempotency checks.
-    //
-    // #################################################################################
 
 
     private void validateChargeRequest(PaymentRequestDTO request) {

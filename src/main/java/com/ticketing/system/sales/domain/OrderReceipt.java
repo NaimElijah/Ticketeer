@@ -348,8 +348,6 @@ public class OrderReceipt implements InvariantChecked {
 
 
 
-    // Helper methods to extract specific transaction info from the list of transaction records. These are not strictly necessary but can be convenient for common queries.
-
     // For simplicity we assume there is at most one payment charge per receipt. In a real system we might want to enforce this or handle multiple charges more robustly.
     public Optional<Integer> getPaymentTransactionId() {
         return transactionRecords.stream()

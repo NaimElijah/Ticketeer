@@ -72,7 +72,7 @@ public class Ticket implements InvariantChecked {
      * Seated-zone ticket constructor — {@code seatLabel} is the label of the
      * {@link com.ticketing.system.catalog.domain.Seat} this ticket refers
      * to inside its {@link com.ticketing.system.catalog.domain.SeatedZone}.
-     * Pass {@code null} for standing-zone tickets (or use the 5-arg form).
+     * Pass {@code null} for standing-zone tickets.
      */
     public Ticket(int eventId, int zoneid, int orderReceiptId, String seatLabel, double price, int ticketId, String barcodeValue) {
         this.eventId = eventId;
@@ -82,7 +82,7 @@ public class Ticket implements InvariantChecked {
         this.ticketId = ticketId;
         this.orderReceiptId = orderReceiptId;
         this.barcodeValue = barcodeValue;
-        this.status = TicketStatus.PAID; // Default initial status, because tickets are created at payment time in the current design. Adjust as needed if creation timing changes.
+        this.status = TicketStatus.PAID; // tickets are created once they are paid for, at checkout
         this.holderUserId = null;
         checkInvariants();
     }

@@ -161,7 +161,7 @@ public class CartLineItem implements InvariantChecked {
     public CartLineDTO toDTO() {
         return new CartLineDTO(
                 eventId,
-                "Event Name Placeholder", // This should be replaced with actual event name retrieval logic
+                "Event Name Placeholder", // not the event's name: the service that shows the cart fills it in
                 zoneId,
                 seatNumber,   // seatNumber is null for standing-zone tickets
                 priceAtoneticketReservation,

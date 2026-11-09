@@ -26,8 +26,8 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * tickets ever see. {@link #nextId} seeds its sequence from {@code max(ticketId)} on first
  * use, so a restarted process never reissues an id a previous boot persisted (#19). Like the
  * other aggregates' sequences it assumes a single application instance per database.
- * {@link #save} is {@code @Transactional} so the adapter is self-sufficient before the service
- * layer gains transactions (#359); reads inherit Spring Data's read-only tx.
+ * {@link #save} is {@code @Transactional}, so it also works when no service transaction is open;
+ * reads inherit Spring Data's read-only tx.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)

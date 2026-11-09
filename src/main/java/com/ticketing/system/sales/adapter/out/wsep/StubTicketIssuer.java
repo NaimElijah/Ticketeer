@@ -20,7 +20,6 @@ import java.util.UUID;
 @Component
 @Profile("test")
 public class StubTicketIssuer implements TicketIssuer {
-    //* can change to be however wanted, this is a stub so we can do what we need with it */
     private static final String ISSUER_ID = "stub-ticket-issuer";
 
     private final Clock clock;
@@ -35,7 +34,7 @@ public class StubTicketIssuer implements TicketIssuer {
     }
 
     // Toggleable for UC-1/UC-32 tests: lets a test simulate an unreachable provider so the
-    // initialize / open-market failure paths can be exercised. Production default: reachable.
+    // initialize / open-market failure paths can be exercised. Default: reachable.
     private volatile boolean reachable = true;
 
     public void setReachable(boolean reachable) {
@@ -67,7 +66,6 @@ public class StubTicketIssuer implements TicketIssuer {
     
 
 
-    // helper method to validate the issuance request before processing. Throws TicketIssuanceFailedException if invalid.
     // Validates the issuance request for basic correctness. Throws TicketIssuanceFailedException if invalid.
     private void validateRequest(IssuanceRequestDTO request) {
         if (request == null) {

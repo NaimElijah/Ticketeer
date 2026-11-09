@@ -1,5 +1,5 @@
 package com.ticketing.system.sales.application.service;
-import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it — sales no longer imports governance)
+import com.ticketing.system.sales.application.port.out.MarketGate; // outbound port for the market-open gate (governance implements it)
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -23,8 +23,8 @@ import com.ticketing.system.shared.event.TicketReservationSucceededNotice;
 import com.ticketing.system.identity.application.port.out.SessionManager;
 import com.ticketing.system.shared.metrics.ISystemMetrics;
 import com.ticketing.system.shared.metrics.MetricType;
-// Catalog inbound port: catalog now owns all Event/InventoryZone inventory mutation, so sales'
-// application layer no longer imports any catalog.domain type — it drives inventory through this port.
+// Catalog inbound port: catalog owns all Event/InventoryZone inventory mutation, and sales' application
+// layer drives inventory through this port.
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.sales.domain.ActiveOrder;
 import com.ticketing.system.sales.domain.CartLineItem;
@@ -162,8 +162,8 @@ public class ReservationService {
             }
 
             // Policy inputs computed from the order and the buyer's identity. The effective purchase
-            // policy itself (company AND event, RESERVE stage) is enforced INSIDE the inventory port —
-            // catalog owns the event + the company policy — so sales no longer touches catalog.domain.
+            // policy itself (company AND event, RESERVE stage) is enforced INSIDE the inventory port,
+            // because catalog owns the event and the company policy.
             int totalQuantity = existingForEvent(activeOrder, eventId) + selection.getQuantity();
             Integer buyerAge = buyer.isMember() ? resolveMemberAge(buyer.userId()) : null;
             int buyerId = buyer.isMember() ? buyer.userId() : -1;
@@ -179,19 +179,17 @@ public class ReservationService {
                     holdUntil(addedAt), buyerId, buyerAge, totalQuantity);
             inventoryReserved = true;
 
-            // Now that we have successfully reserved the inventory, we can safely modify the active order to reflect the new reservation. If any of the validations for modifying the active order fail (e.g. trying to reserve more tickets than allowed by purchase policy, etc.), we will throw an exception and roll back the inventory reservation in the catch block, ensuring that we do not end up with an active order that has reservations that were not successfully made.
+            // A failure while adding the line is undone by the catch block, which releases the hold just taken.
             addOrderReservation(activeOrder, eventId, zoneId, selection, pricePerTicket, addedAt);
             orderModified = true;
 
             activeOrderRepository.save(activeOrder);
-            // Notify the member of the successful reservation. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member of their successful reservation and any details they may need (e.g. event name, zone, quantity reserved, etc.).
-            notifySuccessAfterUnlock = true;
+            notifySuccessAfterUnlock = true; // the notice goes out in the finally block, after the unlock
             systemMetrics.record(MetricType.RESERVATION);
-            // Return the reservation result, which includes details about the reservation such as event ID, zone ID, quantity reserved, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
             return buildReservationResult(eventId, zoneId, selection, addedAt);
 
         } catch (RuntimeException e) {
-            // If any exception occurs during the reservation process, we need to roll back any actions that were taken to keep our data consistent. This includes releasing any inventory that was reserved and removing any reservations that were added to the active order. We also log the error for monitoring and debugging purposes, and rethrow the exception to indicate that the reservation failed. The frontend can catch this exception and show an appropriate error message to the user (e.g. "Failed to reserve tickets: not enough availability", "Failed to reserve tickets: event not found", "Failed to reserve tickets: invalid input", etc.).
+            // Undo the cart line and the inventory hold taken so far, then rethrow the reserve's own failure.
             rollbackReservationIfNeeded(activeOrder, eventId, zoneId, selection, inventoryReserved,
                     orderModified);
 
@@ -232,7 +230,6 @@ public class ReservationService {
                 zoneId,
                 selection == null ? null : selection.getQuantity(),
                 selection == null ? null : selection.getSeatNumbers());
-        // Validate input arguments before doing anything else to fail fast on invalid input and avoid doing unnecessary work. This also ensures that we do not attempt to remove reservations for an event or zone that does not exist, which keeps our data consistent and avoids having active orders that reflect removals for events or zones that do not actually exist.
         validateReservationArguments(eventId, zoneId, selection);
 
         ActiveOrder activeOrder = null;
@@ -295,14 +292,12 @@ public class ReservationService {
 
             activeOrderRepository.save(activeOrder);
 
-            // Notify the member of the successful removal. For guests, we do not have a user ID to send notifications to, so we skip this step for guests. The notification can be used to trigger email notifications, app push notifications, etc. to inform the member of their successful reservation removal and any details they may need (e.g. event name, zone, quantity removed, etc.).
-            notifySuccessAfterUnlock = true;
+            notifySuccessAfterUnlock = true; // the notice goes out in the finally block, after the unlock
 
-            // Return the reservation result, which includes details about the removed reservation such as event ID, zone ID, quantity removed, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
             return buildReservationResult(eventId, zoneId, selection, now());
 
         } catch (RuntimeException e) {
-            // If any exception occurs during the removal process, we need to roll back any actions that were taken to keep our data consistent. This includes re-reserving any inventory that was released and re-adding any reservations that were removed from the active order. We also log the error for monitoring and debugging purposes, and rethrow the exception to indicate that the removal failed. The frontend can catch this exception and show an appropriate error message to the user (e.g. "Failed to remove reservation: reservation not found in active order", "Failed to remove reservation: event not found", "Failed to remove reservation: invalid input", etc.).
+            // Put back the inventory hold and the cart line removed so far, then rethrow the remove's own failure.
             rollbackRemoveIfNeeded(
                     activeOrder,
                     eventId,
@@ -385,8 +380,6 @@ public class ReservationService {
     // ---------------------------------------------------------------------
     // Authentication / request parsing
     // ---------------------------------------------------------------------
-
-    // Helper methods to authenticate the buyer based on the type of request (member vs guest) and extract the necessary information to create a BuyerContextDTO, which is used in the main flows to represent the buyer's context (e.g. whether they are a member or guest, their user ID if they are a member, their session ID if they are a guest, etc.). These methods also handle validation of the input tokens/session IDs and throw appropriate exceptions if the authentication fails (e.g. invalid token, expired token, missing session ID, etc.), which can be caught by the frontend to show appropriate error messages to the user.
 
     private BuyerContextDTO authenticateMember(String token) {
         return BuyerContextDTO.member(validateTokenAndGetUserId(token));
@@ -472,10 +465,10 @@ public class ReservationService {
     // helper functions - these are not part of the main flows but are used by multiple public methods, so they help keep the main flows clean and avoid code duplication.
     // ---------------------------------------------------------------------
 
-    // Event/zone existence checks and the price read now live inside the catalog inventory port
-    // (InventoryService), which owns the Event aggregate — so ReservationService no longer loads events.
+    // Event/zone existence checks and the price read happen inside the catalog inventory port
+    // (InventoryService), which owns the Event aggregate.
 
-    // For members, we get or create an active order based on their user ID. For guests, we get or create an active order based on their session ID. This method abstracts away the logic of determining whether to use user ID or session ID and ensures that we always have an active order to work with in the main flows, which simplifies the logic in those flows and keeps them focused on the reservation and removal logic rather than the details of how we manage active orders for different types of buyers.
+    // A member's cart is found by user id, a guest's by session id; a buyer with none gets a new, unsaved one.
     private ActiveOrder getOrCreateActiveOrder(BuyerContextDTO buyer) {
         if (buyer.isMember()) {
             ActiveOrder activeOrder = activeOrderRepository.getByUserId(buyer.userId());
@@ -493,7 +486,8 @@ public class ReservationService {
                 });
     }
 
-    // For members, we get the active order based on their user ID. For guests, we get the active order based on their session ID. This method abstracts away the logic of determining whether to use user ID or session ID and ensures that we can easily retrieve the active order for the buyer in the main flows, which simplifies the logic in those flows and keeps them focused on the reservation and removal logic rather than the details of how we manage active orders for different types of buyers. We also throw an exception if no active order is found for the buyer, which allows us to handle that case in the main flows (e.g. show an error message to the user if they try to remove a reservation but they do not have an active order).
+    // The buyer's existing cart, found as in getOrCreateActiveOrder; a buyer with none gets an
+    // IllegalArgumentException, whose message reaches the user.
     private ActiveOrder getActiveOrderOrThrow(BuyerContextDTO buyer) {
         if (buyer.isMember()) {
             ActiveOrder activeOrder = activeOrderRepository.getByUserId(buyer.userId());
@@ -547,7 +541,9 @@ public class ReservationService {
         }
     }
 
-    // rollback the cart if inventory release fails, and rollback inventory if the later cart/save flow fails
+    // Best-effort undo of a remove that failed after the inventory release: restores the hold, then puts the
+    // cart line back. A failing step is logged at ERROR with its exception and not rethrown, so the caller
+    // rethrows the remove's own failure.
     private void rollbackRemoveIfNeeded(ActiveOrder activeOrder, int eventId, int zoneId,
             InventorySelectionDTO selection, boolean orderModified,
             boolean inventoryReleased, double pricePerTicket) {
@@ -621,7 +617,7 @@ public class ReservationService {
         }
     }
 
-    // Helper method to build the reservation result DTO that is returned by the reserve and remove methods, which includes details about the reservation such as event ID, zone ID, quantity reserved/removed, seat numbers if applicable, and the expiration time of the reservation (based on the current time plus the configured reservation timeout). This information can be used by the frontend to show the user their current reservations and how long they have before they expire, etc.
+    // The result of a reserve or remove; its expiry is the hold that starts at holdStart.
     private ReservationResultDTO buildReservationResult(int eventId, int zoneId, InventorySelectionDTO selection,
             LocalDateTime holdStart) {
         return new ReservationResultDTO(
@@ -632,7 +628,13 @@ public class ReservationService {
                 holdUntil(holdStart));
     }
 
-    // method to restore an active order for a user (member) - this is used by the frontend when a user logs in or returns to the site after navigating away, to restore their active order and show them their current reservations in the cart. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we convert it to an ActiveOrderDTO and return it. If no active order is found, we return null. We also enrich the DTO with event names for better UX in the frontend, so that the frontend can show the event names directly in the cart without needing to make extra calls to get event details for each line item.
+    /**
+     * The member's cart, with event names on its lines. Looks the cart up by user id only; a guest's cart
+     * is read by {@link #restoreActiveOrderForGuest}.
+     *
+     * @param userId the member's user id
+     * @return the cart, or {@code null} when the member has none
+     */
     @Transactional(readOnly = true)
     public ActiveOrderDTO restoreActiveOrder(int userId) {
         ActiveOrder activeOrder = activeOrderRepository.getByUserId(userId);
@@ -642,7 +644,7 @@ public class ReservationService {
         }
         log.info("Active order found for userId={}, restoring ActiveOrderDTO", userId);
         ActiveOrderDTO activeOrderDTO = activeOrder.toDTO(now());
-        // enrich the DTO with event and zone details for each line item (for better UX in the frontend; avoids extra calls from frontend to get event/zone details for each line)
+        // Each line gets its event's name.
         List<ActiveOrderDTO.CartLineDTO> enrichedLines = new ArrayList<>();
         for (ActiveOrderDTO.CartLineDTO line : activeOrderDTO.lines()) {
             String eventName = eventNameFor(line.eventId());
@@ -654,7 +656,6 @@ public class ReservationService {
                     line.pricePerTicket(),
                     line.addedAt()));
         }
-        // return the same DTO but with enriched lines (event names) for better frontend UX; the frontend can ignore the extra eventName field if it wants and just use eventId, or it can show the event name directly in the cart without needing to make extra calls to get event details for each line item
         return new ActiveOrderDTO(
                 activeOrderDTO.userId(),
                 activeOrderDTO.sessionId(),
@@ -708,13 +709,18 @@ public class ReservationService {
         }
     }
 
-    // When a buyer enters the checkout page, reset the hold timer of every reserved ticket
-    // in their active order to a fresh full window (CartLineItem.EXPIRATION_LIMIT, 10 min),
-    // so the buyer gets the maximum time to complete payment. We only renew when the cart is
-    // still fully valid: if it is empty, already in checkout, or has any expired item, we
-    // leave it untouched so the existing expiry/sweeper path can reject the stale cart. The
-    // reset runs under the per-order lock (the same lock the expiry sweeper acquires first),
-    // so it cannot race the sweeper. The enriched DTO is built by reusing restoreActiveOrder.
+    /**
+     * Restarts the hold timer of every line in the member's cart, so the buyer has a full hold window to
+     * complete payment, and returns the cart as {@link #restoreActiveOrder} does.
+     *
+     * <p>The timers are renewed only while the cart is fully valid. A missing or empty cart, one in
+     * checkout, or one with a line whose hold has run out is left untouched, so the expiry sweeper's
+     * path still rejects a stale cart. The renewal runs under the cart's order lock, the one the expiry
+     * sweeper takes first; that lock is real only on the in-memory repository adapters.
+     *
+     * @param userId the member's user id
+     * @return the cart, or {@code null} when the member has none
+     */
     @Transactional
     public ActiveOrderDTO renewReservationsForMemberCheckout(int userId) {
         String orderLockKey = "user:" + userId;
@@ -760,13 +766,23 @@ public class ReservationService {
         return guestOrderWithEventNames(sessionId);
     }
 
-    // Helper method to abandon the active order for a user (member or guest) - this is used by the frontend when a user explicitly clicks "Abandon Cart" or when they log out, to clear their active order and release any reserved inventory back to the events. For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID. If an active order is found, we release any reserved inventory back to the events and then delete the active order. If no active order is found, we simply return without doing anything. This ensures that we do not leave any reserved inventory hanging around for abandoned carts, which keeps our inventory accurate and allows other users to purchase those tickets if they are still available.
+    /**
+     * Releases the buyer's held inventory and deletes the buyer's cart. A buyer with no cart is a no-op.
+     *
+     * <p>Each line is released through the inventory port on its own, best-effort: a failed release is
+     * logged at WARN and does not stop the others or the delete. The login cart merge calls it for a
+     * member cart that a guest cart replaces.
+     *
+     * @param buyer the member (cart found by user id) or guest (cart found by session id) whose cart to
+     *     abandon
+     * @throws IllegalArgumentException if {@code buyer} is {@code null}
+     * @throws IllegalStateException if the cart is in checkout
+     */
     @Transactional
     public void abandonActiveOrder(BuyerContextDTO buyer) {
         if (buyer == null) {
             throw new IllegalArgumentException("Buyer context is required");
         }
-        // Determine the lock key based on whether the buyer is a member or a guest.
         String orderLockKey = buyer.isMember()
                 ? "user:" + buyer.userId()
                 : "sess:" + buyer.sessionId();
@@ -777,7 +793,6 @@ public class ReservationService {
         activeOrderRepository.lockForUpdate(orderLockKey);
 
         try {
-            // For members, we look up the active order by their user ID. For guests, we look up the active order by their session ID.
             ActiveOrder activeOrder = buyer.isMember()
                     ? activeOrderRepository.getByUserId(buyer.userId())
                     : activeOrderRepository.getBySessionId(buyer.sessionId()).orElse(null);
@@ -817,7 +832,6 @@ public class ReservationService {
                             line.eventId(), line.zoneId(), line.seatNumber(), e.getMessage());
                 }
             }
-            // After releasing all reserved inventory, we can safely delete the active order from the repository.
             activeOrderRepository.delete(activeOrder);
 
             if (buyer.isMember()) {
@@ -849,9 +863,9 @@ public class ReservationService {
 
     /**
      * Determines if the given credential is a member JWT (vs a guest session ID).
-     * JWTs have two dots; guest session IDs are UUIDs with none.
-     * Only silences exceptions for the guest path — a credential that looks like
-     * a JWT but fails validation throws so the caller sees the real failure.
+     * JWTs have two dots; guest session IDs are UUIDs with none. A credential that looks
+     * like a JWT must validate as a member token, or validation throws so the caller sees
+     * the real failure.
      */
     private boolean isMember(String userTokenOrSessionId) {
         if (userTokenOrSessionId == null || userTokenOrSessionId.isBlank()) {
@@ -909,66 +923,6 @@ public class ReservationService {
         }
     }
 
-    
-
-    // COMMENTED OUT: expireActiveOrders / safelyReleaseAndDelete are a second, orphaned cart-expiry
-    // path that duplicates the live @Scheduled SessionAndOrderSweeper. They have no callers anywhere
-    // in the codebase (dead code), and the live sweeper is the single source of truth for expiry-driven
-    // inventory release. Keeping a callable public duplicate is a foot-gun: wiring it up would
-    // reintroduce the "buyer loses seats mid-payment" bug the sweeper is careful to avoid. The
-    // in-checkout guard below is preserved so that if this is ever revived it already matches the
-    // sweeper's behavior. Left in (commented) rather than deleted for reference/history.
-    //
-    // public void expireActiveOrders() {
-    //     List<ActiveOrder> expiredOrders = activeOrderRepository.findExpired();
-    //     if (expiredOrders == null || expiredOrders.isEmpty()) return;
-    //     for (ActiveOrder order : expiredOrders) {
-    //         safelyReleaseAndDelete(order);
-    //     }
-    // }
-    // private void safelyReleaseAndDelete(ActiveOrder order) {
-    //     String lockKey = order.getUserId() != 0
-    //         ? "user:" + order.getUserId()
-    //         : "sess:" + order.getSessionId();
-    //
-    //     activeOrderRepository.lockForUpdate(lockKey);
-    //     try {
-    //         // Mirror SessionAndOrderSweeper: never release/delete an order that is mid-checkout.
-    //         // Checkout's own failure handling resets it to PRE_CHECKOUT, after which a later sweep
-    //         // can clean it up if still expired. Releasing inventory under an active checkout would
-    //         // break a buyer who is currently paying.
-    //         if (order.isCheckoutInProgress()) {
-    //             log.info("Skipping expired order for userId={} sessionId={} because checkout is in progress",
-    //                 order.getUserId(), order.getSessionId());
-    //             return;
-    //         }
-    //         for (ActiveOrderDTO.CartLineDTO line : order.toDTO().lines()) {
-    //             try {
-    //                 Event event = eventRepository.findById(line.eventId());
-    //                 if (event != null) {
-    //                     eventRepository.lockForUpdate(line.eventId());
-    //                     try {
-    //                         InventorySelection selection = (line.seatNumber() != null)
-    //                             ? InventorySelection.seated(List.of(line.seatNumber()))
-    //                             : InventorySelection.standing(1);
-    //                         event.releaseInventory(line.zoneId(), selection);
-    //                         eventRepository.save(event);
-    //                     } finally {
-    //                         eventRepository.unlock(line.eventId());
-    //                     }
-    //                 }
-    //             } catch (RuntimeException e) {
-    //                 log.warn("Failed to release inventory for expired order ...", e.getMessage());
-    //             }
-    //         }
-    //         activeOrderRepository.delete(order);
-    //     } catch (Exception e) {
-    //         log.error("Failed to expire order for userId={} sessionId={}",
-    //             order.getUserId(), order.getSessionId(), e);
-    //     } finally {
-    //         activeOrderRepository.unlock(lockKey);
-    //     }
-    // }
 
 
 

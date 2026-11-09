@@ -33,14 +33,16 @@ import jakarta.persistence.Version;
  * <p>Carries a dual identity (auth rework / D9a):
  * <ul>
  *   <li><b>Guest cart:</b> {@code userId == null}, {@code sessionId != null}.
- *       Bound to a Guest Session row by sessionId; deleted when that Session
- *       is swept or ended.</li>
- *   <li><b>Member cart (active session):</b> {@code userId != null} and
- *       {@code sessionId != null}. The sessionId is the currently-attached
- *       Member session.</li>
- *   <li><b>Member cart (between sessions):</b> {@code userId != null},
- *       {@code sessionId == null}. Survives logout per II.3.1 / D9a;
- *       restored on next login by {@link #attachToSession(String)}.</li>
+ *       Bound to a Guest Session row by sessionId; released and deleted when the
+ *       session sweeper sweeps that Session.</li>
+ *   <li><b>Member cart with a session id:</b> {@code userId != null} and
+ *       {@code sessionId != null}. A claimed guest cart ({@link #attachToUser(int)}) keeps the
+ *       guest session's id; a login that finds no guest cart re-binds the member's cart to the new
+ *       session with {@link #attachToSession(String)}.</li>
+ *   <li><b>Member cart without a session id:</b> {@code userId != null},
+ *       {@code sessionId == null}. The state of a cart created for a member
+ *       ({@link #ActiveOrder(int, LocalDateTime)}). A cart is kept by userId, so it survives
+ *       logout (II.3.1 / D9a); the next login re-binds it with {@link #attachToSession(String)}.</li>
  * </ul>
  *
  * <p>Invariant: at least one of userId / sessionId is non-null at all times.
@@ -117,8 +119,8 @@ public class ActiveOrder implements InvariantChecked {
 
     /**
      * Legacy convenience for existing Member-only callers. Equivalent to
-     * {@code new ActiveOrder(userId, null, createdAt)} — a Member cart in the
-     * between-sessions state. New code should prefer
+     * {@code new ActiveOrder(userId, null, createdAt)} — a Member cart without a
+     * session id. New code should prefer
      * {@link #forMember(int, String, LocalDateTime)} or {@link #forGuest(String, LocalDateTime)}.
      */
     public ActiveOrder(int userId, LocalDateTime createdAt) {
@@ -518,8 +520,8 @@ public class ActiveOrder implements InvariantChecked {
         }
     }
 
-    // returns the total price of all items in the active order by summing up their individual prices at reservation time.
-    // OR* avoid using domain total and let ReservationService build the DTO with event policies.   <------
+    // The sum of the line prices recorded at reservation time, before any event discount policy: checkout
+    // prices the lines again with the policy.
     public double getRegularTotalPrice() {
         synchronized (itemsLock) {
             return items.stream()
@@ -560,9 +562,8 @@ public class ActiveOrder implements InvariantChecked {
     }
 
     /**
-     * Marks the cart as orphaned from any active session — used on logout
-     * for Member carts (D9a). The cart's userId is preserved; only the
-     * sessionId pointer clears.
+     * Clears the session id of a Member cart, leaving it bound to no session (D9a). The cart's
+     * userId is preserved.
      */
     public void clearSession() {
         this.sessionId = null;

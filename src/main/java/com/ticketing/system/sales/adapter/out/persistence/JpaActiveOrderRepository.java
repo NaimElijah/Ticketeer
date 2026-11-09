@@ -23,10 +23,10 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * ({@code @ElementCollection}) persist by cascade with the order.
  *
  * <p>{@code lockForUpdate}/{@code unlock} are no-ops: concurrency is guarded by {@code ActiveOrder}'s
- * {@code @Version}. The guest→member cart-merge that previously relied on the double-lock in
- * {@code CartRestorationAdapter.mergeGuestCartOnPromotion} therefore runs optimistically — the merge is
- * re-runnable (re-read the cart, re-attach, save), so it survives as a {@code @Version} retry once the
- * service-level {@code @Retryable} lands (C1, #359).
+ * {@code @Version}. The guest→member cart merge in
+ * {@code CartRestorationAdapter.mergeGuestCartOnPromotion} therefore runs optimistically: a conflicting
+ * write surfaces as a {@link ConcurrentReservationException}, and the login that ran the merge can be
+ * retried.
  *
  * <p>{@link #save} reproduces the in-memory identity collapse: a member cart is unique per userId and
  * a guest cart per sessionId, even though each {@link ActiveOrder} carries a distinct orderKey. So a
@@ -34,8 +34,8 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
  * entity delete cascades the item collection), refuses if one still holds lines, then persists this
  * one. Because the order lock here is a no-op, the database backs both sides: {@code uk_active_orders_user_id}
  * the member side, and {@code uk_active_orders_guest_session_id} the guest side, on the column
- * {@link ActiveOrder} fills only while it has no user (NaimElijah/Ticketeer#224). Writes are {@code @Transactional} so the
- * adapter is self-sufficient before the service layer gains transactions (#359).
+ * {@link ActiveOrder} fills only while it has no user (NaimElijah/Ticketeer#224). Writes are
+ * {@code @Transactional}, so they also work when no service transaction is open.
  */
 @Repository
 @Profile(PersistenceProfiles.JPA_ADAPTERS)

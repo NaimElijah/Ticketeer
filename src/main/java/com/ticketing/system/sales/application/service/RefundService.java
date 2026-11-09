@@ -14,8 +14,8 @@ import com.ticketing.system.sales.application.port.out.PaymentGateway;
 import com.ticketing.system.sales.application.port.out.TicketRepository;
 import com.ticketing.system.sales.domain.Ticket;
 import com.ticketing.system.sales.domain.TicketStatus;
-// Catalog inbound port: catalog owns the SOLD -> AVAILABLE inventory return, so RefundService no
-// longer imports any catalog.domain type — it hands the refunded lines to the port.
+// Catalog inbound port: catalog owns the SOLD -> AVAILABLE inventory return; RefundService hands the
+// refunded lines to the port.
 import com.ticketing.system.catalog.application.port.in.InventoryCommandPort;
 import com.ticketing.system.catalog.application.port.in.InventoryLineDTO;
 import com.ticketing.system.shared.exception.BusinessRuleViolationException;
@@ -31,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Member-initiated refund of one owned order (I.3.3 / #64, #284). The owner/admin side of refunds
- * lives elsewhere ({@link EventManagementService#cancelEventAndRefund}); this is the buyer's
+ * lives elsewhere ({@code EventManagementService#cancelEventAndRefund} in catalog); this is the buyer's
  * "Request refund" path from {@code ReceiptView} / {@code MyAccountView}.
  *
  * <p>Mirrors the cancellation refund mechanics, scoped to a single member-owned receipt: charge
@@ -205,7 +205,7 @@ public class RefundService {
      * The port groups the flat lines by event then zone, holds each event's buyer-lock across
      * load -> mutate -> save, and is fully best-effort: a stock-return hiccup is logged and swallowed
      * (the gateway refund and receipt/ticket flips have already committed, so it must never fail the
-     * refund). Behaviour is preserved verbatim — only the ownership of the mutation moved into catalog.
+     * refund).
      */
     private void returnRefundedInventoryToStock(List<Ticket> refundedTickets) {
         // One flat line per refunded ticket: a seated ticket carries its seat label; a standing ticket
