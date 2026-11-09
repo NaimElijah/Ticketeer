@@ -35,6 +35,9 @@ public class JpaProductionCompanyRepository implements ProductionCompanyReposito
     private final AtomicInteger idSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
+    /**
+     * Creates the adapter over the Spring Data repository.
+     */
     public JpaProductionCompanyRepository(SpringDataProductionCompanyRepository data) {
         this.data = data;
     }

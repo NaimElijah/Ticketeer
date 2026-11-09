@@ -32,6 +32,9 @@ public class JpaCompanyAppointmentRepository implements CompanyAppointmentReposi
     private final AtomicInteger idSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
+    /**
+     * Creates the adapter over the Spring Data repository.
+     */
     public JpaCompanyAppointmentRepository(SpringDataCompanyAppointmentRepository data) {
         this.data = data;
     }

@@ -14,6 +14,13 @@ import com.ticketing.system.organization.domain.Permission;
  */
 public class AppointmentInfoMapper {
 
+    /**
+     * Maps an appointment to its read-side view.
+     *
+     * @param targetUsername the appointed user's username, looked up by the caller
+     * @param companyName    the company's name, looked up by the caller
+     * @return the view, with the appointment id as decimal text and the role, status and permissions as enum names
+     */
     public AppointmentInfoDTO toDTO(CompanyAppointment appt, String targetUsername, String companyName) {
         return new AppointmentInfoDTO(
                 String.valueOf(appt.getAppointmentId()),
