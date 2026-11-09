@@ -12,14 +12,16 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-// Sub-entity of the Conversation aggregate.
-// Identity is local to the conversation. Cross-aggregate refs by ID:
-//   senderId — User / ProductionCompany / Admin (resolved by senderType)
-//
-// V3: an owned child @Entity of the Conversation aggregate (mapped via Conversation's @OneToMany,
-// never its own repository). messageId is an ASSIGNED @Id (a UUID); senderType is stored by name.
-// The mutable read flag maps to is_read (READ is a SQL reserved word). Fields are non-final with a
-// protected no-arg ctor so Hibernate can hydrate; the public ctor still enforces the invariants.
+/**
+ * One message of a {@link Conversation}, an owned child entity with no repository of its own.
+ * {@code senderId} refers to a user, a production company or an admin, according to
+ * {@code senderType}.
+ *
+ * <p>{@code messageId} is an assigned UUID and {@code senderType} is stored by name. The read flag is
+ * the one mutable field; it maps to {@code is_read} because {@code READ} is a SQL reserved word. The
+ * fields are not final and a protected no-argument constructor exists so Hibernate can hydrate it; the
+ * public constructor still enforces the invariants.
+ */
 @Entity
 @Table(name = "messages")
 public class Message implements InvariantChecked {
@@ -46,6 +48,19 @@ public class Message implements InvariantChecked {
     /** For JPA only — do not call from application code. */
     protected Message() { }
 
+    /**
+     * Creates an unread message.
+     *
+     * @param messageId the message's id: not blank
+     * @param senderId the sender's id, read together with {@code senderType}
+     * @param senderType the side that sends it: not null
+     * @param body the text: not blank, at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param sentAt when it was sent: not null
+     * @throws com.ticketing.system.shared.exception.BusinessRuleViolationException if the body is too
+     *         long
+     * @throws IllegalStateException if the id or the body is null or blank, or the sender type or the
+     *         time is null
+     */
     public Message(String messageId, int senderId, ParticipantType senderType,
                    String body, LocalDateTime sentAt) {
         TextLimits.requireFits("Message", body);

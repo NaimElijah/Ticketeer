@@ -31,6 +31,7 @@ public class JpaConversationRepository implements ConversationRepository {
 
     private final SpringDataConversationRepository data;
 
+    /** Creates the adapter over the Spring Data repository that Spring injects. */
     public JpaConversationRepository(SpringDataConversationRepository data) {
         this.data = data;
     }

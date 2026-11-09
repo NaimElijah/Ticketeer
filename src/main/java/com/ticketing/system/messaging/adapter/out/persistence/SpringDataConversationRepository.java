@@ -19,12 +19,16 @@ import com.ticketing.system.messaging.domain.ParticipantType;
  */
 public interface SpringDataConversationRepository extends JpaRepository<Conversation, String> {
 
+    /** Derived query: the conversations of one type, in no defined order. */
     List<Conversation> findByType(ConversationType type);
 
+    /** Derived query: the conversations of one type with an initiator of the given kind, in no defined order. */
     List<Conversation> findByTypeAndInitiatorType(ConversationType type, ParticipantType initiatorType);
 
+    /** Derived query: the conversations of one type with one status, in no defined order. */
     List<Conversation> findByTypeAndStatus(ConversationType type, ConversationStatus status);
 
+    /** Derived query: the conversations whose counterparty has that type and id, in no defined order. */
     List<Conversation> findByCounterpartyTypeAndCounterpartyId(ParticipantType counterpartyType, int counterpartyId);
 
     /**

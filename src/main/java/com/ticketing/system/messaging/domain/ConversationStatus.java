@@ -1,13 +1,13 @@
 package com.ticketing.system.messaging.domain;
 
-// Lifecycle states for a Conversation.
-//   OPEN       - awaiting any reply
-//   RESPONDED  - counterparty has responded; back to initiator
-//   RESOLVED   - terminal (used for COMPLAINT — admin marked resolved)
-//   CLOSED     - terminal (no further messages allowed)
+/** Lifecycle states of a {@link Conversation}. */
 public enum ConversationStatus {
+    /** Awaiting a reply from the counterparty. */
     OPEN,
+    /** The counterparty has responded; the next move is the initiator's. */
     RESPONDED,
+    /** An admin has answered a complaint. The conversation takes no more messages, but can still be closed. */
     RESOLVED,
+    /** Closed by a participant. The conversation takes no more messages. */
     CLOSED
 }

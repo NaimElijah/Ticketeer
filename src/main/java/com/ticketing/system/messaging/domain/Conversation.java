@@ -28,19 +28,22 @@ import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
-// Aggregate root for the centralized messaging subsystem.
-// Replaces the per-User MessageInbox, per-Company Inbox, and the standalone Complaint aggregate.
-//
-// Two-party model: an initiator and a counterparty. Either side can be a specific entity
-// (MEMBER/COMPANY/ADMIN) or a group descriptor (ADMIN_GROUP / SYSTEM).
-//
-// Cross-aggregate references by ID per course rules — never holds direct refs to User / ProductionCompany / Admin.
-// V3: mapped to JPA. conversationId is an ASSIGNED @Id (a UUID); type/status and the two participant
-// types are stored by name. The polymorphic participants stay as plain (id, type) by-id column pairs
-// — never @ManyToOne. @Version drives optimistic locking. messages are owned children
-// (@OneToMany cascade-all + orphan-removal) kept in send order via @OrderColumn, loaded eagerly so a
-// detached Conversation is fully usable. A protected no-arg ctor lets Hibernate hydrate; start is the
-// only other way in, and enforces the invariants.
+/**
+ * Aggregate root of the messaging subsystem: a thread of {@link Message}s between two parties, an
+ * initiator and a counterparty. Each party is a specific entity ({@link ParticipantType#MEMBER},
+ * {@code COMPANY} or {@code ADMIN}) or a group descriptor ({@code ADMIN_GROUP} or {@code SYSTEM}).
+ * Other aggregates are referred to by id and type, never held.
+ *
+ * <p>The domain enforces the thread's rules: a closed or resolved thread takes no messages, a sender
+ * must be a participant, and a {@link ConversationType#COMPLAINT} takes exactly one admin response.
+ *
+ * <p>Persistence: {@code conversationId} is an assigned UUID. The type, the status and the two
+ * participant types are stored by name. The participants are plain (id, type) column pairs, never
+ * associations. {@code @Version} drives optimistic locking. The messages are owned children kept in
+ * send order and loaded eagerly, so a detached conversation is fully usable. A protected no-argument
+ * constructor lets Hibernate hydrate it; {@link #start} is the only other way in and enforces the
+ * invariants.
+ */
 @Entity
 @Table(name = "conversations")
 public class Conversation implements InvariantChecked {
@@ -112,9 +115,26 @@ public class Conversation implements InvariantChecked {
         checkInvariants();
     }
 
-    // Factory — opens a new conversation with its first message already attached.
-    // Generates the conversationId, the first messageId, and the timestamps internally
-    // so id/time creation stays in the domain (callers don't synthesize them).
+    /**
+     * Opens an {@code OPEN} conversation with the initiator's first message already attached. It
+     * generates the conversation id and the first message's id, so callers never mint them.
+     *
+     * @param type what the conversation is for
+     * @param initiatorId the initiator's id, read together with {@code initiatorType}
+     * @param initiatorType the side that opens the conversation; it sends the first message
+     * @param counterpartyId the counterparty's id; {@code MessagingService} passes 0 for a
+     *        group such as {@code ADMIN_GROUP}, which has no single id
+     * @param counterpartyType the other side
+     * @param subject the subject, or {@code null} for none; at most {@link TextLimits#MAX_TEXT_LENGTH}
+     *        characters
+     * @param firstMessageBody the first message: not blank, at most {@link TextLimits#MAX_TEXT_LENGTH}
+     *        characters
+     * @param now when the conversation is opened; both {@code createdAt} and {@code lastMessageAt}
+     * @return the new conversation
+     * @throws BusinessRuleViolationException if the subject or the first message is too long
+     * @throws IllegalStateException if the first message is null or blank, or a type or {@code now} is
+     *         null
+     */
     public static Conversation start(ConversationType type,
                                      int initiatorId, ParticipantType initiatorType,
                                      int counterpartyId, ParticipantType counterpartyType,
@@ -136,11 +156,28 @@ public class Conversation implements InvariantChecked {
     public String getSubject() { return subject; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getLastMessageAt() { return lastMessageAt; }
+
+    /** Returns the messages in send order, as an unmodifiable snapshot. */
     public List<Message> getMessages() { return List.copyOf(messages); }
 
-    // Append a new message. Updates lastMessageAt and may transition status (OPEN→RESPONDED, etc).
-    // Throws ConversationClosedException if status is CLOSED or RESOLVED.
-    // Throws InvalidParticipantException if sender is not initiator or counterparty.
+    /**
+     * Appends a message and sets {@code lastMessageAt} to its time. A message from the initiator's side
+     * reopens a {@code RESPONDED} conversation; a message from the other side moves an {@code OPEN}
+     * one to {@code RESPONDED}. A specific admin counts as the initiator's side when the initiator is
+     * the {@code ADMIN_GROUP}.
+     *
+     * <p>A {@link ConversationType#COMPLAINT} accepts only an admin's message, and only one.
+     *
+     * @param senderId the sender's id, read together with {@code senderType}
+     * @param senderType the side the sender acts as
+     * @param body the message text: not blank, at most {@link TextLimits#MAX_TEXT_LENGTH} characters
+     * @param now when the message is sent
+     * @throws ConversationClosedException if the conversation is {@code RESOLVED} or {@code CLOSED}
+     * @throws BusinessRuleViolationException if this is a complaint and the sender is not an admin or
+     *         an admin has already answered, or if the body is too long
+     * @throws InvalidParticipantException if the sender is not a participant of the conversation
+     * @throws IllegalStateException if the body is null or blank, or {@code now} is null
+     */
     public void addMessage(int senderId, ParticipantType senderType, String body, LocalDateTime now) {
         if (isClosed()) {
             throw new ConversationClosedException(conversationId);
@@ -207,7 +244,11 @@ public class Conversation implements InvariantChecked {
         }
     }
 
-    // Status transitions.
+    /**
+     * Sets the status to {@code RESPONDED}.
+     *
+     * @throws InvalidStateTransitionException if the conversation is {@code RESOLVED} or {@code CLOSED}
+     */
     public void transitionToResponded() {
         if (isClosed()) {
             throw new InvalidStateTransitionException("Conversation", status.name(),
@@ -217,6 +258,12 @@ public class Conversation implements InvariantChecked {
         checkInvariants();
     }
 
+    /**
+     * Sets the status to {@code RESOLVED}, as when an admin answers a complaint. Does nothing if it is
+     * already resolved.
+     *
+     * @throws InvalidStateTransitionException if the conversation is {@code CLOSED}
+     */
     public void transitionToResolved() {
         if (status == ConversationStatus.RESOLVED) {
             return; // idempotent
@@ -229,6 +276,7 @@ public class Conversation implements InvariantChecked {
         checkInvariants();
     }
 
+    /** Sets the status to {@code CLOSED} from any status. Does nothing if it is already closed. */
     public void transitionToClosed() {
         if (status == ConversationStatus.CLOSED) {
             return; // idempotent
@@ -237,11 +285,19 @@ public class Conversation implements InvariantChecked {
         checkInvariants();
     }
 
-    // State checks.
+    /** Returns whether the conversation takes no more messages: it is {@code RESOLVED} or {@code CLOSED}. */
     public boolean isClosed() {
         return status == ConversationStatus.CLOSED || status == ConversationStatus.RESOLVED;
     }
 
+    /**
+     * Returns whether the participant takes part in the conversation: its id and type match the
+     * initiator or the counterparty. A specific {@link ParticipantType#ADMIN} also takes part when
+     * either side is the {@code ADMIN_GROUP}.
+     *
+     * @param participantId the participant's id, read together with {@code participantType}
+     * @param participantType the participant's type; {@code null} matches nothing
+     */
     public boolean involvesParticipant(int participantId, ParticipantType participantType) {
         if (participantType == null) {
             return false;
