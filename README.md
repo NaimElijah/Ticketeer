@@ -32,7 +32,7 @@ flowchart TB
     wsep["WSEP<br/>payment + ticket issuing"]
 
     browser -->|"HTTP, long-polling push"| ui
-    ui -->|"inbound ports"| app
+    ui -->|"application services"| app
     app -->|"outbound ports"| repos
     repos --> db
     app -->|"HTTPS, outside the DB transaction"| wsep
