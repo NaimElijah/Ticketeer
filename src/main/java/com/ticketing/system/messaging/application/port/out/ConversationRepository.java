@@ -9,32 +9,55 @@ import java.util.Optional;
 
 import com.ticketing.system.shared.IRepository;
 
-// Aggregate-root entry point for the Conversation aggregate (per course's
-// IXxxRepository convention). Owns the centralized messaging subsystem —
-// replaces per-User MessageInbox, per-Company Inbox, and the standalone Complaint repo.
+/**
+ * Driven port for the {@link Conversation} aggregate, with its messages. The one repository of the
+ * messaging subsystem: inquiries, complaints and admin outreach are all conversations.
+ *
+ * <p>Every list finder returns an empty list when nothing matches, in no defined order.
+ */
 public interface ConversationRepository extends IRepository<Conversation, String> {
 
+    /** Stores the conversation with its messages: a new one is inserted, a stored one updated. */
     void save(Conversation conversation);
 
+    /**
+     * Returns the conversation with that id.
+     *
+     * @param conversationId the id; {@code null} matches nothing
+     * @return the conversation, or empty if there is none
+     */
     Optional<Conversation> findById(String conversationId);
 
-    // "My conversations" view — used by company support inbox.
+    /**
+     * Returns the conversations in which the participant is the initiator or the counterparty, matching
+     * both id and type. The admin inbox reads it with {@link ParticipantType#ADMIN}.
+     */
     List<Conversation> findByParticipant(int participantId, ParticipantType participantType);
 
-    // Member Support Inbox: INQUIRY / COMPLAINT the member initiated, plus DIRECT admin outreach
-    // where the member is the counterparty. Excludes inquiries TO a company the member owns
-    // (those are company-counterparty threads and belong in the company "Customer Inquiries" view).
+    /**
+     * Returns the member's Support Inbox: the INQUIRY and COMPLAINT conversations the member initiated,
+     * plus the DIRECT admin outreach where the member is the counterparty. It leaves out inquiries other
+     * members sent to a company the member owns; those are company-counterparty threads and belong in
+     * the company inbox.
+     */
     List<Conversation> findMemberInbox(int memberId);
 
-    // Admin-side typed queries (II.6.3.1 — find all complaints).
+    /** Returns the conversations of one type, as for the admin complaint queue (II.6.3.1). */
     List<Conversation> findByType(ConversationType type);
 
-    // Admin outreach history (II.6.3.2) — DIRECT conversations the admin initiated.
+    /**
+     * Returns the conversations of one type that were opened by the given kind of party, as for the
+     * admin outreach history (II.6.3.2): DIRECT conversations initiated by {@code ADMIN}. It does not
+     * narrow to one admin.
+     */
     List<Conversation> findByTypeAndInitiatorType(ConversationType type, ParticipantType initiatorType);
 
-    // Company-side support inbox (II.4.4) — conversations where the company is counterparty.
+    /** Returns the conversations where the company is the counterparty, as for its inbox (II.4.4). */
     List<Conversation> findByCompanyAsCounterparty(int companyId);
 
-    // Admin filter for complaint queues — by status and date.
+    /**
+     * Returns the conversations of the given type that have the given status. The admin complaint queue
+     * reads it for one status; its date filters are applied by the service, not here.
+     */
     List<Conversation> findByTypeAndStatus(ConversationType type, ConversationStatus status);
 }

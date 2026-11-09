@@ -17,6 +17,14 @@ import com.ticketing.system.messaging.domain.Message;
  */
 public class ConversationMapper {
 
+    /**
+     * Maps a conversation, with all its messages in send order, to its DTO.
+     *
+     * @param viewerId the viewer's id, read together with {@code viewerType}
+     * @param viewerType the side the viewer acts as; the DTO's unread count is that side's
+     * @param initiatorDisplayName the initiator's name, copied into the DTO as given
+     * @param counterpartyDisplayName the counterparty's name, copied into the DTO as given
+     */
     public ConversationDTO toDTO(Conversation conversation, int viewerId, ParticipantType viewerType,
             String initiatorDisplayName, String counterpartyDisplayName) {
         List<MessageDTO> messages = conversation.getMessages().stream()
@@ -39,6 +47,7 @@ public class ConversationMapper {
                 counterpartyDisplayName);
     }
 
+    /** Maps one message to its DTO, with its sender type as a {@code name()} string. */
     public MessageDTO toMessageDTO(Message message) {
         return new MessageDTO(
                 message.getMessageId(),

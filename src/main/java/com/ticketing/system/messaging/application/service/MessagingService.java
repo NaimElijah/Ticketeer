@@ -47,16 +47,31 @@ import com.ticketing.system.identity.domain.User;
 
 import lombok.extern.slf4j.Slf4j;
 
-// Centralized messaging subsystem service.
-// Replaces per-User MessageInbox, per-Company Inbox, and the standalone Complaint flow.
-// Covers requirements II.3.3 (complaint), II.3.10 (contact company), II.4.4 (company support
-// inbox), II.6.3.1 (admin complaint queue), II.6.3.2 (admin announcements).
-//
-// All write paths fire the messaging→notification bridge AFTER releasing the conversation
-// lock: members are notified of admin/producer messages; company owners of new inquiries.
-// Admins are never notified: a notice names its recipient by bare user id, admin ids share the
-// member id space, so a notice to an admin's id would reach the member with that id (ADR-012).
-// Admins see complaints and replies in their queue and inbox instead.
+/**
+ * The messaging subsystem's application service: inquiries to companies, complaints to the admins and
+ * admin outreach, all stored as {@link Conversation}s. Covers II.3.3 (complaint), II.3.10 (contact a
+ * company), II.4.4 (company support inbox), II.6.3.1 (admin complaint queue) and II.6.3.2 (admin
+ * announcements).
+ *
+ * <p>Each operation, except {@link #complaintDetailsLimit}, takes the caller's session token and acts
+ * as the side the token identifies. A member token acts as a member, or as a company where the member
+ * owns it or holds {@code RESPOND_TO_INQUIRIES} in it; an admin token acts as an admin. The token must
+ * be of the kind the operation accepts: a member operation refuses an admin token, and an admin
+ * operation a member token.
+ *
+ * <p>The writes that notify ({@link #startConversation}, {@link #sendMessage},
+ * {@link #respondToComplaint} and {@link #sendOutreach}) publish a {@link NewMessageNotice} or an
+ * {@link OutreachSentNotice}, which Notifications consumes after the transaction commits (ADR-004):
+ * members are notified of admin and company messages, and company owners of inquiries and of members'
+ * replies to them. Admins are never notified: a notice names its recipient by bare user id, admins and
+ * members share one id space, so a notice to an admin's id would reach the member with that id
+ * (ADR-012). Admins see complaints and replies in their queue and inbox instead.
+ *
+ * <p>On the Jpa adapters, two concurrent writes that add a message or change the status are separated
+ * by {@code @Version}, and the loser gets a
+ * {@link com.ticketing.system.shared.exception.ConcurrentReservationException}; a read mark updates
+ * only message rows and does not conflict.
+ */
 @Service
 @Slf4j
 public class MessagingService {
@@ -73,8 +88,7 @@ public class MessagingService {
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
-    // Company-membership/authorization checks (moved off the User aggregate, task #20) used to decide
-    // whether a caller may act for a company; messaging already depends on organization.
+    // Decides whether a caller may act for a company.
     private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context integration events (NewMessageNotice per message, OutreachSentNotice
     // per outreach send); the notifications context listens for these instead of messaging calling it
@@ -83,6 +97,11 @@ public class MessagingService {
     // Stamps messages and conversations: UTC wall time (ADR-008).
     private final Clock clock;
 
+    /**
+     * Creates the service; Spring injects the collaborators.
+     *
+     * @param clock stamps messages and conversations with UTC wall time (ADR-008)
+     */
     public MessagingService(
             ConversationRepository conversationRepository,
             SessionManager sessionManager,
@@ -110,7 +129,22 @@ public class MessagingService {
     // Write operations
     // ---------------------------------------------------------------------------
 
-    // II.3.10 — Member starts an INQUIRY conversation (two-way chat) with a Company.
+    /**
+     * II.3.10: a member opens an INQUIRY, a two-way chat, with a company. The first message is the
+     * member's; a {@link NewMessageNotice} is published for each of the company's owners.
+     *
+     * @param token   the member's token
+     * @param request the company's id, the subject and the body of the first message
+     * @return the new conversation, seen by the member
+     * @throws CompanyNotFoundException if there is no such company
+     * @throws BusinessRuleViolationException if the subject or the body is longer than
+     *         {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws IllegalStateException if the body is null or blank
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed,
+     *         revoked or an admin's, and {@link com.ticketing.system.shared.exception.SessionExpiredException}
+     *         if it has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     */
     @Transactional
     public ConversationDTO startConversation(String token, StartConversationRequestDTO request) {
         int memberId = authenticate(token);
@@ -133,7 +167,27 @@ public class MessagingService {
 
 
 
-    // Append a reply to an existing conversation. Sender must be a participant.
+    /**
+     * Appends a message to an INQUIRY or DIRECT conversation, as the side the token acts as. Only the
+     * request's conversation id and body are read: the sender comes from the token, never from the
+     * request. The other side then gets a {@link NewMessageNotice}, a company through its owners; an
+     * admin is never notified.
+     *
+     * @param token   the caller's member or admin token
+     * @param request the conversation's id and the message body
+     * @throws ConversationNotFoundException if no conversation has that id
+     * @throws InvalidParticipantException if the caller is not a participant of the conversation
+     * @throws BusinessRuleViolationException if the conversation is a complaint, which accepts a single
+     *         admin response through {@link #respondToComplaint} and no chat, or if the body is longer
+     *         than {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws com.ticketing.system.shared.exception.ConversationClosedException if the conversation is
+     *         resolved or closed
+     * @throws IllegalStateException if the body is null or blank
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     */
     @Transactional
     public void sendMessage(String token, SendMessageRequestDTO request) {
         Caller caller = authenticateCaller(token);
@@ -176,9 +230,9 @@ public class MessagingService {
      *         leaves no room for details (see {@link #complaintDetailsLimit})
      * @throws BusinessRuleViolationException if the details are longer than {@link #complaintDetailsLimit}
      *         allows, or the subject is longer than {@link TextLimits#MAX_TEXT_LENGTH}
-     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
-     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
-     *         has expired
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed,
+     *         revoked or an admin's, and {@link com.ticketing.system.shared.exception.SessionExpiredException}
+     *         if it has expired
      * @throws UnauthorizedActionException if the token is null or blank
      */
     @Transactional
@@ -236,7 +290,25 @@ public class MessagingService {
 
 
 
-    // II.6.3.1 — admin sends the single response to a complaint, which resolves it (one-shot).
+    /**
+     * II.6.3.1: an admin sends the single response to a complaint, which resolves it. Any admin may
+     * answer. Only the request's conversation id and body are read. The member who filed the complaint
+     * gets a {@link NewMessageNotice}.
+     *
+     * @param token   a live admin token whose admin still exists
+     * @param request the complaint's conversation id and the response body
+     * @throws ConversationNotFoundException if no conversation has that id
+     * @throws BusinessRuleViolationException if the conversation is not a complaint, or the body is
+     *         longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws com.ticketing.system.shared.exception.ConversationClosedException if the complaint is
+     *         already resolved or closed
+     * @throws IllegalStateException if the body is null or blank
+     * @throws UnauthorizedActionException if the token is a member's or is null or blank, or its admin
+     *         no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     */
     @Transactional
     public void respondToComplaint(String token, RespondToComplaintRequestDTO request) {
         int adminId = requireSystemAdmin(token);
@@ -251,7 +323,8 @@ public class MessagingService {
                         "Conversation " + conversationId + " is not a complaint");
             }
             // The admin's reply is the complaint's terminal response: append it, then resolve.
-            // The lock serializes concurrent admins; the domain rejects a second admin reply.
+            // The domain rejects a second admin reply. Concurrent admins are kept apart by the lock on the
+            // Memory adapter and by @Version on the Jpa adapters, where the lock is a no-op.
             conversation.addMessage(adminId, ParticipantType.ADMIN, request.body(), LocalDateTime.now(clock));
             conversation.transitionToResolved();
             conversationRepository.save(conversation);
@@ -280,10 +353,14 @@ public class MessagingService {
      * @return how many recipients the send reached, and the first conversation opened
      * @throws UserNotFoundException if an explicit recipient id names no member, 0 and negative ids
      *         included; nothing is stored or published
-     * @throws BusinessRuleViolationException if the send matches no recipient
-     * @throws UnauthorizedActionException if the token is a member's, or its admin no longer exists
+     * @throws BusinessRuleViolationException if the send matches no recipient, or the subject or the
+     *         body is longer than {@link TextLimits#MAX_TEXT_LENGTH}
+     * @throws IllegalStateException if the body is null or blank
+     * @throws UnauthorizedActionException if the token is a member's or is null or blank, or its admin
+     *         no longer exists
      * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
-     *         revoked
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
      */
     @Transactional
     public OutreachResultDTO sendOutreach(String token, OutreachRequestDTO request) {
@@ -367,7 +444,20 @@ public class MessagingService {
 
 
 
-    // Terminal action — close a conversation (no further messages allowed).
+    /**
+     * Closes a conversation, after which it accepts no further messages but stays readable. Either side
+     * may close it, a complaint included, from any status; closing a closed conversation changes
+     * nothing. No notice is published.
+     *
+     * @param token the caller's member or admin token
+     * @param conversationId the conversation to close
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     * @throws ConversationNotFoundException if no conversation has that id
+     * @throws InvalidParticipantException if the caller is not a participant of the conversation
+     */
     @Transactional
     public void closeConversation(String token, String conversationId) {
         Caller caller = authenticateCaller(token);
@@ -386,7 +476,19 @@ public class MessagingService {
     // Read operations
     // ---------------------------------------------------------------------------
 
-    // Member-facing Support Inbox: inquiries + complaints the member opened, plus admin outreach.
+    /**
+     * The member's Support Inbox, most recent activity first: the inquiries and complaints the member
+     * opened and the admin outreach sent to the member. Inquiries other members sent to a company the
+     * member owns are not here; they belong to {@link #viewCompanyInbox}. Unread counts are the member's
+     * own.
+     *
+     * @param token the member's token
+     * @return the member's conversations; empty if there are none
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed,
+     *         revoked or an admin's, and {@link com.ticketing.system.shared.exception.SessionExpiredException}
+     *         if it has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewMyConversations(String token) {
         int memberId = authenticate(token);
@@ -396,7 +498,20 @@ public class MessagingService {
                 .toList();
     }
 
-    // Open a single thread. Caller must be a participant.
+    /**
+     * Returns one thread as the caller's side sees it, unread count included. It does not mark the
+     * thread read; {@link #markConversationRead} does.
+     *
+     * @param token the caller's member or admin token
+     * @param conversationId the thread to open
+     * @return the conversation with all its messages
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     * @throws UnauthorizedActionException if the token is null or blank
+     * @throws ConversationNotFoundException if no conversation has that id
+     * @throws InvalidParticipantException if the caller is not a participant of the conversation
+     */
     @Transactional(readOnly = true)
     public ConversationDTO viewConversation(String token, String conversationId) {
         Caller caller = authenticateCaller(token);
@@ -405,7 +520,20 @@ public class MessagingService {
         return toDTO(conversation, side.id(), side.type());
     }
 
-    // II.4.4 — company support inbox: all conversations where this company is counterparty.
+    /**
+     * II.4.4: the company's support inbox, most recent activity first: every conversation where the
+     * company is the counterparty. Unread counts are the company's own.
+     *
+     * @param token the member's token; the member must be an owner of the company or hold
+     *              {@code RESPOND_TO_INQUIRIES} in it
+     * @param companyId the company whose inbox to read
+     * @return the company's conversations; empty if there are none
+     * @throws UnauthorizedActionException if the member is neither an owner of the company nor holds
+     *         {@code RESPOND_TO_INQUIRIES} in it, or if the token is null or blank
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed,
+     *         revoked or an admin's, and {@link com.ticketing.system.shared.exception.SessionExpiredException}
+     *         if it has expired
+     */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewCompanyInbox(String token, int companyId) {
         int callerId = authenticate(token);
@@ -420,7 +548,8 @@ public class MessagingService {
     }
 
     /**
-     * II.6.3.1: the admin complaint queue, newest first, narrowed by whichever filters are set.
+     * II.6.3.1: the admin complaint queue, most recent activity first, narrowed by whichever filters are
+     * set.
      *
      * @param token   a live admin token whose admin still exists
      * @param filters status, member and creation-date filters, each optional; {@code null} for none. A
@@ -429,9 +558,11 @@ public class MessagingService {
      * @return the matching complaints, seen by the calling admin
      * @throws IllegalArgumentException if the status names no {@link ConversationStatus} (#187): an
      *         unknown status is refused rather than read as "every status"
-     * @throws UnauthorizedActionException if the token is a member's, or its admin no longer exists
+     * @throws UnauthorizedActionException if the token is a member's or is null or blank, or its admin
+     *         no longer exists
      * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
-     *         revoked
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
      */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewAllComplaints(String token, ComplaintFilterDTO filters) {
@@ -448,8 +579,19 @@ public class MessagingService {
                 .toList();
     }
 
-    // II.6.3.2 — admin "sent history": every DIRECT conversation the admin initiated.
-    // The fan-out creates one conversation per recipient; callers group them into broadcasts.
+    /**
+     * II.6.3.2: the admins' sent history, most recent activity first: every DIRECT conversation an admin
+     * initiated, whichever admin. {@link #sendOutreach} creates one conversation per recipient, so a
+     * broadcast appears as many conversations; callers group them.
+     *
+     * @param token a live admin token whose admin still exists
+     * @return the outreach conversations, seen by the calling admin; empty if there are none
+     * @throws UnauthorizedActionException if the token is a member's or is null or blank, or its admin
+     *         no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewSentOutreach(String token) {
         int adminId = requireSystemAdmin(token);
@@ -459,9 +601,19 @@ public class MessagingService {
                 .toList();
     }
 
-    // Admin Inbox — the calling admin's own DIRECT conversations (outreach they started), newest
-    // first, so they can chat and close each one. Scoped to this admin (findByParticipant is an
-    // exact id/type match), so it never includes another admin's outreach or complaints.
+    /**
+     * The admin inbox, most recent activity first: the calling admin's own DIRECT conversations, the
+     * outreach this admin started, so the admin can chat in and close each one. Another admin's
+     * outreach and the complaints are not included; complaints are in {@link #viewAllComplaints}.
+     *
+     * @param token a live admin token whose admin still exists
+     * @return the admin's DIRECT conversations, seen by the calling admin; empty if there are none
+     * @throws UnauthorizedActionException if the token is a member's or is null or blank, or its admin
+     *         no longer exists
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException if the token is malformed or
+     *         revoked, and {@link com.ticketing.system.shared.exception.SessionExpiredException} if it
+     *         has expired
+     */
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewAdminInbox(String token) {
         int adminId = requireSystemAdmin(token);
@@ -569,8 +721,6 @@ public class MessagingService {
 
     private boolean callerActsForCompany(int callerId, int companyId) {
         try {
-            // Owner of, or holder of RESPOND_TO_INQUIRIES on, the company — resolved by userId now that
-            // appointments live on the CompanyAppointment aggregate (task #20).
             return companyMembershipService.isOwnerInCompany(callerId, companyId)
                     || companyMembershipService.hasPermissionInCompany(callerId, companyId,
                             Permission.RESPOND_TO_INQUIRIES);
