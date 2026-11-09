@@ -28,14 +28,15 @@ public class MemberQueryService {
     private final UserRepository userRepository;
     private final SessionManager sessionManager;
 
+    /** Creates the service over the user store and the session manager. */
     public MemberQueryService(UserRepository userRepository, SessionManager sessionManager) {
         this.userRepository = userRepository;
         this.sessionManager = sessionManager;
     }
 
     /**
-     * True when a User with the given username already exists. Blank /
-     * null input is treated as "doesn't exist" — the presenter handles
+     * True when a User with the given username, once surrounding whitespace is trimmed, already
+     * exists. Blank / null input is treated as "doesn't exist" — the presenter handles
      * the format validation; this method is purely the existence
      * predicate.
      */

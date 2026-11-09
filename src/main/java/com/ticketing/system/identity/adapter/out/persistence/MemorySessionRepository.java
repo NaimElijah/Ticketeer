@@ -41,6 +41,11 @@ public class MemorySessionRepository implements SessionRepository {
     @Override
     public void unlock(String id) { locks.unlock(id); }
 
+    /**
+     * Creates an empty repository.
+     *
+     * @param clock the source of "now" for {@link #existsByUserId}'s expiry check
+     */
     public MemorySessionRepository(Clock clock) {
         this.clock = clock;
     }

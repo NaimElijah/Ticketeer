@@ -14,7 +14,7 @@ import jakarta.persistence.Version;
 
 /**
  * Session aggregate — the unified identity record for Guest, Member and Admin
- * sessions. Part of the auth rework (see docs/auth-rework-plan.md).
+ * sessions.
  *
  * <ul>
  *   <li><b>Guest session:</b> kind {@link SessionKind#GUEST}, {@code userId == null}.
@@ -40,9 +40,9 @@ import jakarta.persistence.Version;
  * {@code @GeneratedValue}. {@code userId} is a plain by-id column — never a
  * {@code @ManyToOne} to User (the cross-aggregate reference rule). {@code @Version}
  * drives optimistic locking and lets Spring Data tell a new entity (version == null)
- * from a loaded one. Fields are non-final and a protected no-arg constructor exists
- * purely so Hibernate can hydrate instances — the public constructor still enforces
- * the invariants for application-created sessions.
+ * from a loaded one. The protected no-arg constructor exists so Hibernate can hydrate
+ * instances — the public constructor still enforces the invariants for application-created
+ * sessions.
  */
 @Entity
 @Table(name = "sessions")
@@ -168,7 +168,14 @@ public class Session implements InvariantChecked {
         checkInvariants();
     }
 
-    /** Records activity. Registration touches a Guest session; nothing reads it yet (OQ-8). */
+    /**
+     * Records activity at {@code now}. Registration touches a Guest session; nothing reads it yet
+     * (OQ-8).
+     *
+     * @throws IllegalArgumentException if {@code now} is null
+     * @throws IllegalStateException if {@code now} precedes {@code createdAt}; the last-seen time is
+     *     then unchanged
+     */
     public void touch(Instant now) {
         if (now == null) {
             throw new IllegalArgumentException("now must not be null");
@@ -185,7 +192,12 @@ public class Session implements InvariantChecked {
         }
     }
 
-    /** Extends the expiry. Nothing calls it yet: a sliding guest expiry is not built (OQ-8). */
+    /**
+     * Sets the expiry to {@code newExpiresAt}. Nothing calls it yet: a sliding guest expiry is not
+     * built (OQ-8).
+     *
+     * @throws IllegalArgumentException if {@code newExpiresAt} is null
+     */
     public void extendExpiry(Instant newExpiresAt) {
         if (newExpiresAt == null) {
             throw new IllegalArgumentException("newExpiresAt must not be null");
@@ -212,7 +224,12 @@ public class Session implements InvariantChecked {
         checkInvariants();
     }
 
-    /** Boundary is inclusive: {@code now == expiresAt} counts as expired. */
+    /**
+     * Whether the session has expired at {@code now}. The boundary is inclusive:
+     * {@code now == expiresAt} counts as expired.
+     *
+     * @throws IllegalArgumentException if {@code now} is null
+     */
     public boolean isExpiredAt(Instant now) {
         if (now == null) {
             throw new IllegalArgumentException("now must not be null");

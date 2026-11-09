@@ -8,7 +8,8 @@ import jakarta.validation.constraints.Positive;
 /**
  * Session lifetimes, bound from {@code session.*} and validated at startup (ADR-003).
  *
- * @param memberTtlMinutes        absolute lifetime of a member session and of its JWT
+ * @param memberTtlMinutes        absolute lifetime of a member session and of its JWT; an admin
+ *                                session and its JWT last as long
  * @param guestIdleTimeoutMinutes lifetime of a guest session, counted from its start; nothing
  *                                extends it yet (OQ-8)
  */

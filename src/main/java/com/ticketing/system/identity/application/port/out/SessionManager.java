@@ -5,7 +5,7 @@ import java.util.Optional;
 import com.ticketing.system.identity.domain.Session;
 
 /**
- * Port for session / token management. Implemented in Infrastructure by
+ * Port for session / token management. Implemented by
  * {@code JwtSessionManager}. Used by {@code AuthenticationService} (UC-12/14) and by
  * every application service that authenticates its caller.
  *
@@ -29,13 +29,15 @@ import com.ticketing.system.identity.domain.Session;
  */
 public interface SessionManager {
 
-    /** Issues a member token after successful login. UC-12. */
+    /**
+     * Saves a new Member session row for {@code userId} and issues a member JWT bound to it. UC-12.
+     * No production code calls this method; member sign-in uses {@link #generateTokenForSession}.
+     */
     String generateToken(int userId, String username);
 
     /**
-     * Issues a member JWT bound to an existing Session row. Used by promote-on-login
-     * (Phase 3 of the unified-session rework) so the Guest's sessionId is
-     * preserved into the Member flow and any attached cart survives.
+     * Issues a member JWT bound to an existing Session row. Used at member sign-in, so any attached
+     * cart survives.
      *
      * @throws IllegalArgumentException if {@code session} is null
      * @throws IllegalStateException if {@code session} is not a Member session (a Guest or an
@@ -108,6 +110,7 @@ public interface SessionManager {
      * @return {@code true} only for a live Guest row's id; {@code false} for {@code null} / blank, an
      *     unknown or expired id, the raw id of a Member or Admin session, and any token. Never throws
      *     for these
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     boolean validateGuestSession(String sessionId);
 
@@ -118,6 +121,7 @@ public interface SessionManager {
      *     for any token {@link #validateToken} rejects as invalid, an admin token included
      * @throws com.ticketing.system.shared.exception.SessionExpiredException
      *     for an expired token
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     int extractUserId(String token);
 
@@ -134,23 +138,39 @@ public interface SessionManager {
     int extractAdminId(String token);
 
     /**
-     * Returns the username a member token carries. Member tokens only, with the exceptions of
-     * {@link #extractUserId}.
+     * Returns the username a member token carries. Member tokens only: it rejects a token as
+     * {@link #extractUserId} does.
      */
     String extractUsername(String token);
 
     /**
-     * Returns the sessionId (sid claim) of a live member or admin token. Used by the
-     * cart-binding logic on Guest→Member promotion (D9a / Phase 4.1b).
+     * Returns the sessionId (sid claim) of a live member or admin token. No production code calls
+     * it yet.
+     *
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException
+     *     malformed, bad signature, revoked, or not bound to its session row
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException
+     *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     String extractSessionId(String token);
 
-    /** Quick expiry check; returns {@code true} for expired, revoked, or malformed tokens of either kind. */
+    /**
+     * Quick expiry check; returns {@code true} for expired, revoked, or malformed tokens of either kind.
+     *
+     * @throws RuntimeException a failure of the session store, propagated unchanged
+     */
     boolean isExpired(String token);
 
     /**
      * Epoch millis at which a live member or admin token expires (read from the {@code exp}
      * claim). UC-12.
+     *
+     * @throws com.ticketing.system.shared.exception.InvalidTokenException
+     *     malformed, bad signature, revoked, or not bound to its session row
+     * @throws com.ticketing.system.shared.exception.SessionExpiredException
+     *     past the {@code exp} claim or the session row's expiry
+     * @throws RuntimeException a failure of the session store, propagated unchanged
      */
     long extractExpiration(String token);
 

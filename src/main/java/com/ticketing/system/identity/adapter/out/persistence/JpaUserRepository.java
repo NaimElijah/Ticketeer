@@ -27,8 +27,8 @@ import com.ticketing.system.identity.domain.User;
  * {@code @Version} optimistic lock. {@code save} delegates to Spring Data (insert fresh / update
  * loaded under {@code @Version}) and flushes, so the {@code uk_users_username} and
  * {@code uk_users_email} constraints are checked inside the adapter. {@code save} and {@code delete}
- * are {@code @Transactional} so the adapter is self-sufficient before the service layer gains
- * transactions (#359).
+ * are {@code @Transactional}, so they join the caller's transaction and also work when called
+ * outside one (#359).
  *
  * <p>{@link #nextId()} keeps the assigned-id design (the service mints the id, then constructs the
  * User) but seeds an in-memory counter from the current {@code max(userId)} in the database on
@@ -47,6 +47,7 @@ public class JpaUserRepository implements UserRepository {
     private final AtomicInteger idSequence = new AtomicInteger(0);
     private volatile boolean seeded = false;
 
+    /** Creates the adapter over its Spring Data repository; {@link #nextId} seeds its counter on first use. */
     public JpaUserRepository(SpringDataUserRepository data) {
         this.data = data;
     }
@@ -125,7 +126,7 @@ public class JpaUserRepository implements UserRepository {
     @Override
     @Transactional
     public void delete(int userId) {
-        // Idempotent: deleteById would throw for an unknown id; the Memory impl is a silent no-op.
+        // Idempotent: an unknown id is a silent no-op, as in the Memory adapter.
         if (data.existsById(userId)) {
             data.deleteById(userId);
         }
