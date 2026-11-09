@@ -1,8 +1,7 @@
 package com.ticketing.system.organization.application.dto;
 
-// General Production Company view.
-// Used in catalog browse output (alongside EventSummaryDTO), org-tree responses,
-// and any "view company" query.
+// A production company as the registration and company-selection flows return it: the result of
+// registerCompany, and the entries of findOwnedCompanies and adminListAllCompanies.
 public record ProductionCompanyDTO(
     int companyId,
     String name,

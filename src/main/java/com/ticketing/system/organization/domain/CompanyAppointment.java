@@ -40,7 +40,7 @@ public class CompanyAppointment implements InvariantChecked {
     private int appointmentId; // assigned identifier for the appointment (minted by the repository)
 
     @Column(name = "company_id", nullable = false)
-    private int companyId; // ID of the company this appointment belongs to
+    private int companyId;
 
     @Column(name = "target_id", nullable = false)
     private int targetId; // ID of the user being appointed
@@ -50,11 +50,11 @@ public class CompanyAppointment implements InvariantChecked {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private CompanyRole role; // Role assigned to the target user
+    private CompanyRole role;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private AppointmentStatus status; // Current status of the appointment
+    private AppointmentStatus status;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "appointment_permissions",
@@ -64,7 +64,7 @@ public class CompanyAppointment implements InvariantChecked {
     private Set<Permission> permissions; // Permissions granted to the target user
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt; // Timestamp of when the appointment was created
+    private LocalDateTime createdAt;
 
     @Version
     private Long version; // Optimistic-lock version; null on a freshly constructed (not-yet-persisted) appointment
@@ -122,7 +122,7 @@ public class CompanyAppointment implements InvariantChecked {
         }
     }
 
-    // this constructor is specifically for the creation of the company founder
+    // this factory is specifically for the creation of the company founder
     // appointment, which is always an active owner with no permissions (as owners
     // have all permissions implicitly).
     public static CompanyAppointment FoundingAppointment(
@@ -179,7 +179,7 @@ public class CompanyAppointment implements InvariantChecked {
     }
 
     // ---------------------------------------------------------------------------
-    // Skeleton additions — AppointmentStatus lifecycle + accessors.
+    // AppointmentStatus lifecycle transitions and accessors.
     // ---------------------------------------------------------------------------
 
     // UC-23 / UC-24 — PENDING -> ACTIVE on target acceptance.
@@ -200,8 +200,8 @@ public class CompanyAppointment implements InvariantChecked {
         checkInvariants();
     }
 
-    // UC-24 — ACTIVE -> REVOKED. Owner appointments do NOT support revoke (II.4.9
-    // Cancelled in v0).
+    // UC-24 — ACTIVE -> REVOKED. A Manager appointment is revoked by its inviter; an Owner appointment
+    // by its inviter or its target (II.4.9).
     public void revoke(int revokerId) {
         if (this.status != AppointmentStatus.ACTIVE) {
             throw new IllegalStateException("Only active appointments can be revoked.");

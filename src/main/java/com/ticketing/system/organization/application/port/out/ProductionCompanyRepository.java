@@ -23,7 +23,7 @@ public interface ProductionCompanyRepository extends IRepository<ProductionCompa
 
     boolean existsByName(String name);
 
-    // UC-3 / UC-7 — public catalog excludes closed/suspended companies.
+    // UC-3 / UC-7 — public catalog lists only companies whose status is ACTIVE.
     List<ProductionCompany> findActive();
 
     // Owner's own list of companies they founded (informational).
@@ -35,6 +35,6 @@ public interface ProductionCompanyRepository extends IRepository<ProductionCompa
     // UC-18 — persist newly-registered company.
     void save(ProductionCompany company);
 
-    // UC-18- genrate company id
+    // UC-18 — mints the id of a company about to be registered.
     int nextId();
 }

@@ -199,9 +199,6 @@ public class ProductionCompany implements InvariantChecked {
         checkInvariants();
     }
 
-    // ---------------------------------------------------------------------------
-    // Skeleton additions — CompanyStatus lifecycle + cycle check + getters.
-    // ---------------------------------------------------------------------------
     public List<Integer> getManagers() {
         // Defensive copy — external callers must not be able to mutate the internal
         // managers list (which would let them violate the owner/manager-overlap invariant).
@@ -209,9 +206,8 @@ public class ProductionCompany implements InvariantChecked {
     }
 
     /**
-     * Legacy accessor — returns the founder's id. Most call sites should
-     * migrate to {@link #isOwner(int)} for permission checks or
-     * {@link #getOwnerIds()} for the full owner list.
+     * Returns the founder's id, the same as {@link #getFounderId()}; it is not an owner list. Use
+     * {@link #isOwner(int)} for permission checks and {@link #getOwnerIds()} for all owners.
      */
     public int getOwnerId() {
         return this.founderId;
@@ -241,21 +237,6 @@ public class ProductionCompany implements InvariantChecked {
     public boolean isActive() {
         return this.companyStatus == CompanyStatus.ACTIVE;
     }
-
-    /*
-     * // II.4.13.x (Cancelled v0; defensive).
-     * public void close(String reason) {
-     * throw new
-     * UnsupportedOperationException("II.4.13.x (Cancelled in v0): not implemented"
-     * );
-     * }
-     * 
-     * // II.4.14 (Cancelled v0; defensive).
-     * public void reopen() {
-     * throw new
-     * UnsupportedOperationException("II.4.14 (Cancelled in v0): not implemented");
-     * }
-     */
 
     public String getName() {
         return this.name;
@@ -313,8 +294,7 @@ public class ProductionCompany implements InvariantChecked {
     }
 
     /**
-     * Permission gate for owner-only actions. Now accepts <em>any</em> current
-     * owner (per the multi-owner refactor) rather than founder-only.
+     * Permission gate for owner-only actions. Any current owner passes, not only the founder.
      *
      * @throws UnauthorizedActionException if {@code ownerId2} is not a current
      *                                     owner

@@ -33,7 +33,7 @@ public class JpaCompanyAppointmentRepository implements CompanyAppointmentReposi
     private volatile boolean seeded = false;
 
     public JpaCompanyAppointmentRepository(SpringDataCompanyAppointmentRepository data) {
-        this.data = data; // Spring Data delegate
+        this.data = data;
     }
 
     @Override
@@ -50,34 +50,34 @@ public class JpaCompanyAppointmentRepository implements CompanyAppointmentReposi
 
     @Override
     public Optional<CompanyAppointment> findById(int appointmentId) {
-        return data.findById(appointmentId); // Optional by primary key
+        return data.findById(appointmentId);
     }
 
     @Override
     public List<CompanyAppointment> findByTargetId(int userId) {
-        return data.findByTargetId(userId); // derived query on target_id
+        return data.findByTargetId(userId);
     }
 
     @Override
     public List<CompanyAppointment> findByTargetIdAndCompanyId(int userId, int companyId) {
-        return data.findByTargetIdAndCompanyId(userId, companyId); // derived query on target_id + company_id
+        return data.findByTargetIdAndCompanyId(userId, companyId);
     }
 
     @Override
     public List<CompanyAppointment> findByCompanyId(int companyId) {
-        return data.findByCompanyId(companyId); // derived query on company_id
+        return data.findByCompanyId(companyId);
     }
 
     @Override
     @Transactional
     public void delete(CompanyAppointment appointment) {
-        data.delete(appointment); // DELETE by entity
+        data.delete(appointment);
     }
 
     @Override
     public int nextId() {
         ensureSeeded();
-        return idSequence.incrementAndGet(); // fresh id above any existing row
+        return idSequence.incrementAndGet();
     }
 
     // Lazily seed the id sequence from the current max in the database (once), so assigned ids never

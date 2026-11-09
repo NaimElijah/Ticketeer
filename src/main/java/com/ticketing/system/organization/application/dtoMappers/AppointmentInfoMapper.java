@@ -10,8 +10,7 @@ import com.ticketing.system.organization.domain.Permission;
  * by the caller (looked up from their respective aggregates) so the mapper stays
  * a pure value transform with no repository dependencies.
  *
- * <p>Used by the manager roster + pending-invitation queries (#264) and reused by
- * the "my invitations" query (#275).
+ * <p>Used by the manager roster and pending-invitation queries (#264).
  */
 public class AppointmentInfoMapper {
 

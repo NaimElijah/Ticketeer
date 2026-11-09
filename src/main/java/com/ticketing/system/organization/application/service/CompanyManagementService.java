@@ -73,8 +73,7 @@ public class CompanyManagementService {
     // Outbound port to catalog's active-event count — organization asks through this port instead of
     // importing any catalog type (keeps organization strictly below catalog in the dependency graph).
     private final CompanyEventStatsPort companyEventStatsPort;
-    // Owns the appointment (company-membership) lifecycle since it was promoted off the User aggregate
-    // (task #20). All appointment reads/writes below delegate here instead of walking user.companyAppointments.
+    // Owns the appointment (company-membership) lifecycle; every appointment read and write below delegates here.
     private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context integration events (role-change / appointment notices); the
     // notifications context listens for these instead of organization calling it directly.
@@ -111,14 +110,12 @@ public class CompanyManagementService {
             throw e;
         }
 
-        companyMembershipService.requireOwnerInCompany(appointerId, request.companyId()); // appointer must be an owner
-        if (appointer == null || targetUser == null) { // appointee/appointer must be real users
+        companyMembershipService.requireOwnerInCompany(appointerId, request.companyId());
+        if (appointer == null || targetUser == null) {
             throw new UserNotFoundException();
         }
-        // Target user receives a pending owner appointment (all logic checks + persistence happen inside).
         companyMembershipService.receiveOwnerAppointment(request.targetUserId(), request.companyId(), appointerId);
 
-        // Notify target user
         ProductionCompany company = companyRepository.getCompanyById(request.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new OwnerAppointmentPendingNotice(request.targetUserId(), request.companyId(),
@@ -142,16 +139,14 @@ public class CompanyManagementService {
         int ownerId = authenticate(token);
         User owner = userRepository.getUserById(ownerId);
         User targetUser = userRepository.getUserById(request.targetUserId());
-        companyMembershipService.requireOwnerInCompany(ownerId, request.companyId()); // appointer must be an owner
-        if (owner == null || targetUser == null) { // appointee/appointer must be real users
+        companyMembershipService.requireOwnerInCompany(ownerId, request.companyId());
+        if (owner == null || targetUser == null) {
             throw new UserNotFoundException();
         }
 
-        // Target user receives a pending manager appointment (checks + persistence happen inside).
         companyMembershipService.receiveManagerAppointment(
                 request.targetUserId(), request.companyId(), ownerId, request.permissions());
 
-        // Notify target user
         ProductionCompany company = companyRepository.getCompanyById(request.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         // The invitee's role changes only on acceptance, which publishes the RoleChangedNotice.
@@ -173,11 +168,11 @@ public class CompanyManagementService {
 
         int userId = authenticate(token);
         User user = userRepository.getUserById(userId);
-        if (user == null) { // caller must be a real user
+        if (user == null) {
             throw new UserNotFoundException();
         }
         ProductionCompany company = companyRepository.getCompanyById(response.companyId());
-        if (company == null) { // the company must exist
+        if (company == null) {
             throw new CompanyNotFoundException();
         }
 
@@ -185,7 +180,6 @@ public class CompanyManagementService {
 
         if (response.accept()) {
             requireInviterStillOwner(userId, response.companyId());
-            // Transitions the pending appointment to ACTIVE (and persists it via the appointment repo).
             appointment = companyMembershipService.acceptInvitation(userId, response.companyId());
             if (appointment.getRole() == CompanyRole.Owner) {
                 company.addOwner(appointment.getInviterId(), userId);
@@ -194,13 +188,10 @@ public class CompanyManagementService {
             }
             log.info("Appointment accepted: userId={}, companyId={}", userId, response.companyId());
 
-            // Notify of role change to final role
             // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
             eventPublisher.publishEvent(new RoleChangedNotice(userId, response.companyId(), company.getName(),
                     appointment.getRole().name()));
         } else {
-            // Transitions the pending appointment to REJECTED (persisted via the appointment repo);
-            // status-based lookups will no longer return it.
             companyMembershipService.rejectInvitation(userId, response.companyId());
             log.info("Appointment rejected: userId={}, companyId={}", userId, response.companyId());
         }
@@ -232,7 +223,7 @@ public class CompanyManagementService {
             log.warn("Manager not found during permission edit: {}", e.getMessage());
             throw e;
         }
-        if (manager == null) { // target manager must be a real user
+        if (manager == null) {
             throw new UserNotFoundException();
         }
 
@@ -243,11 +234,9 @@ public class CompanyManagementService {
 
         // A revoked owner keeps no authority over the managers they appointed.
         companyMembershipService.requireOwnerInCompany(ownerId, edit.companyId());
-        // Only the original appointer may edit; role/status checks + persistence happen inside.
         companyMembershipService.modifyManagerPermissions(edit.targetUserId(), edit.companyId(), ownerId,
                 edit.newPermissions());
 
-        // Notify manager of permission change
         ProductionCompany company = companyRepository.getCompanyById(edit.companyId());
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new RoleChangedNotice(edit.targetUserId(), edit.companyId(),
@@ -272,13 +261,11 @@ public class CompanyManagementService {
         // Only a current owner may revoke, so a revoked owner keeps no authority over the managers they
         // appointed. An owner revoking their own appointment is a current owner, so it stays allowed.
         companyMembershipService.requireOwnerInCompany(ownerId, revokeRequest.companyId());
-        // Revoke the target's active appointment (revoke-rights checks + persistence happen inside).
         companyMembershipService.revokeAppointment(revokeRequest.targetUserId(), revokeRequest.companyId(), ownerId);
         company.RevokeAppointment(revokeRequest.targetUserId());
 
         companyRepository.updateCompany(company);
 
-        // Notify user of revocation
         // Publish a cross-context integration event; notifications consumes it after commit (ADR-004).
         eventPublisher.publishEvent(new ManagerRevokedNotice(revokeRequest.targetUserId(),
                 revokeRequest.companyId(), company.getName()));
@@ -434,12 +421,9 @@ public class CompanyManagementService {
         return companies;
     }
 
-    // II.4.7.3 / II.4.8.2 — the signed-in member's own invitation records (every
-    // status),
-    // keyed on the inviter. The presenter splits PENDING (the pending list) from
-    // the
-    // resolved ACTIVE/REJECTED/REVOKED rows (history). Names are resolved per row,
-    // mirroring
+    // II.4.7.3 / II.4.8.2 — the invitations addressed to the signed-in member (every status), each
+    // naming its inviter. The presenter splits PENDING (the pending list) from the resolved
+    // ACTIVE/REJECTED/REVOKED rows (history). Names are resolved per row, mirroring
     // listPendingInvitations.
     @Transactional(readOnly = true)
     public List<InvitationDTO> listMyInvitations(String token) {
@@ -481,11 +465,6 @@ public class CompanyManagementService {
         return invitations;
     }
 
-    // ---------------------------------------------------------------------------
-    // DTO-typed methods added in skeleton round (parallel to the existing
-    // token-arg / List<Permission>-arg methods above; team to consolidate later).
-    // ---------------------------------------------------------------------------
-
     // UC-18 — register a new Production Company; appoints Founder/Owner in same
     // transaction.
     @Transactional
@@ -493,14 +472,12 @@ public class CompanyManagementService {
         int userId = authenticate(token);
         userRepository.getUserById(userId); // existence check (throws if the caller is unknown)
 
-        // CompanyRegistrationDTO is a class with get* accessors, not a record.
         if (request.getName() == null || request.getName().trim().isEmpty() ||
                 request.getDescription() == null || request.getDescription().trim().isEmpty()) {
             log.warn("Company registration failed: Missing required fields by user {}", userId);
             throw new IllegalArgumentException("All company fields (name, description) must be provided");
         }
 
-        // Call on the injected instance, not the interface.
         if (companyRepository.existsByName(request.getName().trim())) {
             log.warn("Company registration failed: Company name '{}' already exists", request.getName());
             throw new IllegalStateException(COMPANY_NAME_TAKEN_MESSAGE);
@@ -526,8 +503,8 @@ public class CompanyManagementService {
                 newProductionCompany.getCompanyId(),
                 newProductionCompany.getName(),
                 newProductionCompany.getDescription(),
-                newProductionCompany.getStatus().name(), // DTO field is String
-                newProductionCompany.getFounderId() // DTO field is founderId
+                newProductionCompany.getStatus().name(),
+                newProductionCompany.getFounderId()
         );
     }
 
@@ -577,8 +554,6 @@ public class CompanyManagementService {
         }
 
         log.info("Successfully retrieved organizational tree for company {}", companyId);
-        // using the helper method to build the tree starting from the founder (root of
-        // the tree)
         return buildOrganizationalTree(companyId, company.getFounderId());
     }
 
@@ -607,21 +582,17 @@ public class CompanyManagementService {
         return buildOrganizationalTree(companyId, company.getFounderId());
     }
 
-    // *HELPER METHOD* — BFS build of the organizational tree for UC-25
-    // (viewOrganizationalTree).
+    // Builds the UC-25 organizational tree in two passes: a node per owner and manager, then each node
+    // attached under the member who appointed it. The founder's node is the root.
     private OrganizationalTreeNodeDTO buildOrganizationalTree(int companyId, int founderId) {
         ProductionCompany company = companyRepository.getCompanyById(companyId);
 
-        // gather all members (owners and managers) of the company in a single list for
-        // easy processing
         List<Integer> members = new ArrayList<>();
         members.addAll(company.getManagers());
         members.addAll(company.getOwnersIds());
 
         Map<Integer, OrganizationalTreeNodeDTO> userIdToNodeMap = new HashMap<>();
 
-        // First pass: create a node for each member (including founder) without setting
-        // children yet.
         for (Integer memberId : members) {
             User memberUser = userRepository.getUserById(memberId);
             CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(memberId, companyId);
@@ -637,18 +608,15 @@ public class CompanyManagementService {
             userIdToNodeMap.put(memberId, node);
         }
 
-        // Second pass: set the appointedByThisUser list for each node based on
-        // inviterId.
         for (Integer memberId : members) {
             if (memberId == founderId)
-                continue; // skip founder, they have no appointer
+                continue;
             CompanyAppointment appt = companyMembershipService.getActiveCompanyAppointment(memberId, companyId);
             OrganizationalTreeNodeDTO node = userIdToNodeMap.get(memberId);
             OrganizationalTreeNodeDTO inviterNode = userIdToNodeMap.get(appt.getInviterId());
             inviterNode.appointedByThisUser().add(node);
         }
 
-        // return the founder's node, which is the root of the organizational tree
         return userIdToNodeMap.get(founderId);
     }
 

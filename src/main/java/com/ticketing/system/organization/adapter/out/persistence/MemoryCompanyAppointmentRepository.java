@@ -31,38 +31,38 @@ public class MemoryCompanyAppointmentRepository implements CompanyAppointmentRep
     private final Map<Integer, CompanyAppointment> appointmentsById = new ConcurrentHashMap<>();
     // Assigned-id sequence (the service calls nextId() before constructing an appointment).
     private final AtomicInteger idSequence = new AtomicInteger(1);
-    // Per-id write locks (no-op equivalent under jpa, where @Version handles concurrency).
+    // Per-id write locks; the Jpa adapter relies on @Version instead.
     private final RepositoryLocks<Integer> locks = new RepositoryLocks<>();
 
     @Override
     public void lockForUpdate(Integer id) {
-        locks.lock(id); // acquire the per-id write lock
+        locks.lock(id);
     }
 
     @Override
     public void unlock(Integer id) {
-        locks.unlock(id); // release the per-id write lock
+        locks.unlock(id);
     }
 
     @Override
     public int nextId() {
-        return idSequence.getAndIncrement(); // hand out a fresh, monotonically increasing id
+        return idSequence.getAndIncrement();
     }
 
     @Override
     public CompanyAppointment save(CompanyAppointment appointment) {
-        appointmentsById.put(appointment.getAppointmentId(), appointment); // store/replace by id
-        return appointment; // the stored instance is the saved one
+        appointmentsById.put(appointment.getAppointmentId(), appointment);
+        return appointment;
     }
 
     @Override
     public Optional<CompanyAppointment> findById(int appointmentId) {
-        return Optional.ofNullable(appointmentsById.get(appointmentId)); // present iff stored
+        return Optional.ofNullable(appointmentsById.get(appointmentId));
     }
 
     @Override
     public List<CompanyAppointment> findByTargetId(int userId) {
-        List<CompanyAppointment> result = new ArrayList<>(); // appointments held by this user
+        List<CompanyAppointment> result = new ArrayList<>();
         for (CompanyAppointment a : appointmentsById.values()) {
             if (a.getTargetId() == userId) {
                 result.add(a);
@@ -73,7 +73,7 @@ public class MemoryCompanyAppointmentRepository implements CompanyAppointmentRep
 
     @Override
     public List<CompanyAppointment> findByTargetIdAndCompanyId(int userId, int companyId) {
-        List<CompanyAppointment> result = new ArrayList<>(); // this user's appointments in one company
+        List<CompanyAppointment> result = new ArrayList<>();
         for (CompanyAppointment a : appointmentsById.values()) {
             if (a.getTargetId() == userId && a.getCompanyId() == companyId) {
                 result.add(a);
@@ -84,7 +84,7 @@ public class MemoryCompanyAppointmentRepository implements CompanyAppointmentRep
 
     @Override
     public List<CompanyAppointment> findByCompanyId(int companyId) {
-        List<CompanyAppointment> result = new ArrayList<>(); // every appointment issued for this company
+        List<CompanyAppointment> result = new ArrayList<>();
         for (CompanyAppointment a : appointmentsById.values()) {
             if (a.getCompanyId() == companyId) {
                 result.add(a);
@@ -95,6 +95,6 @@ public class MemoryCompanyAppointmentRepository implements CompanyAppointmentRep
 
     @Override
     public void delete(CompanyAppointment appointment) {
-        appointmentsById.remove(appointment.getAppointmentId()); // remove by id (idempotent)
+        appointmentsById.remove(appointment.getAppointmentId());
     }
 }

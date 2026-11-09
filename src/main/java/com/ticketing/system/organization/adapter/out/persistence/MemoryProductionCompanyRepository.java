@@ -18,8 +18,8 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 import com.ticketing.system.organization.domain.ProductionCompany;
 
 /**
- * In-memory {@link ProductionCompanyRepository}. Lets Spring wire
- * CatalogService / CompanyManagementService / EventManagementService.
+ * In-memory {@link ProductionCompanyRepository}. Lets Spring wire the services that depend on
+ * {@code ProductionCompanyRepository} without a database.
  * Used only by the in-memory test suite ({@code test} with {@code memory});
  * every other run gets {@link JpaProductionCompanyRepository}.
  */
