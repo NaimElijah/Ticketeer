@@ -71,7 +71,8 @@ Where the course documents contradict each other or leave a gap, the item is lis
 
 - **`§1 #n`, `§2 #n`, `§3 #n`** — the [business-rule](#business-rules-and-invariants) numbering,
   cited by `SystemIntegrityVerifier`.
-- **`#n`** — an issue in this repository, in this document and in code and Javadoc alike.
+- **`#n`** — an issue in this repository, in this document and in code and Javadoc alike, unless
+  a label precedes it (`constraint #n` is `§1 #n`).
 - **`upstream#n`** — a ticket in the upstream course repository,
   `AdamSimkinbgu/event-ticket-system`. Codes like `V3-INIT-02` belong to that repository too.
 

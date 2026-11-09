@@ -9,7 +9,7 @@ this file holds what a coding session needs on top of them.
 Event management and ticketing platform: producers run companies and events, buyers browse and buy
 tickets. Spring Boot 3.5.16 + Vaadin Flow 24.10.7 + Spring Modulith 1.4.14 monolith, Java 21, Maven
 wrapper (Maven 3.9.16). It extends an upstream BGU course project (`AdamSimkinbgu/event-ticket-system`);
-history before July 2026 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
+history before 2026-07-08 is imported from there. Roadmap: GitHub milestones on `NaimElijah/Ticketeer`.
 
 ## Commands
 
@@ -216,7 +216,7 @@ non-2xx status or a body over `MAX_RESPONSE_BODY_BYTES`, and
 
 - **Traceability IDs.** Preserve them when editing, and cite one when adding behaviour tied to a requirement.
   - Requirement and use-case IDs (`UC-1`, `I.1.4`, `II.3.0.x`, `SLR.6`) are defined in `docs/requirements/requirements.md`.
-  - A `#n` that names a ticket in code, Javadoc, `requirements.md`, ADRs, and commits or PRs since July 2026 is an issue in `NaimElijah/Ticketeer`. A ticket in the upstream course repo, `AdamSimkinbgu/event-ticket-system`, is written `upstream#n` (#57); codes like `V3-INIT-02` are that repo's too, as are the bare numbers in imported commits from before July 2026 and ADR-001's `#410`. The numbers collide, so never cite an upstream ticket as a bare `#n`. Numbers behind a label (`§1 #n` and the list after it, `constraint #n`, `Fix #n`, `Order #n`) are rules, findings and orders, not issues.
+  - A `#n` that names a ticket in code, Javadoc, `requirements.md`, ADRs, and commits or PRs since 2026-07-08 is an issue in `NaimElijah/Ticketeer`. A ticket in the upstream course repo, `AdamSimkinbgu/event-ticket-system`, is written `upstream#n` (#57); codes like `V3-INIT-02` are that repo's too, as are the bare numbers in imported commits from before 2026-07-08 and ADR-001's `#410`. Two later commits also cite numbers that are not this repo's: `8baec22b` (`#20/#21/#22`, migration-plan tasks) and `4d129d4f` (`#471`, `#335`, upstream's). The numbers collide, so never cite an upstream ticket as a bare `#n`. Numbers behind a label (`§1 #n` and the list after it, `constraint #n`, `Fix #n`, `Order #n`) are rules, findings and orders, not issues.
 - **Time** ([ADR-008](../docs/ADRs/ADR-008-event-time-zones-and-one-clock.md)). Every "now" comes from the `Clock` bean (`shared/config/SecurityConfig.systemClock`, UTC): services and adapters inject it; domain methods and repository ports take `now`. `HexagonalRulesTest` fails the build on `now()`/`now(ZoneId)` of a `java.time` type, `System.currentTimeMillis()` ([ADR-022](../docs/ADRs/ADR-022-system-current-time-millis-is-a-system-clock-read.md)), `ZoneId.systemDefault()` or a second system clock in production code; `System.nanoTime()` stays allowed for durations.
   - Recorded timestamps are `LocalDateTime` holding UTC wall time (`LocalDateTime.now(clock)`). Show dates are wall time at the venue plus `Event.timeZone`; compare them as instants (`ShowDate.startsAt/endsAt(zone)`), never as wall times.
   - The UI shows recorded times and "today" through `ui/support/DisplayTime`, in `platform.time-zone`; show times with the event's own zone.
