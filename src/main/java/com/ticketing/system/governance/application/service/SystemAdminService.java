@@ -63,7 +63,7 @@ public class SystemAdminService {
     private final String defaultAdminPassword;
     private static final int DEFAULT_ADMIN_ID = 1;
 
-    // Platform lifecycle state (in-memory for V1). openMarket()/closeMarket() (UC-32, #307)
+    // Platform lifecycle state: in memory, not persisted. openMarket()/closeMarket() (UC-32, #307)
     // build on top of this status.
     private enum PlatformStatus { UNINITIALIZED, READY, OPEN, CLOSED }
     private volatile PlatformStatus status = PlatformStatus.UNINITIALIZED;
@@ -147,8 +147,9 @@ public class SystemAdminService {
      * UC-1 / I.1.4: creates the default System Admin if no admin exists. A save that loses to another
      * instance creating it first is not a failure (ADR-003).
      *
-     * @throws MissingDefaultAdminException if the admin cannot be created and none exists. Its cause is the
-     *         save failure; a failure of the re-check that follows it is attached as suppressed
+     * @throws MissingDefaultAdminException if creating or saving the admin fails and the re-check that
+     *         follows finds none (its cause is the creation failure; a failure of the re-check is
+     *         attached as suppressed), or if the save returns but no admin exists afterwards (no cause)
      */
     public void createDefaultAdminIfMissing() {
         if (adminRepository.existsAny()) {
@@ -377,7 +378,8 @@ public class SystemAdminService {
     }
 
     // *HELPER* — UC-1 step 4 / I.1.1: re-assert that a System Admin exists. The external-service
-    // post-conditions are asserted by requireExternalServicesReachable(), which now runs last.
+    // post-conditions are asserted separately by requireExternalServicesReachable(), which
+    // initializePlatform() runs after this and the integrity scan.
     private void verifyInitializationInvariants() {
         if (!adminRepository.existsAny()) {
             throw new InitializationIntegrityException("no System Admin present");
@@ -451,9 +453,10 @@ public class SystemAdminService {
 
 
 
-    // *HELPER METHODS* for viewGlobalHistory() that normalize and validate the filters, and enforce admin RBAC.
-    // this method enforces that the event filter is consistent with the company filter (if provided), and that the date range is valid.
-    // It also logs the filters being applied for audit purposes.
+    // *HELPER METHODS* for viewGlobalHistory() that normalize and validate the filters. The admin check
+    // and the logging stay in viewGlobalHistory().
+    // This method rejects a date range whose start is after its end, and folds the company filter into the
+    // event filter, so the query sees only event ids that belong to that company.
     private GlobalHistoryFiltersDTO normalizeGlobalHistoryFilters(GlobalHistoryFiltersDTO filters) {
         // If no filters are provided, return a default filter that matches all receipts.
         GlobalHistoryFiltersDTO f = filters == null
@@ -464,7 +467,7 @@ public class SystemAdminService {
             throw new IllegalArgumentException("fromDate must be before or equal to toDate");
         }
 
-        // If companyId is provided but eventIds is not, we need to fetch the event IDs for that company and use them as the effective filter.
+        // Without a company filter, the event filter passes through unchanged.
         if (f.companyId() == null) {
             return new GlobalHistoryFiltersDTO(
                     f.buyerUserId(),

@@ -1,5 +1,5 @@
 package com.ticketing.system.reporting.application.service;
-// CompanyRatings lives in catalog (rating is derived from catalog Events); CompanyManagementService in
+// CompanyRatings lives in catalog (rating is derived from catalog Events); CompanyMembershipService in
 // organization; reporting reads both downward, which is allowed.
 import com.ticketing.system.catalog.application.service.CompanyRatings;
 import com.ticketing.system.organization.application.service.CompanyMembershipService;
@@ -42,9 +42,10 @@ import com.ticketing.system.shared.exception.UserNotFoundException;
  *
  * <p>Every read is company-scoped and authorizes the caller itself (#22): it validates the
  * session token, requires an active appointment in the company, and checks the organization
- * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. Sales
- * figures are the company's own share of each receipt (a receipt can mix events from several
- * companies), over the trailing 30 days, counting only lines that are not refunded (#21).
+ * context's permission for sales or inquiry data. Callers never pass a pre-authorized id. The
+ * dashboard's sales figures are the company's own share of each receipt (a receipt can mix events
+ * from several companies), over the trailing 30 days, counting only lines that are not refunded
+ * (#21). The sales history has no date limit.
  */
 @Service
 @Slf4j
@@ -93,8 +94,8 @@ public class CompanyAnalyticsService {
     }
 
     /**
-     * Live dashboard counters for one company, as seen by the calling member. Returns zeros for a
-     * fresh company with no events.
+     * Live dashboard counters for one company, as seen by the calling member. A fresh company with
+     * no events has zero counts and a {@code null} rating (nothing is rated).
      *
      * <p>Figures the caller may not see are withheld as {@code null}: revenue and tickets sold
      * need {@link Permission#VIEW_SALES} and open inquiries need
@@ -158,7 +159,7 @@ public class CompanyAnalyticsService {
 
     /**
      * UC-22 — the company's sales history: one record per receipt that holds at least one ticket
-     * for the company's events, carrying only that company's lines and revenue. Payment
+     * for the company's events, carrying only that company's lines and their total. Payment
      * transactions are never included: they cover the whole order, which may hold other
      * companies' tickets (#121); the admin global history (UC-31) shows them.
      *

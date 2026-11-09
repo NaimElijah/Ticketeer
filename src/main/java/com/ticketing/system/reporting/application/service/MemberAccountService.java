@@ -19,9 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 
 // Read-side service for member-facing personal account queries.
 // Owns UC-16 (View Personal Purchase History).
-// Reserved for additional member-side reads (UC-15 if it returns from Cancelled, profile views, etc.).
 // Separated from AuthenticationService (which is auth-flow only) so personal-data reads don't
-// stretch the auth boundary — see design_walkthrough_summary.md §6.
+// stretch the auth boundary.
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,8 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class MemberAccountService {
 
-    private final AuthenticationService authenticationService; // For user identity verification, if needed for future
-                                                               // methods.
+    private final AuthenticationService authenticationService; // validates the member's token and extracts the user id
     private final OrderReceiptRepository orderReceiptRepository;
     private final TicketRepository ticketRepository;
     private final CatalogEventDisplayPort eventDisplayPort; // For event/zone name lookups in history records.
@@ -98,10 +96,8 @@ public class MemberAccountService {
             throw new UnauthorizedActionException("view receipt " + receiptId, userId);
         }
 
-        // Buyer is the member themselves and company isn't shown on the receipt, so
-        // pass null for
-        // those repos (the mapper yields null for the unresolved names — see
-        // OrderReceiptMapper).
+        // Buyer is the member themselves and company isn't shown on the receipt, so pass null for
+        // those repos (the mapper yields null for the unresolved names — see OrderReceiptMapper).
         return new OrderReceiptMapper().toPurchaseRecordDTO(
                 receipt, ticketRepository, eventDisplayPort, null, null);
     }

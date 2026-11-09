@@ -28,8 +28,9 @@ import com.ticketing.system.identity.domain.User;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Verifies the platform's structural correctness against persisted state, invoked from
- * {@code SystemAdminService.initializePlatform()} after the I.1 post-conditions hold.
+ * Verifies the platform's structural correctness against persisted state. {@code SystemAdminService}
+ * invokes it from {@code initializePlatform()} and each time the market opens (from READY or CLOSED),
+ * after its System Admin check.
  *
  * <p>This javadoc is the single coverage map for <i>every</i> correctness/integrity requirement
  * in {@code docs/requirements/requirements.md} (§1 correctness constraints, §2 integrations,
@@ -50,11 +51,12 @@ import lombok.extern.slf4j.Slf4j;
  *       not scanned, and owner revocation can currently break it (#126).</li>
  * </ul>
  *
- * <h3>Checked at initialization (connection rules)</h3>
+ * <h3>Checked at initialization and market open (connection rules)</h3>
  * <ul>
- *   <li>§1 #2 ≥1 System Admin — asserted by {@code SystemAdminService.verifyInitializationInvariants()};
- *       §2 ≥1 payment + ≥1 ticket-issuance connection — asserted last, by
- *       {@code SystemAdminService.requireExternalServicesReachable()} (ADR-003).</li>
+ *   <li>§1 #2 ≥1 System Admin — asserted by {@code SystemAdminService.verifyInitializationInvariants()}
+ *       at initialization and by an equivalent check when the market opens;
+ *       §2 ≥1 payment + ≥1 ticket-issuance connection — asserted last at initialization, and first when
+ *       the market opens, by {@code SystemAdminService.requireExternalServicesReachable()} (ADR-003).</li>
  * </ul>
  *
  * <h3>Enforced at their call sites (behavioural / transaction rules — not scannable state)</h3>
@@ -77,10 +79,10 @@ import lombok.extern.slf4j.Slf4j;
  *       ({@code NoPurchasePolicy}); a company discount policy is not built yet (NaimElijah/Ticketeer#67).</li>
  * </ul>
  *
- * <p><b>V1/V2 note:</b> the in-memory repos are empty when this runs at boot (runner is
- * {@code @Order(0)}, before the dev seeders), so the scans pass trivially today; their value is
- * realized in V3 when persisted state is loaded and re-validated on startup (SLR.6 / SLR.7). The
- * logic is proven by unit tests now, and this class is the growth point for the V3 scans.
+ * <p>The scans read whatever the repositories hold when they run (SLR.6 / SLR.7). On the default
+ * profile that is the PostgreSQL data of earlier runs, loaded and re-validated at boot. They find
+ * nothing to check on an empty database: a first start, or dev's in-memory H2 at boot, where the
+ * runner ({@code @Order(0)}) runs before the dev seeders.
  */
 @Service
 @Slf4j
@@ -101,8 +103,9 @@ public class SystemIntegrityVerifier {
         this.activeOrderRepository = activeOrderRepository;
     }
 
-    // Read-only inside a transaction so the loaded JPA aggregates' lazy collections (event zones,
-    // cart items, show dates, …) stay reachable while the scans traverse them (#372).
+    // Read-only: the scans never write. The one transaction also keeps the loaded aggregates attached
+    // while the scans traverse them, which matters only for an association mapped LAZY; every
+    // association is EAGER today (#372).
     @Transactional(readOnly = true)
     public void verify() {
         verifyActiveCompaniesHaveOwner();      // constraint #6
@@ -144,7 +147,7 @@ public class SystemIntegrityVerifier {
         }
     }
 
-    // ---- #372 V3 scans: re-validate the LOADED DB state (no-ops on the empty in-memory stack) ----
+    // ---- #372: re-validate the state loaded from the repositories ----
 
     // Re-run every loaded aggregate's own invariant. A row persisted (or hand-edited) into a state
     // that breaks its aggregate invariant blocks the market from opening.
