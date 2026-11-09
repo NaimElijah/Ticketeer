@@ -47,8 +47,7 @@ or transitively):
 - **bootstrap** — the application composition root: lifecycle runners, `@Scheduled` sweepers, and
   the dev seed/`.scenario` engine. A pure sink that wires the contexts together.
 
-Each backend context follows the canonical hexagonal layout
-`domain / application(port.in, port.out, service) / adapter(out.*)`. The seams between contexts are
+Each backend context follows the hexagonal layout `domain / application(port.in, port.out, service) / adapter(in, out.*)`, with each layer present only where the context needs it: `governance` and `reporting` have no `domain`, `reporting` has no `adapter`, and only `catalog` and `notifications` have an inbound port package. The seams between contexts are
 ports and events (e.g. `MarketGate`, `CompanyEventStatsPort`, `CartRestorationPort`,
 `EventSalesHistoryPort`, `EventCancelledEvent`, the `shared/event` notices); other cross-context
 calls still use services, repository ports and entities, and #54 replaces them.
