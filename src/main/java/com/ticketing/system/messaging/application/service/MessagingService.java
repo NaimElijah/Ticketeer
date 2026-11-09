@@ -52,8 +52,9 @@ import lombok.extern.slf4j.Slf4j;
 // Covers requirements II.3.3 (complaint), II.3.10 (contact company), II.4.4 (company support
 // inbox), II.6.3.1 (admin complaint queue), II.6.3.2 (admin announcements).
 //
-// All write paths fire the messaging→notification bridge AFTER releasing the conversation
-// lock: members are notified of admin/producer messages; company owners of new inquiries.
+// The writes that notify (startConversation, sendMessage, respondToComplaint, sendOutreach) publish a
+// notice, which Notifications consumes after the transaction commits (ADR-004): members are notified
+// of admin/producer messages; company owners of new inquiries.
 // Admins are never notified: a notice names its recipient by bare user id, admin ids share the
 // member id space, so a notice to an admin's id would reach the member with that id (ADR-012).
 // Admins see complaints and replies in their queue and inbox instead.
@@ -73,8 +74,7 @@ public class MessagingService {
     private final AdminRepository adminRepository;
     private final UserRepository userRepository;
     private final ProductionCompanyRepository companyRepository;
-    // Company-membership/authorization checks (moved off the User aggregate, task #20) used to decide
-    // whether a caller may act for a company; messaging already depends on organization.
+    // Decides whether a caller may act for a company.
     private final CompanyMembershipService companyMembershipService;
     // Publisher for cross-context integration events (NewMessageNotice per message, OutreachSentNotice
     // per outreach send); the notifications context listens for these instead of messaging calling it
@@ -251,7 +251,8 @@ public class MessagingService {
                         "Conversation " + conversationId + " is not a complaint");
             }
             // The admin's reply is the complaint's terminal response: append it, then resolve.
-            // The lock serializes concurrent admins; the domain rejects a second admin reply.
+            // The domain rejects a second admin reply. Concurrent admins are kept apart by the lock on the
+            // Memory adapter and by @Version on the Jpa adapters, where the lock is a no-op.
             conversation.addMessage(adminId, ParticipantType.ADMIN, request.body(), LocalDateTime.now(clock));
             conversation.transitionToResolved();
             conversationRepository.save(conversation);
@@ -448,7 +449,7 @@ public class MessagingService {
                 .toList();
     }
 
-    // II.6.3.2 — admin "sent history": every DIRECT conversation the admin initiated.
+    // II.6.3.2 — admin "sent history": every DIRECT conversation an admin initiated, whichever admin.
     // The fan-out creates one conversation per recipient; callers group them into broadcasts.
     @Transactional(readOnly = true)
     public List<ConversationDTO> viewSentOutreach(String token) {
@@ -569,8 +570,7 @@ public class MessagingService {
 
     private boolean callerActsForCompany(int callerId, int companyId) {
         try {
-            // Owner of, or holder of RESPOND_TO_INQUIRIES on, the company — resolved by userId now that
-            // appointments live on the CompanyAppointment aggregate (task #20).
+            // Owner of, or holder of RESPOND_TO_INQUIRIES on, the company, resolved by user id.
             return companyMembershipService.isOwnerInCompany(callerId, companyId)
                     || companyMembershipService.hasPermissionInCompany(callerId, companyId,
                             Permission.RESPOND_TO_INQUIRIES);

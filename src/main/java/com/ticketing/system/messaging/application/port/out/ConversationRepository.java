@@ -9,16 +9,20 @@ import java.util.Optional;
 
 import com.ticketing.system.shared.IRepository;
 
-// Aggregate-root entry point for the Conversation aggregate (per course's
-// IXxxRepository convention). Owns the centralized messaging subsystem —
-// replaces per-User MessageInbox, per-Company Inbox, and the standalone Complaint repo.
+/**
+ * Driven port for the {@link Conversation} aggregate, with its messages. The one repository of the
+ * messaging subsystem: inquiries, complaints and admin outreach are all conversations.
+ */
 public interface ConversationRepository extends IRepository<Conversation, String> {
 
     void save(Conversation conversation);
 
     Optional<Conversation> findById(String conversationId);
 
-    // "My conversations" view — used by company support inbox.
+    /**
+     * Returns the conversations in which the participant is the initiator or the counterparty, matching
+     * both id and type. The admin inbox reads it with {@link ParticipantType#ADMIN}.
+     */
     List<Conversation> findByParticipant(int participantId, ParticipantType participantType);
 
     // Member Support Inbox: INQUIRY / COMPLAINT the member initiated, plus DIRECT admin outreach
@@ -35,6 +39,9 @@ public interface ConversationRepository extends IRepository<Conversation, String
     // Company-side support inbox (II.4.4) — conversations where the company is counterparty.
     List<Conversation> findByCompanyAsCounterparty(int companyId);
 
-    // Admin filter for complaint queues — by status and date.
+    /**
+     * Returns the conversations of the given type that have the given status. The admin complaint queue
+     * reads it for one status; its date filters are applied by the service, not here.
+     */
     List<Conversation> findByTypeAndStatus(ConversationType type, ConversationStatus status);
 }

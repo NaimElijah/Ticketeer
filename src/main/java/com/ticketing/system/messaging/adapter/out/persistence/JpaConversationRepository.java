@@ -16,7 +16,7 @@ import com.ticketing.system.shared.persistence.PersistenceProfiles;
 
 /**
  * JPA-backed {@link ConversationRepository} — active in every run but the in-memory test suite. Adapts
- * the domain port onto Spring Data ({@link SpringDataConversationRepository}); the application layer
+ * the port onto Spring Data ({@link SpringDataConversationRepository}); the application layer
  * depends only on {@code ConversationRepository}, never on Spring Data. Owned, send-ordered messages
  * ({@code @OneToMany} + {@code @OrderColumn}) persist by cascade with the conversation.
  *

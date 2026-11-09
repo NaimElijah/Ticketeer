@@ -14,7 +14,7 @@ import com.ticketing.system.messaging.domain.ParticipantType;
 /**
  * Spring Data JPA repository for {@link Conversation} — the auto-implemented SQL backing
  * {@link JpaConversationRepository}. The application layer never sees this type; it depends only on
- * the {@code ConversationRepository} domain port. Owned messages persist as an ordered
+ * the {@code ConversationRepository} port. Owned messages persist as an ordered
  * {@code @OneToMany} by cascade with the conversation.
  */
 public interface SpringDataConversationRepository extends JpaRepository<Conversation, String> {
