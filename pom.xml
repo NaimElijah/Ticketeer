@@ -45,7 +45,7 @@
 		<postgresql.version>42.7.14</postgresql.version>
 		<!-- Netty reaches only the dev classpath, through Vaadin Copilot, and the production profile
 		     drops it with vaadin-dev; 4.1.135 still carries a critical and several high advisories. -->
-		<netty.version>4.1.139.Final</netty.version>
+		<netty.version>4.1.140.Final</netty.version>
 		<jjwt.version>0.13.0</jjwt.version>
 		<!-- Vaadin Flow (V2-F-01). 24.10.7 is the last free Vaadin 24 release: free maintenance ended
 		     2026-06-16, and 24.10.8 and later need a Vaadin subscription even though Maven Central
